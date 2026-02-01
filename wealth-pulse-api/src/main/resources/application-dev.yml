@@ -36,5 +36,5 @@ cloudflare:
     region: cn-east-1
     url: https://aihub.s3.bitiful.net/
     endpoint: https://s3.bitiful.net
-    accessKey: rlJyjozUkmUOOMM1QVkBtXV9
-    secretKey: sS7PDRP98TepJc8rJe71ZpVb1VESpwm
+    accessKey: ${CLOUDFLARE_TURNSTILE_SECRET:}
+    secretKey: ${CLOUDFLARE_TURNSTILE_SECRET:}
