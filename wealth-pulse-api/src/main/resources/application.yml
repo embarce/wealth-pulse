@@ -1,0 +1,71 @@
+server:
+  port: 9090
+  servlet:
+    context-path: /api
+  tomcat:
+    uri-encoding: UTF-8
+    accept-count: 1000
+    threads:
+      max: 800
+      min-spare: 100
+# Spring
+spring:
+  application:
+    name: litchi-api
+  messages:
+    basename: message
+    encoding: UTF-8
+  servlet:
+    multipart:
+      max-file-size: 10MB
+  profiles:
+    active: @profileActive@
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      indent_output: true
+      fail_on_empty_beans: false
+    defaultPropertyInclusion: NON_NULL
+    deserialization:
+      fail_on_unknown_properties: false
+    parser:
+      allow_unquoted_control_chars: true
+      allow_single_quotes: true
+    time-zone: GMT+8
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+
+# token
+token:
+  header: Authorization
+  secret: WIGnHxgXO8HK44UwZMoCDHK2Gq1yAfl9OMXsxD4H1YS98ocnxfIT7NS1n2CLM25NX2EMwX9V9OAf+JaugEsx/w==
+  accessExpireTime: 1440
+
+google:
+  auth:
+    clientId: ${clientId:}
+    clientSecret: ${clientSecret:}
+    redirectUri: https://ai.girls-rating.com/auth/google/callback
+
+resend:
+  key: ${resend-key:}
+  from: no-reply <no-reply@aicatpaint.com>
+
+cloudflare:
+  turnstile:
+    enabled: true
+    secret: ${CLOUDFLARE_TURNSTILE_SECRET:}
+  R2:
+    region: auto
+    endpoint: https://04114523cf012650642c027d752d92bc.r2.cloudflarestorage.com
+    accessKey: ${CLOUDFLARE_accessKey:}
+    secretKey: ${CLOUDFLARE_secretKey:}
+    key: image
+    bucket: image
+    url: https://static.girls-rating.com/

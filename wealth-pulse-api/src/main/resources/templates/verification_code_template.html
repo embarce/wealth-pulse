@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[Litchi AI] 一次性验证码</title>
+    <style>
+        /* 基础样式，兼容大多数邮件客户端 */
+        body {
+            margin: 0;
+            padding: 24px;
+            background-color: #f6f7fb;
+            color: #1f2937;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, 'Helvetica Neue', Helvetica, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            border: 1px solid #eef0f5;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
+            padding: 18px 20px;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+        }
+
+        .brand-logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.15);
+            display: inline-block;
+            overflow: hidden;
+            margin-right: 12px;
+        }
+
+        .brand-title {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .brand-subtitle {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 24px 24px 8px 24px;
+        }
+
+        .greeting {
+            font-size: 16px;
+            margin: 0 0 12px 0;
+        }
+
+        .lead {
+            font-size: 14px;
+            color: #4b5563;
+            margin: 0 0 20px 0;
+        }
+
+        .code-box {
+            text-align: center;
+            margin: 24px 0;
+            padding: 18px 16px;
+            border-radius: 12px;
+            background: #f3f4f6;
+            border: 1px dashed #d1d5db;
+        }
+
+        .code {
+            display: inline-block;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+            color: #111827;
+            padding: 8px 14px;
+            border-radius: 10px;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+        }
+
+        .note {
+            font-size: 13px;
+            color: #6b7280;
+            margin: 16px 0 0 0;
+        }
+
+        .footer {
+            padding: 8px 24px 20px 24px;
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .company {
+            margin-top: 8px;
+            color: #6b7280;
+        }
+
+        a { color: #7c3aed; text-decoration: none; }
+    </style>
+    <!-- 如需替换为实际 Logo，请将下方占位 img 的 src 指向线上可访问图片地址 -->
+    <!-- 例如：https://your-cdn.example.com/logo.png -->
+    
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <div class="header">
+            <span class="brand-logo">
+                <img src="https://dummyimage.com/64x64/ffffff/7c3aed.png&text=L" alt="Litchi AI Logo" width="32" height="32" style="display:block;border:0;width:32px;height:32px;" />
+            </span>
+            <div>
+                <div class="brand-title">荔影科技 · Litchi AI</div>
+                <div class="brand-subtitle">电商智能视觉平台</div>
+            </div>
+        </div>
+        <div class="content">
+            <p class="greeting">您好！</p>
+            <p class="lead">您正在进行身份验证。请使用以下一次性验证码完成验证：</p>
+
+            <div class="code-box">
+                <span class="code">{{verificationCode}}</span>
+            </div>
+
+            <p class="lead">为保障安全，请在 <strong>{{expirationTime}}</strong> 内使用该验证码。请勿泄露验证码给任何人。</p>
+            <p class="note">若非您本人操作，请忽略本邮件或及时修改账户密码。</p>
+        </div>
+        <div class="footer">
+            此邮件由系统自动发送，请勿直接回复。
+            <div class="company">© 荔影科技 · Litchi AI 电商智能视觉平台</div>
+        </div>
+    </div>
+    
+</div>
+</body>
+</html>

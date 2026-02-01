@@ -1,0 +1,5 @@
+{
+  "name": "Personal Stock Alpha - AI Portfolio Manager",
+  "description": "A comprehensive personal stock trading analyzer and capital tracker featuring real-time price simulations, portfolio management, and Gemini-powered trade scoring and market predictions.",
+  "requestFramePermissions": []
+}
