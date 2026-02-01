@@ -26,7 +26,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets,
     <aside className="w-72 bg-[#0d0f17] flex flex-col p-8 shadow-2xl h-full lg:h-screen border-r border-white/5 overflow-y-auto custom-scrollbar">
       <div className="flex items-center space-x-4 mb-10 lg:mb-14 px-2">
         <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-500/30">
-          <i className="fas fa-pulse text-xl"></i>
+          <i className="fas fa-chart-line text-xl"></i>
         </div>
         <div>
           <h1 className="text-xl font-black text-white tracking-tight leading-none">Wealth Pulse</h1>
