@@ -79,18 +79,6 @@ public class User extends BaseEntity implements UserDetails, Serializable {
     @TableField("role")
     private String role;
 
-    /**
-     * google 唯一标识
-     */
-    @TableField("google_id")
-    private String googleId;
-
-    /**
-     * 微软唯一标识
-     */
-    @TableField("microsoft_id")
-    private String microsoftId;
-
 
     /**
      * token

@@ -94,22 +94,6 @@ public class PasswordLoginService {
                 log.error("password error times exceed limit:{}", username);
                 throw new ServiceException("password error times exceed limit", -2);
             }
-            if (times > 3) {//4-5-6次
-                // 需要验证码
-                if (StringUtils.isBlank(code)) {
-                    log.error("username:{} try to password login over times:{} need to human machine verification required", username, times);
-                    throw new ServiceException("human machine verification required", -3);
-                } else {
-                    String onceEmailCodeKey = ONCE_EMAIL_CODE_KEY.formatted(username);
-                    String cachedCode = redisCache.getCacheObject(onceEmailCodeKey);
-                    if (!cachedCode.equals(code)) {
-                        log.error("username:{} code:{} not equals requestCode:{}", username, cachedCode, code);
-                        throw new ServiceException("code not valid", -4);
-                    } else {
-                        redisCache.deleteObject(onceEmailCodeKey);
-                    }
-                }
-            }
         }
     }
 
@@ -121,11 +105,6 @@ public class PasswordLoginService {
         if (increment > 6) {
             log.error("password error times exceed limit:{}", username);
             throw new ServiceException("password error times exceed limit", -2);
-        }
-        if (increment > 3) {
-            // 需要验证码
-            log.error("username:{} try to password login over times:{} need to human machine verification required", username, increment);
-            throw new ServiceException("human machine verification required", -3);
         }
         throw new ServiceException("password or username not valid", -1);
     }

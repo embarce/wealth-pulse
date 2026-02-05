@@ -20,28 +20,26 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * @author Embrace
  * @version 1.0
- * @description: 提供用户信息查询和资产相关的REST API接口
+ * @description: 提供交易相关的REST API接口
  * @date 2025/10/21 23:10
  */
 @RestController
-@RequestMapping("/user")
-@Tag(name = "用户管理", description = "提供用户信息查询和资产相关的API接口")
-public class UserController {
-
-    @Autowired
-    private UserService userService;
+@RequestMapping("/trade")
+@Tag(name = "交易管理", description = "提供交易相关的 API接口")
+public class TradeController {
 
 
+    //交易记录
     @Operation(
-            summary = "获取当前用户信息",
-            description = "获取当前登录用户的详细信息，包括用户昵称、邮箱地址和头像等基本信息",
+            summary = "交易记录",
+            description = "获取当前用户的交易记录",
             method = "GET",
-            tags = {"用户管理"}
+            tags = {"交易管理"}
     )
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
-                    description = "成功获取用户信息",
+                    description = "获取当前用户的交易记录",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = Result.class),
@@ -62,60 +60,22 @@ public class UserController {
                     )
             )
     })
-    @GetMapping("/getUser")
-    public Result getUser() {
-        UserVo user = userService.getUserVo();
-        return Result.success(user);
-    }
-
-
-    @Operation(
-            summary = "资产总览",
-            description = "获取当前用户的资产总览信息，包括总资产、可用资产、冻结资产、持仓资产等",
-            method = "GET",
-            tags = {"用户管理"}
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "成功获取用户信息",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = Result.class),
-                            examples = @ExampleObject(
-                                    name = "成功示例",
-                                    value = """
-                                            {
-                                              "code": 200,
-                                              "msg": "操作成功",
-                                              "data": {
-                                                "nickName": "张三",
-                                                "email": "zhangsan@example.com",
-                                                "avatar": "https://example.com/avatar.jpg"
-                                              }
-                                            }
-                                            """
-                            )
-                    )
-            )
-    })
-    @GetMapping("/assets/dashboard")
-    public Result getAssets() {
+    @GetMapping("/record")
+    public Result record() {
         return Result.success();
     }
 
-
-
+    //本金流水
     @Operation(
-            summary = "仓位总览",
-            description = "获取当前用户的仓位总览",
+            summary = "本金记录",
+            description = "获取当前用户的本金记录",
             method = "GET",
-            tags = {"用户管理"}
+            tags = {"交易管理"}
     )
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
-                    description = "成功获取用户信息",
+                    description = "获取当前用户的本金记录",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = Result.class),
@@ -136,8 +96,8 @@ public class UserController {
                     )
             )
     })
-    @GetMapping("/positions/dashboard")
-    public Result getPositions() {
+    @GetMapping("/capital/record")
+    public Result capitalRecord() {
         return Result.success();
     }
 }

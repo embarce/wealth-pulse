@@ -12,6 +12,7 @@ import { INITIAL_STOCKS, generateMockHistory } from './constants';
 import { apiService } from './services/backend';
 import { getTradeScore, getMarketOutlook } from './services/gemini';
 import { Language, translations } from './i18n';
+import { httpClient } from './services/http';
 
 // Components
 import Modal from './components/Modal';
@@ -48,6 +49,7 @@ const AppContent: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [capitalLogs, setCapitalLogs] = useState<CapitalLog[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [user, setUser] = useState<{ nickName: string; email: string; avatar?: string } | null>(null);
 
   // Modals State
   const [capitalModalOpen, setCapitalModalOpen] = useState(false);
@@ -72,6 +74,32 @@ const AppContent: React.FC = () => {
     };
     init();
   }, []);
+
+  // 登录后拉取用户信息
+  useEffect(() => {
+    const fetchUser = async () => {
+      if (!isLoggedIn) return;
+      try {
+        const res: any = await httpClient.get('/api/user/getUser');
+        // 期望后端返回：
+        // {
+        //   "msg": "success",
+        //   "code": 200,
+        //   "data": {
+        //     "nickName": "admin",
+        //     "email": "xxx",
+        //     "avatar": "https://..."
+        //   }
+        // }
+        if (res?.data) {
+          setUser(res.data);
+        }
+      } catch (e) {
+        console.error('获取用户信息失败', e);
+      }
+    };
+    fetchUser();
+  }, [isLoggedIn]);
 
   const holdings = useMemo(() => {
     const hMap: Record<string, { qty: number; totalCost: number }> = {};
@@ -216,7 +244,13 @@ const AppContent: React.FC = () => {
       )}
 
       <div className={`fixed inset-y-0 left-0 z-50 transform lg:relative lg:translate-x-0 transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <Sidebar activeTab={activeTab} setActiveTab={(tab) => { setActiveTab(tab); setIsSidebarOpen(false); }} totalAssets={assets.total} assetRate={assets.rate} />
+        <Sidebar 
+          activeTab={activeTab} 
+          setActiveTab={(tab) => { setActiveTab(tab); setIsSidebarOpen(false); }} 
+          totalAssets={assets.total} 
+          assetRate={assets.rate}
+          user={user || undefined}
+        />
       </div>
 
       <main className="flex-grow overflow-y-auto custom-scrollbar flex flex-col">

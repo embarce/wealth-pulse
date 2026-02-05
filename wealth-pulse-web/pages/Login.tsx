@@ -1,6 +1,7 @@
 
 import React, { useState, useContext } from 'react';
 import { I18nContext } from '../App';
+import { httpClient } from '../services/http';
 
 interface LoginProps {
   onLogin: () => void;
@@ -9,14 +10,40 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const { lang, t, setLang } = useContext(I18nContext);
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('729374717@qq.com');
+  const [password, setPassword] = useState('13602449816');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    setTimeout(() => {
+    try {
+      // 调用后端真实登录接口
+      const res: any = await httpClient.post('/api/auth/v1/password/login', {
+        email,
+        password,
+      });
+
+      // 后端返回结构：
+      // {
+      //   "msg": "success",
+      //   "code": 200,
+      //   "data": { "accessToken": "xxx" }
+      // }
+      const token = res?.data?.accessToken;
+      if (!token) {
+        throw new Error('登录返回数据不包含 accessToken');
+      }
+
+      // 统一保存 token，并让 App 里的 isLoggedIn 生效
+      httpClient.setToken(token);
       onLogin();
+    } catch (err: any) {
+      console.error('登录失败', err);
+      alert(err?.message || '登录失败，请检查账号或密码');
+    } finally {
       setLoading(false);
-    }, 1200);
+    }
   };
 
   return (
@@ -57,7 +84,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <i className="fas fa-user absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 text-sm"></i>
               <input 
                 type="text" 
-                defaultValue="admin@pulse.ai"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all"
               />
             </div>
@@ -68,7 +96,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <i className="fas fa-lock absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 text-sm"></i>
               <input 
                 type="password" 
-                defaultValue="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all"
               />
             </div>

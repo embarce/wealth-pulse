@@ -93,8 +93,6 @@ public class SecurityConfig {
                                         "/swagger-ui.html",
                                         "/favicon.ico"
                                 ).permitAll()
-                                .requestMatchers(HttpMethod.GET, "/common/v1/model/config")
-                                .permitAll()
                                 .anyRequest().authenticated()
 
                 )

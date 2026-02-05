@@ -7,9 +7,14 @@ interface SidebarProps {
   setActiveTab: (tab: any) => void;
   totalAssets: number;
   assetRate: number;
+  user?: {
+    nickName: string;
+    email: string;
+    avatar?: string;
+  };
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets, assetRate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets, assetRate, user }) => {
   const { lang, t, setLang } = useContext(I18nContext);
 
   const menuItems = [
@@ -82,15 +87,30 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets,
         </div>
         
         <div className="flex items-center justify-between px-2 pb-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-800 flex items-center justify-center text-slate-400">
-              <i className="fas fa-shield-halved text-xs"></i>
-            </div>
-            <div>
-              <p className="text-xs font-black text-slate-300">Administrator</p>
-              <p className="text-[9px] text-slate-600 font-bold uppercase">{t.professional}</p>
-            </div>
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-800 flex items-center justify-center overflow-hidden">
+            {user?.avatar ? (
+              // 头像
+              <img
+                src={user.avatar}
+                alt={user.nickName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="flex items-center justify-center w-full h-full text-slate-400 text-xs font-black">
+                <i className="fas fa-user"></i>
+              </div>
+            )}
           </div>
+          <div className="flex flex-col">
+            <p className="text-xs font-black text-slate-100 truncate max-w-[120px]">
+              {user?.nickName || 'Administrator'}
+            </p>
+            <p className="text-[9px] text-slate-500 font-bold truncate max-w-[140px]">
+              {user?.email || t.professional}
+            </p>
+          </div>
+        </div>
           <button onClick={() => window.location.reload()} className="text-slate-600 hover:text-rose-500 transition-all">
             <i className="fas fa-power-off text-sm"></i>
           </button>
