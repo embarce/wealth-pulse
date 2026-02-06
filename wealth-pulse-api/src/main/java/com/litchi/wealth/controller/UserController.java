@@ -44,21 +44,7 @@ public class UserController {
                     description = "成功获取用户信息",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = Result.class),
-                            examples = @ExampleObject(
-                                    name = "成功示例",
-                                    value = """
-                                            {
-                                              "code": 200,
-                                              "msg": "操作成功",
-                                              "data": {
-                                                "nickName": "张三",
-                                                "email": "zhangsan@example.com",
-                                                "avatar": "https://example.com/avatar.jpg"
-                                              }
-                                            }
-                                            """
-                            )
+                            schema = @Schema(implementation = Result.class)
                     )
             )
     })
@@ -81,21 +67,7 @@ public class UserController {
                     description = "成功获取用户信息",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = Result.class),
-                            examples = @ExampleObject(
-                                    name = "成功示例",
-                                    value = """
-                                            {
-                                              "code": 200,
-                                              "msg": "操作成功",
-                                              "data": {
-                                                "nickName": "张三",
-                                                "email": "zhangsan@example.com",
-                                                "avatar": "https://example.com/avatar.jpg"
-                                              }
-                                            }
-                                            """
-                            )
+                            schema = @Schema(implementation = Result.class)
                     )
             )
     })
@@ -118,21 +90,7 @@ public class UserController {
                     description = "成功获取用户信息",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = Result.class),
-                            examples = @ExampleObject(
-                                    name = "成功示例",
-                                    value = """
-                                            {
-                                              "code": 200,
-                                              "msg": "操作成功",
-                                              "data": {
-                                                "nickName": "张三",
-                                                "email": "zhangsan@example.com",
-                                                "avatar": "https://example.com/avatar.jpg"
-                                              }
-                                            }
-                                            """
-                            )
+                            schema = @Schema(implementation = Result.class)
                     )
             )
     })

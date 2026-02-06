@@ -45,15 +45,7 @@ public class LoginController {
                     description = "登录成功，返回访问令牌",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = Result.class, example = """
-                                    {
-                                        "code": 200,
-                                        "msg": "success",
-                                        "data": {
-                                            "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                                        }
-                                    }
-                                    """)
+                            schema = @Schema(implementation = Result.class)
                     )
             ),
             @ApiResponse(responseCode = "400", description = "请求参数错误，邮箱或密码为空"),

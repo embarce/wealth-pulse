@@ -2,16 +2,15 @@ package com.litchi.wealth.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.litchi.wealth.constant.Result;
-import com.litchi.wealth.dto.trade.StockTradeRequest;
+import com.litchi.wealth.dto.capital.CapitalOperationRequest;
 import com.litchi.wealth.qo.TradePageQo;
-import com.litchi.wealth.service.StockTransactionLogService;
+import com.litchi.wealth.service.UserCapitalFlowService;
 import com.litchi.wealth.utils.SecurityUtils;
 import com.litchi.wealth.utils.ToPageUtils;
-import com.litchi.wealth.vo.TradeRecordVo;
+import com.litchi.wealth.vo.CapitalFlowVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -21,89 +20,88 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 用户管理控制器
+ * 本金管理控制器
  *
  * @author Embrace
  * @version 1.0
- * @description: 提供交易相关的REST API接口
- * @date 2025/10/21 23:10
+ * @description: 提供本金相关的REST API接口
+ * @date 2026/2/6 23:30
  */
 @RestController
-@RequestMapping("/trade")
-@Tag(name = "交易管理", description = "提供交易相关的 API接口")
-public class TradeController {
+@RequestMapping("/capital")
+@Tag(name = "本金管理", description = "提供本金操作和查询相关的API接口")
+public class CapitalController {
 
     @Autowired
-    private StockTransactionLogService stockTransactionLogService;
-
+    private UserCapitalFlowService userCapitalFlowService;
 
     @Operation(
-            summary = "交易记录",
-            description = "获取当前用户的交易记录",
+            summary = "本金记录",
+            description = "获取当前用户的本金记录",
             method = "GET",
-            tags = {"交易管理"}
+            tags = {"本金管理"}
     )
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
-                    description = "获取当前用户的交易记录",
+                    description = "获取当前用户的本金记录",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = TradeRecordVo.class)
+                            schema = @Schema(implementation = CapitalFlowVo.class)
                     )
             )
     })
     @GetMapping("/record")
     public Result record(@Parameter TradePageQo tradePageQo) {
         String userId = SecurityUtils.getUserId();
-        IPage<TradeRecordVo> pageResult = stockTransactionLogService.getTradeRecordPage(userId, tradePageQo);
+        IPage<CapitalFlowVo> pageResult = userCapitalFlowService.getCapitalFlowPage(userId, tradePageQo);
         ToPageUtils page = new ToPageUtils(pageResult);
         return Result.success(page);
     }
 
     @Operation(
-            summary = "买入股票",
-            description = "买入股票",
+            summary = "资金入金",
+            description = "向账户注入资金",
             method = "POST",
-            tags = {"交易管理"}
+            tags = {"本金管理"}
     )
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
-                    description = "买入成功",
+                    description = "入金成功",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = Result.class)
                     )
             )
     })
-    @PostMapping("/buy")
-    public Result buyStock(@Valid @RequestBody StockTradeRequest request) {
+    @PostMapping("/deposit")
+    public Result deposit(@Valid @RequestBody CapitalOperationRequest request) {
         String userId = SecurityUtils.getUserId();
-        stockTransactionLogService.buyStock(userId, request);
+        userCapitalFlowService.deposit(userId, request);
         return Result.success();
     }
 
     @Operation(
-            summary = "卖出股票",
-            description = "卖出股票",
+            summary = "提取本金",
+            description = "从账户提取本金",
             method = "POST",
-            tags = {"交易管理"}
+            tags = {"本金管理"}
     )
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
-                    description = "卖出成功",
+                    description = "提取成功",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = Result.class)
                     )
             )
     })
-    @PostMapping("/sell")
-    public Result sellStock(@Valid @RequestBody StockTradeRequest request) {
+    @PostMapping("/withdraw")
+    public Result withdraw(@Valid @RequestBody CapitalOperationRequest request) {
         String userId = SecurityUtils.getUserId();
-        stockTransactionLogService.sellStock(userId, request);
+        userCapitalFlowService.withdraw(userId, request);
         return Result.success();
     }
 }

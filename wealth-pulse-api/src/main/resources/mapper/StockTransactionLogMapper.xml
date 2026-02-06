@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.litchi.wealth.mapper.StockTransactionLogMapper">
+
+    <!-- 分页查询用户交易记录，关联股票信息 -->
+    <select id="selectTradeRecordPage" resultType="com.litchi.wealth.vo.TradeRecordVo">
+        SELECT
+            t.id,
+            t.stock_code AS stockCode,
+            s.company_name AS companyName,
+            s.short_name AS shortName,
+            t.instruction,
+            t.execution_date AS executionDate,
+            t.execution_time AS executionTime,
+            t.execution_datetime AS executionDatetime,
+            t.price,
+            t.quantity,
+            t.total_amount AS totalAmount,
+            t.total_amount_display AS totalAmountDisplay,
+            t.currency,
+            t.is_settled AS isSettled,
+            t.commission,
+            t.tax,
+            t.fee_total AS feeTotal,
+            t.created_at AS createdAt,
+            t.updated_at AS updatedAt
+        FROM stock_transaction_log t
+        LEFT JOIN tb_stock_info s ON t.stock_code = s.stock_code
+        WHERE t.user_id = #{userId}
+        <if test="query.tradeType != null and query.tradeType != ''">
+            AND t.instruction = #{query.tradeType}
+        </if>
+        <if test="query.name != null and query.name != ''">
+            AND (s.company_name LIKE CONCAT('%', #{query.name}, '%') OR s.short_name LIKE CONCAT('%', #{query.name}, '%'))
+        </if>
+        <if test="query.id != null and query.id != ''">
+            AND t.stock_code = #{query.id}
+        </if>
+        <if test="query.tradeStartTime != null and query.tradeStartTime != ''"><![CDATA[
+            AND DATE(t.execution_datetime) >= #{query.tradeStartTime}
+        ]]></if>
+        <if test="query.tradeEndTime != null and query.tradeEndTime != ''"><![CDATA[
+            AND DATE(t.execution_datetime) <= #{query.tradeEndTime}
+        ]]></if>
+        ORDER BY t.execution_datetime DESC, t.created_at DESC
+    </select>
+
+</mapper>

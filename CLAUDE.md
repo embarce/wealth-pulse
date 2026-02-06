@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Wealth Pulse is a **Hong Kong stock investment tracking & AI-assisted analysis platform** consisting of:
 - **Backend (wealth-pulse-api)**: Spring Boot 3.5.5 REST API with JWT authentication
 - **Frontend (wealth-pulse-web)**: React 19 + TypeScript SPA with Vite 6
+- **Python Scripts (wealth-pulse-python)**: Utility scripts (see wealth-pulse-python/ directory)
 
 The platform tracks investment portfolios, manages trading records, provides real-time market monitoring, and uses Google Gemini AI for trade analysis and market insights.
 
@@ -21,6 +22,9 @@ The platform tracks investment portfolios, manages trading records, provides rea
 - **Security**: Spring Security + JWT (jjwt 0.13.0)
 - **Storage**: AWS S3 SDK / Cloudflare R2 for file storage
 - **Documentation**: SpringDoc OpenAPI 2.8.12 (Swagger UI)
+- **Email**: Resend Java SDK 4.6.0 for email notifications
+- **Google OAuth**: Google API Client 2.8.1 for OAuth authentication
+- **Volcengine**: Volcengine Ark Runtime for AI services
 
 ### Build & Run
 ```bash
@@ -35,6 +39,7 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 
 # Default profile: dev (see pom.xml)
 # Dev server runs on port 9090
+# Context path: /api (configured in application.yml)
 ```
 
 ### Testing
@@ -62,18 +67,22 @@ mvn test -Dtest=ClassName#methodName
 - **Role-based access control**: Comma-separated roles in `tb_user.role` field
 - **Public endpoints** (configured in `SecurityConfig.java:80-97`):
   - `/auth/**` - Authentication endpoints
-  - `/v2/api-docs`, `/swagger-ui/**` - API documentation
-  - `/common/v1/model/config` (GET only)
+  - `/v2/api-docs`, `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`, `/doc.html` - API documentation
+  - `/swagger-resources`, `/swagger-resources/**`, `/configuration/ui`, `/configuration/security` - Swagger resources
+  - `/webjars/**` - Swagger webjars
+  - `/favicon.ico` - Static asset
 
 #### Layer Structure
 ```
 controller/     - REST endpoints (@RestController)
 service/        - Business logic interfaces
   impl/         - Service implementations
+  auth/         - Authentication services (PasswordLoginService, RegisterService, etc.)
 mapper/         - MyBatis-Plus data access interfaces
 entity/         - Database entities with @TableName
 dto/            - Request/Response objects
 vo/             - View objects for API responses
+qo/             - Query objects
 constant/       - Constants and result wrappers
 config/         - Spring configuration classes
 utils/          - Utility classes (RedisCache, SecurityUtils, etc.)
@@ -104,8 +113,11 @@ security/       - Security filters and handlers
 
 ### Environment Variables
 Required for cloud features (set in environment or `application-dev.yml`):
-- `CLOUDFLARE_TURNSTILE_SECRET` - Cloudflare Turnstile verification
-- R2 storage credentials (if using S3 storage)
+- `CLOUDFLARE_TURNSTILE_SECRET` - Cloudflare Turnstile verification and R2 storage credentials
+
+### Database Connection
+- MySQL: `jdbc:mysql://127.0.0.1:3306/wealth_pulse` (username: `root`, password in application-dev.yml)
+- Redis: `127.0.0.1:6379` (password: `redis_data_center`)
 
 ---
 
@@ -139,17 +151,23 @@ pnpm preview
 ```
 
 ### Environment Variables
-Create `.env` file in project root:
+Create `.env` file in `wealth-pulse-web/` directory:
 ```bash
 GEMINI_API_KEY=your_gemini_api_key
 ```
-Vite injects this as `process.env.GEMINI_API_KEY` via `define` in `vite.config.ts:22-24`.
+Vite injects this as both `process.env.API_KEY` and `process.env.GEMINI_API_KEY` via `define` in `vite.config.ts:22-24`.
 
 ### Dev Proxy
 - `/api` requests proxy to `http://localhost:9090` (backend)
 - Configured in `vite.config.ts:11-19`
 
 ### Key Architecture Patterns
+
+#### Project Structure
+- **Main files in root**: `App.tsx`, `i18n.ts`, `types.ts`, `constants.ts` are in `wealth-pulse-web/` (not in a `src/` subdirectory)
+- **Services**: `services/` directory contains HTTP client, backend API wrapper, and Gemini AI integration
+- **Components**: `components/` directory for reusable UI components
+- **Pages**: `pages/` directory for main page components
 
 #### State Management
 - **No Redux/Context store**: All state in `App.tsx` with props drilling
@@ -162,18 +180,19 @@ Vite injects this as `process.env.GEMINI_API_KEY` via `define` in `vite.config.t
   - `app_config` - App configuration
 
 #### Internationalization (i18n)
-- Custom `I18nContext` in `App.tsx:32-36`
-- Dictionary in `i18n.ts` with `translations[lang]`
+- Custom `I18nContext` in `App.tsx:32-36` (wealth-pulse-web/App.tsx)
+- Dictionary in `i18n.ts` with `translations[lang]` (wealth-pulse-web/i18n.ts)
 - Toggle via language selector, persisted to localStorage
 
 #### HTTP Client
-**`services/http.ts`** - Custom wrapper:
+**`services/http.ts`** - Custom wrapper (wealth-pulse-web/services/http.ts):
 - Auto-attaches JWT from `localStorage.pulse_token`
 - Handles 401/403 by clearing auth and redirecting to login
 - Used for backend API calls
+- Methods: `get`, `post`, `put`, `patch`, `delete`
 
 #### Backend Services
-**`services/backend.ts`** - Dual-mode:
+**`services/backend.ts`** - Dual-mode (wealth-pulse-web/services/backend.ts):
 - **Mock mode**: Uses localStorage with demo data
 - **Real mode**: Calls backend API via httpClient
 
@@ -190,7 +209,7 @@ Help.tsx            - Usage guide
 ```
 
 #### Data Flow
-- **App.tsx** manages all global state (transactions, holdings, capital logs)
+- **App.tsx** (wealth-pulse-web/App.tsx) manages all global state
 - **Derived calculations** via `useMemo`:
   - `holdings`: Aggregates positions from transactions
   - `assets`: Calculates total value, profit, cash from holdings
@@ -198,10 +217,13 @@ Help.tsx            - Usage guide
 - **Child components** receive data as props, call handlers passed down
 
 #### AI Integration
-**`services/gemini.ts`**:
+**`services/gemini.ts`** (wealth-pulse-web/services/gemini.ts):
+- Uses `@google/genai` with `GoogleGenAI` client
 - `getTradeScore()` - Scores trades with rationale
 - `getMarketOutlook()` - Generates portfolio-level insights
-- Auto-triggered after buy trades in `App.tsx:185-189`
+- `analyzeBrokerScreenshot()` - Extracts trades from broker screenshots (uses gemini-3-flash-preview)
+- Built-in retry logic with exponential backoff for rate limits (429) and server errors (5xx)
+- Auto-triggered after buy trades in `App.tsx:185-189` (wealth-pulse-web/App.tsx)
 
 ---
 
@@ -249,9 +271,10 @@ AUTH redis_data_center
 ### Security Flow
 1. Login → Backend returns JWT token
 2. Frontend stores in `localStorage.pulse_token`
-3. Subsequent requests include `Authorization: Bearer <token>`
-4. Backend validates via `JwtAuthenticationTokenFilter`
-5. Token refresh on each request via `tokenService.verifyToken()`
+3. Subsequent requests include `Authorization: Bearer <token>` (header name: `Authorization`)
+4. Backend validates via `JwtAuthenticationTokenFilter` using `TokenService.verifyToken()`
+5. Token stored in Redis with UUID key, valid for 1440 minutes (24 hours) by default
+6. Token refreshed on each request via `tokenService.verifyToken()`
 
 ### Data Storage
 - **Frontend mock mode**: All data in localStorage (works without backend)
@@ -283,6 +306,7 @@ Entities (in `entity/`):
 - Ensure backend is running on port 9090
 - Check proxy config in `vite.config.ts`
 - Check browser console for CORS errors
+- Verify JWT token exists in `localStorage.pulse_token`
 
 ### JWT token issues
 - Check `JwtAuthenticationTokenFilter` logs
