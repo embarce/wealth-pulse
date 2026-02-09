@@ -44,9 +44,13 @@ public class UserAssetSummary {
     @TableField("cumulative_profit_loss")
     private BigDecimal cumulativeProfitLoss;
 
-    @Schema(name = "availableCash", description = "可用现金")
+    @Schema(name = "availableCash", description = "可用现金（可提现）")
     @TableField("available_cash")
     private BigDecimal availableCash;
+
+    @Schema(name = "purchasingPower", description = "购买力（可用于交易）")
+    @TableField("purchasing_power")
+    private BigDecimal purchasingPower;
 
     @Schema(name = "positionValue", description = "持仓市值")
     @TableField("position_value")

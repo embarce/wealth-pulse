@@ -24,7 +24,7 @@ public class StockInfo {
 
 
     @Schema(name = "stockCode", description = "股票代码(如: NVDA.US)")
-    @TableField(value = "stock_code")
+    @TableId(value = "stock_code", type = IdType.INPUT)
     private String stockCode;
 
     @Schema(name = "companyName", description = "公司全名")

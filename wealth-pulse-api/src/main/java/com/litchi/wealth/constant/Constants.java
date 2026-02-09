@@ -185,7 +185,6 @@ public class Constants {
     public static final String GENERATIONS_IMAGE_JOB_KEY = "generations_image_job::%s-%s";
 
 
-
     /**
      * 没有补偿的订单状态
      */
@@ -204,7 +203,7 @@ public class Constants {
 
 
     /**
-     * 图片处理任务锁
+     * 资产处理任务锁
      */
-    public static final String GENERATIONS_JOB_LOCK_KEY = "generations_job_lock::%s";
+    public static final String USER_ASSET_JOB_LOCK_KEY = "asset_job_lock::%s";
 }

@@ -9,9 +9,12 @@ import com.litchi.wealth.entity.StockTransactionLog;
 import com.litchi.wealth.entity.UserAssetSummary;
 import com.litchi.wealth.entity.UserPosition;
 import com.litchi.wealth.mapper.StockTransactionLogMapper;
-import com.litchi.wealth.service.*;
 import com.litchi.wealth.qo.TradePageQo;
+import com.litchi.wealth.service.StockTransactionLogService;
+import com.litchi.wealth.service.UserAssetSummaryService;
+import com.litchi.wealth.service.UserPositionService;
 import com.litchi.wealth.utils.HkStockFeeCalculator;
+import com.litchi.wealth.utils.RedissonLock;
 import com.litchi.wealth.vo.TradeRecordVo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,13 +25,16 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.util.Date;
+import java.util.List;
+
+import static com.litchi.wealth.constant.Constants.USER_ASSET_JOB_LOCK_KEY;
 
 /**
-* @description 股票交易流水表（记录买入和卖出操作） 服务实现类
-* @author Embrace
-* @git: https://github.com/embarce
-* @date 2026-02-06
-*/
+ * @author Embrace
+ * @description 股票交易流水表（记录买入和卖出操作） 服务实现类
+ * @git: https://github.com/embarce
+ * @date 2026-02-06
+ */
 @Slf4j
 @Service
 public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransactionLogMapper, StockTransactionLog> implements StockTransactionLogService {
@@ -38,6 +44,9 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
 
     @Autowired
     private UserPositionService userPositionService;
+
+    @Autowired
+    private RedissonLock redissonLock;
 
     @Override
     public IPage<TradeRecordVo> getTradeRecordPage(String userId, TradePageQo query) {
@@ -61,36 +70,49 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
         BigDecimal totalAmount = request.getQuantity().multiply(request.getPrice());
         String currency = request.getCurrency() != null ? request.getCurrency() : "HKD";
 
-        // 2. 计算手续费（目前只支持港股HKD）
-        HkStockFeeCalculator.FeeResult feeResult;
-        if ("HKD".equals(currency)) {
-            feeResult = HkStockFeeCalculator.calculateBuyFee(totalAmount);
-            log.info("买入手续费: {}", HkStockFeeCalculator.formatFeeInfo(feeResult));
-        } else {
-            // 非港股暂不计算手续费
-            feeResult = new HkStockFeeCalculator.FeeResult();
-            feeResult.setNetAmount(totalAmount);
+
+        String key = USER_ASSET_JOB_LOCK_KEY.formatted(userId);
+        boolean locked = false;
+        try {
+            locked = redissonLock.tryLock(key);
+            if (locked) {
+                // 2. 计算手续费（目前只支持港股HKD）zabank
+                HkStockFeeCalculator.FeeResult feeResult;
+                if ("HKD".equals(currency)) {
+                    feeResult = HkStockFeeCalculator.calculateBuyFee(totalAmount);
+                    log.info("买入手续费: {}", HkStockFeeCalculator.formatFeeInfo(feeResult));
+                } else {
+                    // 非港股暂不计算手续费
+                    feeResult = new HkStockFeeCalculator.FeeResult();
+                    feeResult.setNetAmount(totalAmount);
+                }
+
+                // 3. 检查购买力是否足够（支持T+0交易）
+                UserAssetSummary assetSummary = getUserAssetSummary(userId);
+                BigDecimal requiredCash = feeResult.getNetAmount();
+                if (assetSummary.getPurchasingPower().compareTo(requiredCash) < 0) {
+                    throw new RuntimeException("购买力不足，无法买入。需要: " + requiredCash + "，购买力: " + assetSummary.getPurchasingPower() + "（可用现金: " + assetSummary.getAvailableCash() + "）");
+                }
+
+                // 4. 创建交易记录（包含手续费信息）
+                StockTransactionLog transaction = buildTransaction(userId, request, "BUY", totalAmount, currency, feeResult);
+                save(transaction);
+
+                // 5. 更新持仓
+                updatePositionForBuy(userId, request, currency);
+
+                // 6. 更新用户资产（扣除所有费用）
+                updateAssetForBuy(userId, totalAmount, feeResult.getTotalFee());
+
+                log.info("买入股票成功, userId={}, stockCode={}, totalAmount={}, totalFee={}",
+                        userId, request.getStockCode(), totalAmount, feeResult.getTotalFee());
+            }
+        } finally {
+            if (locked) {
+                redissonLock.unlock(key);
+            }
         }
 
-        // 3. 检查可用现金是否足够（需要支付交易金额 + 手续费）
-        UserAssetSummary assetSummary = getUserAssetSummary(userId);
-        BigDecimal requiredCash = feeResult.getNetAmount();
-        if (assetSummary.getAvailableCash().compareTo(requiredCash) < 0) {
-            throw new RuntimeException("可用现金不足，无法买入。需要: " + requiredCash + "，可用: " + assetSummary.getAvailableCash());
-        }
-
-        // 4. 创建交易记录（包含手续费信息）
-        StockTransactionLog transaction = buildTransaction(userId, request, "BUY", totalAmount, currency, feeResult);
-        save(transaction);
-
-        // 5. 更新持仓
-        updatePositionForBuy(userId, request, currency);
-
-        // 6. 更新用户资产（扣除所有费用）
-        updateAssetForBuy(userId, totalAmount, feeResult.getTotalFee());
-
-        log.info("买入股票成功, userId={}, stockCode={}, totalAmount={}, totalFee={}",
-                userId, request.getStockCode(), totalAmount, feeResult.getTotalFee());
     }
 
     @Override
@@ -103,44 +125,54 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
         BigDecimal totalAmount = request.getQuantity().multiply(request.getPrice());
         String currency = request.getCurrency() != null ? request.getCurrency() : "HKD";
 
-        // 2. 检查持仓是否足够
-        UserPosition position = getUserPosition(userId, request.getStockCode());
-        if (position == null || position.getQuantity().compareTo(request.getQuantity()) < 0) {
-            throw new RuntimeException("持仓数量不足，无法卖出");
+        String key = USER_ASSET_JOB_LOCK_KEY.formatted(userId);
+        boolean locked = false;
+        try {
+            locked = redissonLock.tryLock(key);
+            if (locked) {
+                // 2. 检查持仓是否足够
+                UserPosition position = getUserPosition(userId, request.getStockCode());
+                if (position == null || position.getQuantity().compareTo(request.getQuantity()) < 0) {
+                    throw new RuntimeException("持仓数量不足，无法卖出");
+                }
+
+                // 3. 计算手续费（目前只支持港股HKD）
+                HkStockFeeCalculator.FeeResult feeResult;
+                if ("HKD".equals(currency)) {
+                    feeResult = HkStockFeeCalculator.calculateSellFee(totalAmount);
+                    log.info("卖出手续费: {}", HkStockFeeCalculator.formatFeeInfo(feeResult));
+                } else {
+                    // 非港股暂不计算手续费
+                    feeResult = new HkStockFeeCalculator.FeeResult();
+                    feeResult.setNetAmount(totalAmount);
+                }
+                // 4. 创建交易记录（包含手续费信息）
+                StockTransactionLog transaction = buildTransaction(userId, request, "SELL", totalAmount, currency, feeResult);
+                save(transaction);
+
+                // 5. 更新持仓
+                updatePositionForSell(userId, request, position);
+
+                // 6. 更新用户资产（实际到账 = 交易金额 - 手续费）
+                updateAssetForSell(userId, totalAmount, feeResult.getNetAmount(), feeResult.getTotalFee(),
+                        request.getStockCode(), request.getQuantity(), position.getAvgCost());
+
+                log.info("卖出股票成功, userId={}, stockCode={}, totalAmount={}, netAmount={}, totalFee={}",
+                        userId, request.getStockCode(), totalAmount, feeResult.getNetAmount(), feeResult.getTotalFee());
+            }
+        } finally {
+            if (locked) {
+                redissonLock.unlock(key);
+            }
         }
-
-        // 3. 计算手续费（目前只支持港股HKD）
-        HkStockFeeCalculator.FeeResult feeResult;
-        if ("HKD".equals(currency)) {
-            feeResult = HkStockFeeCalculator.calculateSellFee(totalAmount);
-            log.info("卖出手续费: {}", HkStockFeeCalculator.formatFeeInfo(feeResult));
-        } else {
-            // 非港股暂不计算手续费
-            feeResult = new HkStockFeeCalculator.FeeResult();
-            feeResult.setNetAmount(totalAmount);
-        }
-
-        // 4. 创建交易记录（包含手续费信息）
-        StockTransactionLog transaction = buildTransaction(userId, request, "SELL", totalAmount, currency, feeResult);
-        save(transaction);
-
-        // 5. 更新持仓
-        updatePositionForSell(userId, request, position);
-
-        // 6. 更新用户资产（实际到账 = 交易金额 - 手续费）
-        updateAssetForSell(userId, totalAmount, feeResult.getNetAmount(), feeResult.getTotalFee(),
-                request.getStockCode(), request.getQuantity(), position.getAvgCost());
-
-        log.info("卖出股票成功, userId={}, stockCode={}, totalAmount={}, netAmount={}, totalFee={}",
-                userId, request.getStockCode(), totalAmount, feeResult.getNetAmount(), feeResult.getTotalFee());
     }
 
     /**
      * 构建交易记录
      */
     private StockTransactionLog buildTransaction(String userId, StockTradeRequest request,
-                                                  String instruction, BigDecimal totalAmount, String currency,
-                                                  HkStockFeeCalculator.FeeResult feeResult) {
+                                                 String instruction, BigDecimal totalAmount, String currency,
+                                                 HkStockFeeCalculator.FeeResult feeResult) {
         DecimalFormat decimalFormat = new DecimalFormat("#,##0.00");
         String amountDisplay = currencySymbol(currency) + decimalFormat.format(totalAmount);
 
@@ -166,7 +198,7 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
                 .totalAmountDisplay(amountDisplay)
                 .currency(currency)
                 .transactionStatus("COMPLETED")
-                .isSettled(true)
+                .isSettled(false)  // 标记为未结算，支持T+0交易
                 .commission(totalCommission)
                 .tax(feeResult.getStampDuty())
                 .feeTotal(feeResult.getTotalFee())
@@ -256,10 +288,25 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
     private void updateAssetForBuy(String userId, BigDecimal totalAmount, BigDecimal totalFee) {
         UserAssetSummary assetSummary = getUserAssetSummary(userId);
 
-        // 减少可用现金（交易金额 + 手续费）
         BigDecimal totalDeduct = totalAmount.add(totalFee);
-        BigDecimal newAvailableCash = assetSummary.getAvailableCash().subtract(totalDeduct);
+
+        // ⚠️ 关键：买入时需要同时处理 availableCash 和 purchasingPower
+        // purchasingPower = availableCash + 未结算卖出资金
+        // 买入时：availableCash 减少，未结算卖出资金不变
+        // 所以：purchasingPower 减少的金额 = availableCash 减少的金额
+
+        // 计算从 availableCash 扣除的金额（不超过现有可用现金）
+        BigDecimal deductFromCash = assetSummary.getAvailableCash().min(totalDeduct);
+        BigDecimal newAvailableCash = assetSummary.getAvailableCash().subtract(deductFromCash);
         assetSummary.setAvailableCash(newAvailableCash);
+
+        // purchasingPower 只扣除 deductFromCash（即 availableCash 减少的部分）
+        // 原因：purchasingPower = availableCash + 未结算资金
+        // 买入时，未结算资金不变，availableCash 减少了 deductFromCash
+        // 所以 purchasingPower 也应该只减少 deductFromCash
+        //todo
+        BigDecimal newPurchasingPower = assetSummary.getPurchasingPower().subtract(deductFromCash);
+        assetSummary.setPurchasingPower(newPurchasingPower);
 
         // 增加持仓市值（用交易金额作为市值增量，不含手续费）
         BigDecimal newPositionValue = assetSummary.getPositionValue().add(totalAmount);
@@ -273,20 +320,23 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
         assetSummary.setTotalBuyCount(assetSummary.getTotalBuyCount() + 1);
 
         userAssetSummaryService.updateById(assetSummary);
-        log.info("买入更新用户资产成功, userId={}, totalAmount={}, totalFee={}, newAvailableCash={}, newPositionValue={}",
-                userId, totalAmount, totalFee, newAvailableCash, newPositionValue);
+        log.info("买入更新用户资产成功, userId={}, totalAmount={}, totalFee={}, deductFromCash={}, newAvailableCash={}, newPurchasingPower={}, newPositionValue={}",
+                userId, totalAmount, totalFee, deductFromCash, newAvailableCash, newPurchasingPower, newPositionValue);
     }
 
     /**
      * 卖出时更新用户资产
      */
     private void updateAssetForSell(String userId, BigDecimal totalAmount, BigDecimal netAmount, BigDecimal totalFee,
-                                     String stockCode, BigDecimal sellQuantity, BigDecimal avgCost) {
+                                    String stockCode, BigDecimal sellQuantity, BigDecimal avgCost) {
         UserAssetSummary assetSummary = getUserAssetSummary(userId);
 
-        // 增加可用现金（实际到账金额，已扣除手续费）
-        BigDecimal newAvailableCash = assetSummary.getAvailableCash().add(netAmount);
-        assetSummary.setAvailableCash(newAvailableCash);
+        // ⚠️ 卖出时 availableCash 不变（需要T+2结算才能提现）
+        // 资金暂时在"结算中"状态，待结算时转入 availableCash
+
+        // 增加购买力（卖出后资金立即可用于T+0交易）
+        BigDecimal newPurchasingPower = assetSummary.getPurchasingPower().add(netAmount);
+        assetSummary.setPurchasingPower(newPurchasingPower);
 
         // 计算盈亏（使用交易金额计算成本）
         BigDecimal cost = sellQuantity.multiply(avgCost);
@@ -300,16 +350,16 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
         BigDecimal newPositionValue = assetSummary.getPositionValue().subtract(cost);
         assetSummary.setPositionValue(newPositionValue);
 
-        // 重新计算总资产
-        BigDecimal newTotalAssets = newAvailableCash.add(newPositionValue);
+        // 重新计算总资产（注意：这里不包含未结算的卖出资金）
+        BigDecimal newTotalAssets = assetSummary.getAvailableCash().add(newPositionValue);
         assetSummary.setTotalAssets(newTotalAssets);
 
         // 增加卖出次数
         assetSummary.setTotalSellCount(assetSummary.getTotalSellCount() + 1);
 
         userAssetSummaryService.updateById(assetSummary);
-        log.info("卖出更新用户资产成功, userId={}, totalAmount={}, totalFee={}, netAmount={}, profit={}, newCumulativeProfitLoss={}",
-                userId, totalAmount, totalFee, netAmount, profit, newCumulativeProfitLoss);
+        log.info("卖出更新用户资产成功, userId={}, totalAmount={}, totalFee={}, netAmount={}, profit={}, newCumulativeProfitLoss={}, newPurchasingPower={}, availableCash不变={}",
+                userId, totalAmount, totalFee, netAmount, profit, newCumulativeProfitLoss, newPurchasingPower, assetSummary.getAvailableCash());
     }
 
     /**
@@ -326,6 +376,7 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
             assetSummary.setTotalAssets(BigDecimal.ZERO);
             assetSummary.setCumulativeProfitLoss(BigDecimal.ZERO);
             assetSummary.setAvailableCash(BigDecimal.ZERO);
+            assetSummary.setPurchasingPower(BigDecimal.ZERO);  // 初始购买力为0
             assetSummary.setPositionValue(BigDecimal.ZERO);
             assetSummary.setTotalPrincipal(BigDecimal.ZERO);
             assetSummary.setYesterdayPositionValue(BigDecimal.ZERO);
@@ -335,6 +386,13 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
             assetSummary.setTotalSellCount(0L);
             userAssetSummaryService.save(assetSummary);
             log.info("创建用户资产总览记录, userId={}", userId);
+        }
+
+        // 兼容旧数据：如果purchasingPower为null，则初始化为availableCash
+        if (assetSummary.getPurchasingPower() == null) {
+            assetSummary.setPurchasingPower(assetSummary.getAvailableCash());
+            userAssetSummaryService.updateById(assetSummary);
+            log.info("初始化用户购买力, userId={}, purchasingPower={}", userId, assetSummary.getAvailableCash());
         }
 
         return assetSummary;
@@ -360,5 +418,55 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
         } catch (Exception e) {
             return currencyCode + " ";
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int settleTransactions(String userId) {
+        // 查询所有未结算的交易
+        LambdaQueryWrapper<StockTransactionLog> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(StockTransactionLog::getUserId, userId)
+                .eq(StockTransactionLog::getIsSettled, false);
+        List<StockTransactionLog> unsettledTransactions = list(queryWrapper);
+
+        if (unsettledTransactions.isEmpty()) {
+            log.info("没有需要结算的交易, userId={}", userId);
+            return 0;
+        }
+
+        // 计算卖出交易的净收入（卖出金额 - 手续费）
+        BigDecimal settlementAmount = unsettledTransactions.stream()
+                .filter(tx -> "SELL".equals(tx.getInstruction()))
+                .map(tx -> {
+                    // 卖出净收入 = 交易金额 - 总费用
+                    return tx.getTotalAmount().subtract(tx.getFeeTotal());
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 批量更新为已结算
+        unsettledTransactions.forEach(tx -> tx.setIsSettled(true));
+        updateBatchById(unsettledTransactions);
+
+        // 更新用户资产
+        UserAssetSummary assetSummary = getUserAssetSummary(userId);
+
+        // 将卖出净收入转入可用现金（T+2结算完成）
+        BigDecimal newAvailableCash = assetSummary.getAvailableCash().add(settlementAmount);
+        assetSummary.setAvailableCash(newAvailableCash);
+
+        // ⚠️ 不需要重置 purchasingPower！
+        // 原因：purchasingPower 在每次交易时已经被正确维护
+        // 结算后，purchasingPower 应该仍然保持其值（应该等于 newAvailableCash）
+        // 如果不等，说明交易逻辑有问题，应该修正交易逻辑而不是在这里 set
+
+        // 重新计算总资产
+        BigDecimal newTotalAssets = newAvailableCash.add(assetSummary.getPositionValue());
+        assetSummary.setTotalAssets(newTotalAssets);
+
+        userAssetSummaryService.updateById(assetSummary);
+
+        log.info("结算交易完成, userId={}, settledCount={}, settlementAmount={}, newAvailableCash={}, newPurchasingPower={}",
+                userId, unsettledTransactions.size(), settlementAmount, newAvailableCash, newAvailableCash);
+        return unsettledTransactions.size();
     }
 }

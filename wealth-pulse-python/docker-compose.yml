@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: wealth-pulse-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: wealth_pulse
+      MYSQL_USER: wealth_user
+      MYSQL_PASSWORD: wealth_password
+    ports:
+      - "3307:3306"  # Use different port to avoid conflict with existing MySQL
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 5
+    networks:
+      - wealth-pulse-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: wealth-pulse-redis
+    restart: unless-stopped
+    command: redis-server --requirepass redis_data_center
+    ports:
+      - "6380:6379"  # Use different port to avoid conflict
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 5s
+      retries: 5
+    networks:
+      - wealth-pulse-network
+
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wealth-pulse-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: wealth_user
+      DB_PASSWORD: wealth_password
+      DB_NAME: wealth_pulse
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis_data_center
+      REDIS_DB: 0
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_RELOAD: "false"
+      SCHEDULER_ENABLED: "true"
+      MARKET_DATA_UPDATE_INTERVAL: 300
+      LOG_LEVEL: INFO
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - wealth-pulse-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  wealth-pulse-network:
+    driver: bridge

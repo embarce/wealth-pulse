@@ -1,0 +1,29 @@
+# FastAPI and server
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# Database
+sqlalchemy==2.0.35
+pymysql==1.1.1
+cryptography==43.0.1
+
+# Redis
+redis==5.2.0
+
+# Data fetching
+yfinance==0.2.50
+pandas==2.2.3
+
+# Task scheduling
+apscheduler==3.10.4
+
+# Utilities
+python-dotenv==1.0.1
+httpx==0.27.2
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9

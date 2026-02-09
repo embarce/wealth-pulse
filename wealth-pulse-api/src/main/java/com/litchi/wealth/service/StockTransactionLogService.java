@@ -40,4 +40,13 @@ public interface StockTransactionLogService extends IService<StockTransactionLog
      * @param request 卖出请求
      */
     void sellStock(String userId, StockTradeRequest request);
+
+    /**
+     * 结算当日交易（将未结算的交易标记为已结算）
+     * 结算后购买力重置为可用现金
+     *
+     * @param userId 用户ID
+     * @return 结算的交易数量
+     */
+    int settleTransactions(String userId);
 }
