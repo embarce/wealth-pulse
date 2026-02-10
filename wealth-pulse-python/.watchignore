@@ -1,0 +1,26 @@
+# Directories to ignore for file watching
+logs/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.tox/
+venv/
+env/
+ENV/
+.env
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+

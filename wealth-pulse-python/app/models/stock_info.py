@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Integer, BigInteger
+from sqlalchemy import Column, String, Integer, BigInteger, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
+from datetime import datetime
 from app.db.session import Base
 
 
@@ -8,6 +9,7 @@ class StockInfo(Base):
 
     stock_code: Mapped[str] = mapped_column(String(20), primary_key=True, comment="股票代码(如: NVDA.US)")
     company_name: Mapped[str] = mapped_column(String(100), nullable=False, comment="公司全名")
+    company_name_cn: Mapped[str] = mapped_column(String(255), nullable=False, comment="公司全名中文")
     short_name: Mapped[str | None] = mapped_column(String(50), comment="公司简称")
     stock_type: Mapped[str] = mapped_column(String(20), nullable=False, default="STOCK", comment="股票类型: STOCK/ETF/BOND/INDEX等")
     exchange: Mapped[str | None] = mapped_column(String(20), comment="交易所: NASDAQ/NYSE/SH/SZ/HK等")
@@ -16,3 +18,7 @@ class StockInfo(Base):
     market_cap: Mapped[str | None] = mapped_column(String(255), comment="市值")
     display_order: Mapped[int] = mapped_column(Integer, default=0, comment="显示顺序")
     stock_status: Mapped[int] = mapped_column(Integer, default=1, comment="状态: 1-正常交易")
+
+    # Timestamps for tracking updates
+    create_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
+    update_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")

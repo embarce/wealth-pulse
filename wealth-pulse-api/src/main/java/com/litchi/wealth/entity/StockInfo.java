@@ -31,6 +31,10 @@ public class StockInfo {
     @TableField("company_name")
     private String companyName;
 
+    @Schema(name = "companyNameCn", description = "公司中文名")
+    @TableField("company_name_cn")
+    private String companyNameCn;
+
     @Schema(name = "shortName", description = "公司简称")
     @TableField("short_name")
     private String shortName;

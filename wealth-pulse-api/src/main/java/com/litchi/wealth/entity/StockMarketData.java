@@ -68,18 +68,6 @@ public class StockMarketData {
     @TableField("turnover")
     private BigDecimal turnover;
 
-    @Schema(name = "dayLow", description = "日内最低(L)")
-    @TableField("day_low")
-    private BigDecimal dayLow;
-
-    @Schema(name = "dayHigh", description = "日内最高(N)")
-    @TableField("day_high")
-    private BigDecimal dayHigh;
-
-    @Schema(name = "priceRangePercent", description = "价格区间百分比")
-    @TableField("price_range_percent")
-    private BigDecimal priceRangePercent;
-
     @Schema(name = "week52High", description = "52周最高")
     @TableField("week52_high")
     private BigDecimal week52High;
@@ -112,21 +100,6 @@ public class StockMarketData {
     @TableField("data_source")
     private String dataSource;
 
-    @Schema(name = "bidPrice", description = "买一价")
-    @TableField("bid_price")
-    private BigDecimal bidPrice;
-
-    @Schema(name = "askPrice", description = "卖一价")
-    @TableField("ask_price")
-    private BigDecimal askPrice;
-
-    @Schema(name = "bidSize", description = "买一量")
-    @TableField("bid_size")
-    private Long bidSize;
-
-    @Schema(name = "askSize", description = "卖一量")
-    @TableField("ask_size")
-    private Long askSize;
 
     @Schema(name = "indexStr", description = "扩展指标(JSON格式)")
     @TableField("index_str")

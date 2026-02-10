@@ -6,7 +6,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class YFinanceService:
     """Service for fetching stock data from Yahoo Finance via yfinance"""
 
@@ -103,7 +102,9 @@ class YFinanceService:
                 'turnover': round(float(latest['Volume'] * current_price), 4) if pd.notna(latest['Volume']) else None,
                 'day_low': round(float(latest['Low']), 4),
                 'day_high': round(float(latest['High']), 4),
-                'price_range_percent': round(((float(latest['High']) - float(latest['Low'])) / float(latest['Low']) * 100), 4) if latest['Low'] > 0 else None,
+                'price_range_percent': round(
+                    ((float(latest['High']) - float(latest['Low'])) / float(latest['Low']) * 100), 4) if latest[
+                                                                                                             'Low'] > 0 else None,
                 'week52_high': info.get('fiftyTwoWeekHigh'),
                 'week52_low': info.get('fiftyTwoWeekLow'),
                 'market_cap': info.get('marketCap'),
@@ -150,7 +151,7 @@ class YFinanceService:
 
             # Rename columns to match database schema
             hist.columns = ['trade_date', 'open_price', 'high_price', 'low_price',
-                          'close_price', 'adj_close', 'volume']
+                            'close_price', 'adj_close', 'volume']
 
             # Add stock_code column
             stock_code = self._format_stock_code(symbol)

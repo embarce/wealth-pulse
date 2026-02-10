@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date, datetime
@@ -12,6 +12,9 @@ from app.schemas.stock import (
     StockMarketHistoryResponse
 )
 from app.core.security import get_current_user
+from app.core.exceptions import ApiException
+from app.schemas.common import success_response, page_response, ResponseCode
+from app.db.lock import distributed_lock
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,138 +22,204 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
 
 
-@router.get("/", response_model=List[StockInfoResponse])
+@router.get(
+    "/",
+    summary="Get all stocks",
+    description="Retrieve a list of all stocks in the database with pagination support."
+)
 def get_stocks(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    skip: int = Query(0, ge=0, description="Number of records to skip", example=0),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of records to return", example=100),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Get all stocks (requires authentication)
 
-    - **skip**: Number of records to skip
-    - **limit**: Maximum number of records to return
-
-    Authentication: Bearer token required
+    **Query Parameters:**
+    - `skip`: Number of records to skip (for pagination)
+    - `limit`: Maximum number of records to return (max 500)
     """
     try:
         stock_service = StockService(db)
         stocks = stock_service.get_all_stocks(skip=skip, limit=limit)
-        return stocks
+
+        # Convert to dict format
+        stocks_data = []
+        for stock in stocks:
+            stocks_data.append({
+                "stock_code": stock.stock_code,
+                "company_name": stock.company_name,
+                "short_name": stock.short_name,
+                "stock_type": stock.stock_type,
+                "exchange": stock.exchange,
+                "currency": stock.currency,
+                "industry": stock.industry,
+                "market_cap": stock.market_cap,
+                "display_order": stock.display_order,
+                "stock_status": stock.stock_status
+            })
+
+        return success_response(
+            data=stocks_data,
+            msg="Stocks retrieved successfully"
+        )
     except Exception as e:
         logger.error(f"Error getting stocks: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiException(
+            msg=f"Failed to retrieve stocks: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
 
 
-@router.get("/{stock_code}", response_model=StockInfoResponse)
+@router.get("/{stock_code}", summary="Get stock by code")
 def get_stock(
-    stock_code: str,
+    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, NVDA.US)", example="0700.HK"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Get stock by stock_code (requires authentication)
 
-    - **stock_code**: Stock code (e.g., 0700.HK, NVDA.US)
-
-    Authentication: Bearer token required
+    **Path Parameters:**
+    - `stock_code`: Stock code (e.g., 0700.HK for Tencent, NVDA.US for NVIDIA)
     """
     try:
         stock_service = StockService(db)
         stock = stock_service.get_stock_by_code(stock_code)
 
         if not stock:
-            # Try to fetch from yfinance (convert stock_code to yfinance format)
-            yf_symbol = stock_code.replace('.US', '')  # Remove .US for US stocks
+            # Try to fetch from yfinance
+            yf_symbol = stock_code.replace('.US', '')
             stock_info = yfinance_service.get_stock_info(yf_symbol)
 
             if stock_info:
                 stock = stock_service.get_or_create_stock(stock_info)
             else:
-                raise HTTPException(status_code=404, detail=f"Stock {stock_code} not found")
+                raise ApiException(
+                    msg=f"Stock {stock_code} not found",
+                    code=ResponseCode.NOT_FOUND
+                )
 
-        return stock
-    except HTTPException:
+        stock_data = {
+            "stock_code": stock.stock_code,
+            "company_name": stock.company_name,
+            "short_name": stock.short_name,
+            "stock_type": stock.stock_type,
+            "exchange": stock.exchange,
+            "currency": stock.currency,
+            "industry": stock.industry,
+            "market_cap": stock.market_cap,
+            "display_order": stock.display_order,
+            "stock_status": stock.stock_status
+        }
+
+        return success_response(
+            data=stock_data,
+            msg="Stock retrieved successfully"
+        )
+    except ApiException:
         raise
     except Exception as e:
         logger.error(f"Error getting stock {stock_code}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiException(
+            msg=f"Failed to retrieve stock: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
 
 
-@router.get("/{stock_code}/market-data", response_model=StockMarketDataResponse)
+@router.get("/{stock_code}/market-data", summary="Get market data")
 def get_market_data(
-    stock_code: str,
+    stock_code: str = Path(..., description="Stock code", example="0700.HK"),
     market_date: Optional[date] = Query(None, description="Market date (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Get market data for a stock (requires authentication)
-
-    - **stock_code**: Stock code (e.g., 0700.HK, NVDA.US)
-    - **market_date**: Market date (optional, defaults to today)
-
-    Authentication: Bearer token required
     """
     try:
         stock_service = StockService(db)
 
-        # If market_date provided, get that specific date
         if market_date:
             market_data = stock_service.get_market_data(stock_code, market_date)
         else:
-            # Get latest market data
             market_data = stock_service.get_latest_market_data(stock_code)
 
         if not market_data:
-            # Try to fetch fresh data from yfinance
             stock = stock_service.get_stock_by_code(stock_code)
             if not stock:
-                raise HTTPException(status_code=404, detail=f"Stock {stock_code} not found")
+                raise ApiException(
+                    msg=f"Stock {stock_code} not found",
+                    code=ResponseCode.NOT_FOUND
+                )
 
-            # Convert stock_code to yfinance format
             yf_symbol = stock_code.replace('.US', '')
             fresh_data = yfinance_service.get_market_data(yf_symbol)
 
             if fresh_data:
                 market_data = stock_service.update_market_data(stock_code, fresh_data)
             else:
-                raise HTTPException(status_code=404, detail=f"Market data for {stock_code} not found")
+                raise ApiException(
+                    msg=f"Market data for {stock_code} not found",
+                    code=ResponseCode.NOT_FOUND
+                )
 
-        return market_data
-    except HTTPException:
+        data = {
+            "id": market_data.id,
+            "stock_code": market_data.stock_code,
+            "last_price": float(market_data.last_price) if market_data.last_price else None,
+            "change_number": float(market_data.change_number) if market_data.change_number else None,
+            "change_rate": float(market_data.change_rate) if market_data.change_rate else None,
+            "open_price": float(market_data.open_price) if market_data.open_price else None,
+            "pre_close": float(market_data.pre_close) if market_data.pre_close else None,
+            "high_price": float(market_data.high_price) if market_data.high_price else None,
+            "low_price": float(market_data.low_price) if market_data.low_price else None,
+            "volume": market_data.volume,
+            "turnover": float(market_data.turnover) if market_data.turnover else None,
+            "market_cap": float(market_data.market_cap) if market_data.market_cap else None,
+            "pe_ratio": float(market_data.pe_ratio) if market_data.pe_ratio else None,
+            "pb_ratio": float(market_data.pb_ratio) if market_data.pb_ratio else None,
+            "quote_time": market_data.quote_time.isoformat() if market_data.quote_time else None,
+            "market_date": market_data.market_date.isoformat() if market_data.market_date else None,
+            "data_source": market_data.data_source
+        }
+
+        return success_response(
+            data=data,
+            msg="Market data retrieved successfully"
+        )
+    except ApiException:
         raise
     except Exception as e:
         logger.error(f"Error getting market data for {stock_code}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiException(
+            msg=f"Failed to retrieve market data: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
 
 
-@router.get("/{stock_code}/history", response_model=List[StockMarketHistoryResponse])
+@router.get("/{stock_code}/history", summary="Get historical data")
 def get_historical_data(
-    stock_code: str,
+    stock_code: str = Path(..., description="Stock code", example="0700.HK"),
     start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(100, ge=1, le=1000, description="Max records to return"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Get historical data for a stock (requires authentication)
-
-    - **stock_code**: Stock code (e.g., 0700.HK, NVDA.US)
-    - **start_date**: Start date filter (optional)
-    - **end_date**: End date filter (optional)
-    - **limit**: Maximum number of records to return
-
-    Authentication: Bearer token required
     """
     try:
         stock_service = StockService(db)
         stock = stock_service.get_stock_by_code(stock_code)
 
         if not stock:
-            raise HTTPException(status_code=404, detail=f"Stock {stock_code} not found")
+            raise ApiException(
+                msg=f"Stock {stock_code} not found",
+                code=ResponseCode.NOT_FOUND
+            )
 
         history = stock_service.get_historical_data(
             stock_code=stock_code,
@@ -159,68 +228,156 @@ def get_historical_data(
             limit=limit
         )
 
-        return history
-    except HTTPException:
+        history_data = []
+        for h in history:
+            history_data.append({
+                "id": h.id,
+                "stock_code": h.stock_code,
+                "trade_date": h.trade_date.isoformat() if h.trade_date else None,
+                "open_price": float(h.open_price) if h.open_price else None,
+                "high_price": float(h.high_price) if h.high_price else None,
+                "low_price": float(h.low_price) if h.low_price else None,
+                "close_price": float(h.close_price) if h.close_price else None,
+                "adj_close": float(h.adj_close) if h.adj_close else None,
+                "volume": h.volume
+            })
+
+        return success_response(
+            data=history_data,
+            msg="Historical data retrieved successfully"
+        )
+    except ApiException:
         raise
     except Exception as e:
         logger.error(f"Error getting historical data for {stock_code}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiException(
+            msg=f"Failed to retrieve historical data: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
 
 
-@router.post("/refresh")
+@router.post("/refresh", summary="Refresh market data")
 def refresh_market_data(
-    symbols: List[str] = None,
+    stock_codes: Optional[List[str]] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Manually trigger market data refresh (requires authentication)
 
-    - **symbols**: List of stock codes to refresh (optional, if not provided refreshes all monitored stocks)
+    Only updates market_data for stocks that already exist in database.
+    Does NOT create new stocks or update stock_info.
 
-    Authentication: Bearer token required
+    Query Parameters:
+    - stock_codes: Optional list of stock codes to refresh (e.g., ["0700.HK", "NVDA.US"])
+                   If not provided, refreshes all active stocks in database.
+
+    Uses distributed lock to prevent concurrent refresh operations.
     """
     try:
-        from app.tasks.scheduler import MONITORED_STOCKS
+        from app.services.yfinance_batch_service import yfinance_batch_service
+        from app.models.stock_info import StockInfo
 
-        if symbols is None:
-            # Convert yfinance symbols to stock_codes
-            symbols = [s if '.' in s else f"{s}.US" for s in MONITORED_STOCKS]
+        # Get symbols to refresh
+        if stock_codes is None:
+            # Refresh all active stocks from database
+            stocks = db.query(StockInfo.stock_code).filter(
+                StockInfo.stock_status == 1
+            ).all()
+            stock_codes = [code for (code,) in stocks]
+            logger.info(f"Refreshing all {len(stock_codes)} active stocks from database")
+        else:
+            logger.info(f"Refreshing {len(stock_codes)} specified stocks")
 
-        results = []
-        for stock_code in symbols:
-            try:
-                stock_service = StockService(db)
+        # Convert stock_codes to yfinance symbols
+        symbols = []
+        for stock_code in stock_codes:
+            # Convert from stock_code format to yfinance symbol format
+            # e.g., 'NVDA.US' -> 'NVDA', '0700.HK' -> '0700.HK'
+            if stock_code.endswith('.US'):
+                symbol = stock_code[:-3]
+            else:
+                symbol = stock_code
+            symbols.append(symbol)
 
-                # Convert stock_code to yfinance format
-                yf_symbol = stock_code.replace('.US', '')
+        if not symbols:
+            return success_response(
+                data={"results": []},
+                msg="No stocks to refresh"
+            )
 
-                # Get or create stock
-                stock_info = yfinance_service.get_stock_info(yf_symbol)
-                if stock_info:
-                    stock = stock_service.get_or_create_stock(stock_info)
+        # Use distributed lock to prevent concurrent refreshes
+        lock_name = "manual_market_data_refresh"
+        lock_timeout = 600  # 10 minutes
 
-                    # Get market data
-                    market_data = yfinance_service.get_market_data(yf_symbol)
-                    if market_data:
-                        stock_service.update_market_data(stock_info['stock_code'], market_data)
-                        results.append({"stock_code": stock_code, "status": "success"})
-                    else:
-                        results.append({"stock_code": stock_code, "status": "failed", "error": "No market data"})
-                else:
-                    results.append({"stock_code": stock_code, "status": "failed", "error": "Stock not found"})
+        try:
+            with distributed_lock(lock_name, timeout=lock_timeout, blocking=False):
+                logger.info(f"Manual market data refresh started by user {current_user.get('username', 'unknown')}")
 
-            except Exception as e:
-                results.append({"stock_code": stock_code, "status": "failed", "error": str(e)})
+                # Use batch mode for efficiency
+                batch_results = yfinance_batch_service.get_batch_market_data(symbols)
 
-        return {"results": results}
+                results = []
+                success_count = 0
+                for symbol, market_data in batch_results.items():
+                    try:
+                        if market_data:
+                            stock_service = StockService(db)
+                            stock_service.update_market_data(market_data['stock_code'], market_data)
+                            results.append({
+                                "stock_code": market_data['stock_code'],
+                                "status": "success",
+                                "last_price": market_data.get('last_price')
+                            })
+                            success_count += 1
+                        else:
+                            results.append({
+                                "symbol": symbol,
+                                "status": "failed",
+                                "error": "No market data available"
+                            })
+
+                    except Exception as e:
+                        results.append({
+                            "symbol": symbol,
+                            "status": "failed",
+                            "error": str(e)
+                        })
+
+                logger.info(f"Manual market data refresh completed: {success_count}/{len(symbols)} succeeded")
+
+                return success_response(
+                    data={
+                        "results": results,
+                        "summary": {
+                            "total": len(symbols),
+                            "succeeded": success_count,
+                            "failed": len(symbols) - success_count
+                        }
+                    },
+                    msg=f"Market data refresh completed: {success_count}/{len(symbols)} succeeded"
+                )
+
+        except RuntimeError:
+            # Lock acquisition failed - another refresh is already running
+            logger.info("Manual market data refresh skipped - another refresh is already in progress")
+            return success_response(
+                data={"results": [], "skipped": True},
+                msg="Another refresh operation is already in progress. Please wait for it to complete."
+            )
+
+    except ApiException:
+        raise
     except Exception as e:
         logger.error(f"Error refreshing market data: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiException(
+            msg=f"Failed to refresh market data: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
 
 
-# Public endpoint (no authentication required) - for testing
-@router.get("/public/list", response_model=List[StockInfoResponse])
+# Public endpoint (no authentication)
+@router.get("/public/list", summary="Get stocks (public)")
 def get_stocks_public(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -228,13 +385,33 @@ def get_stocks_public(
 ):
     """
     Get all stocks (public endpoint - no authentication required)
-
-    This endpoint is for testing and demonstration purposes.
     """
     try:
         stock_service = StockService(db)
         stocks = stock_service.get_all_stocks(skip=skip, limit=limit)
-        return stocks
+
+        stocks_data = []
+        for stock in stocks:
+            stocks_data.append({
+                "stock_code": stock.stock_code,
+                "company_name": stock.company_name,
+                "short_name": stock.short_name,
+                "stock_type": stock.stock_type,
+                "exchange": stock.exchange,
+                "currency": stock.currency,
+                "industry": stock.industry,
+                "market_cap": stock.market_cap,
+                "display_order": stock.display_order,
+                "stock_status": stock.stock_status
+            })
+
+        return success_response(
+            data=stocks_data,
+            msg="Stocks retrieved successfully"
+        )
     except Exception as e:
         logger.error(f"Error getting stocks: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiException(
+            msg=f"Failed to retrieve stocks: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )

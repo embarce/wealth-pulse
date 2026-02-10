@@ -13,8 +13,9 @@ cryptography==43.0.1
 redis==5.2.0
 
 # Data fetching
-yfinance==0.2.50
+yfinance==1.1.0
 pandas==2.2.3
+openpyxl==3.1.5  # Excel file support
 
 # Task scheduling
 apscheduler==3.10.4
