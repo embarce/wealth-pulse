@@ -1,22 +1,20 @@
-from datetime import datetime, timedelta
-
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.cron import CronTrigger
-from sqlalchemy.orm import Session
 import logging
 
+from app.services.stock_data_provider_base import BaseStockDataProvider
+from app.services.stock_service import StockService
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.db.lock import distributed_lock
+from app.db.redis import RedisClient
 from app.db.session import SessionLocal
 from app.services import (
-    get_stock_data_provider,
     get_default_provider,
     reset_provider
 )
-from app.services.stock_data_provider_base import BaseStockDataProvider
-from app.services.stock_service import StockService
-from app.db.redis import RedisClient
-from app.db.lock import distributed_lock
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -147,10 +145,10 @@ class MarketDataScheduler:
             logger.error(f"Unexpected error in market data update: {str(e)}")
 
     async def _update_market_data_batch(
-        self,
-        db: Session,
-        symbols: list[str],
-        provider: BaseStockDataProvider
+            self,
+            db: Session,
+            symbols: list[str],
+            provider: BaseStockDataProvider
     ):
         """
         Update market data using batch requests (recommended).
@@ -195,89 +193,6 @@ class MarketDataScheduler:
                 continue
 
         logger.info(f"Batch market data update completed: {success_count}/{len(symbols)} succeeded")
-
-    async def update_stock_info(self):
-        """
-        Update stock info for all stocks in database (daily at 8 AM).
-
-        This job ONLY updates stock_info (company names, industries, etc.)
-        It does NOT update market_data (prices, volumes, etc.)
-        """
-        # Use distributed lock to prevent concurrent updates
-        lock_name = "stock_info_refresh"
-        lock_timeout = 1800  # 30 minutes (stock_info updates may take longer)
-
-        try:
-            with distributed_lock(lock_name, timeout=lock_timeout, blocking=False):
-                logger.info("Starting stock_info update... (Lock acquired)")
-
-                db: Session = SessionLocal()
-                try:
-                    # Get data provider
-                    provider = self._get_data_provider()
-                    provider_type = settings.STOCK_DATA_PROVIDER
-
-                    # Get symbols from database
-                    symbols = self._get_active_stock_symbols(db)
-
-                    if not symbols:
-                        logger.warning("No active stocks found in database")
-                        return
-
-                    # Get stock info in batch
-                    logger.info(
-                        f"Fetching stock_info for {len(symbols)} symbols "
-                        f"using '{provider_type}' provider"
-                    )
-                    batch_results = provider.get_batch_stock_info(symbols)
-
-                    # Process results
-                    success_count = 0
-                    for symbol, stock_info in batch_results.items():
-                        try:
-                            if stock_info:
-                                stock_service = StockService(db)
-                                # Update existing stock info
-                                stock = stock_service.get_stock_by_code(stock_info['stock_code'])
-
-                                if stock:
-                                    # Update existing stock
-                                    stock.company_name = stock_info['company_name']
-                                    stock.short_name = stock_info['short_name']
-                                    stock.stock_type = stock_info['stock_type']
-                                    stock.exchange = stock_info['exchange']
-                                    stock.currency = stock_info['currency']
-                                    stock.industry = stock_info['industry']
-                                    stock.market_cap = stock_info['market_cap']
-                                    db.commit()
-                                    logger.debug(f"Updated stock info: {symbol} - {stock.stock_code}")
-                                    success_count += 1
-                                else:
-                                    logger.warning(f"Stock {stock_info['stock_code']} not found in database")
-
-                            else:
-                                logger.warning(f"No stock info available for {symbol}")
-
-                        except Exception as e:
-                            logger.error(f"Error updating stock info for {symbol}: {str(e)}")
-                            db.rollback()
-                            continue
-
-                    logger.info(f"Stock_info update completed: {success_count}/{len(symbols)} succeeded")
-
-                except Exception as e:
-                    logger.error(f"Error in stock_info update: {str(e)}")
-                finally:
-                    db.close()
-
-        except RuntimeError:
-            # Failed to acquire lock (another instance is already running)
-            logger.info(
-                "Stock_info update is already running in another instance. "
-                "Skipping this scheduled execution."
-            )
-        except Exception as e:
-            logger.error(f"Unexpected error in stock_info update: {str(e)}")
 
     async def update_historical_data(self):
         """Update historical data (run daily at 6 AM)"""
@@ -381,15 +296,6 @@ class MarketDataScheduler:
                 trigger=IntervalTrigger(seconds=settings.MARKET_DATA_UPDATE_INTERVAL),
                 id='market_data_update',
                 name='Update Market Data (Every 5 min)',
-                replace_existing=True
-            )
-
-            # Schedule stock info updates daily at 8 AM
-            self.scheduler.add_job(
-                self.update_stock_info,
-                trigger=CronTrigger(hour=8, minute=0),
-                id='stock_info_update',
-                name='Update Stock Info (Daily at 8 AM)',
                 replace_existing=True
             )
 
