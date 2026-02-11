@@ -5,10 +5,12 @@ from datetime import datetime, date
 import time
 import logging
 
+from app.services.stock_data_provider_base import BaseStockDataProvider
+
 logger = logging.getLogger(__name__)
 
 
-class YFinanceBatchService:
+class YFinanceBatchService(BaseStockDataProvider):
     """
     Enhanced yfinance service with batch support and rate limiting.
 
@@ -486,3 +488,7 @@ def get_batch_service(request_delay: float = 0.5) -> YFinanceBatchService:
 
 # Global instance
 yfinance_batch_service = YFinanceBatchService(request_delay=0.5)
+
+
+# Provider type identifier
+PROVIDER_TYPE = "yfinance"

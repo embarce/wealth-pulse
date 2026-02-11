@@ -7,8 +7,12 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.db.session import SessionLocal
-from app.services.yfinance_service import yfinance_service
-from app.services.yfinance_batch_service import yfinance_batch_service
+from app.services import (
+    get_stock_data_provider,
+    get_default_provider,
+    reset_provider
+)
+from app.services.stock_data_provider_base import BaseStockDataProvider
 from app.services.stock_service import StockService
 from app.db.redis import RedisClient
 from app.db.lock import distributed_lock
@@ -25,11 +29,35 @@ class MarketDataScheduler:
     1. Market Data Update - Every 5 minutes (only prices, volumes, etc.)
     2. Stock Info Update - Daily at 8 AM (only company names, industries, etc.)
     3. Historical Data Update - Daily at 6 AM (historical price data)
+
+    Data Provider:
+    - Automatically selected based on STOCK_DATA_PROVIDER environment variable
+    - Supports 'yfinance' (default) and 'akshare'
     """
 
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
         self.redis_client = None
+        self._data_provider: BaseStockDataProvider = None
+
+    def _get_data_provider(self) -> BaseStockDataProvider:
+        """
+        Get the stock data provider based on environment configuration.
+
+        Returns:
+            BaseStockDataProvider instance
+        """
+        if self._data_provider is None:
+            provider_type = getattr(settings, 'STOCK_DATA_PROVIDER', 'yfinance')
+            logger.info(f"Initializing stock data provider: {provider_type}")
+            self._data_provider = get_default_provider()
+        return self._data_provider
+
+    def _refresh_data_provider(self):
+        """Force refresh the data provider (useful for config changes)"""
+        reset_provider()
+        self._data_provider = get_default_provider()
+        logger.info(f"Data provider refreshed: {settings.STOCK_DATA_PROVIDER}")
 
     def _get_active_stock_symbols(self, db: Session) -> list[str]:
         """
@@ -90,13 +118,17 @@ class MarketDataScheduler:
                         logger.warning("No active stocks found in database")
                         return
 
-                    # Choose service based on configuration
-                    if settings.YFINANCE_USE_BATCH:
-                        logger.info(f"Using BATCH mode for {len(symbols)} symbols (market_data only)")
-                        await self._update_market_data_batch(db, symbols)
-                    else:
-                        logger.info(f"Using INDIVIDUAL mode for {len(symbols)} symbols (market_data only)")
-                        await self._update_market_data_individual(db, symbols)
+                    # Get data provider
+                    provider = self._get_data_provider()
+                    provider_type = settings.STOCK_DATA_PROVIDER
+
+                    logger.info(
+                        f"Using '{provider_type}' provider for {len(symbols)} symbols "
+                        f"(market_data update)"
+                    )
+
+                    # Use batch mode (optimized for all providers)
+                    await self._update_market_data_batch(db, symbols, provider)
 
                     logger.info("Market data update completed")
 
@@ -114,18 +146,29 @@ class MarketDataScheduler:
         except Exception as e:
             logger.error(f"Unexpected error in market data update: {str(e)}")
 
-    async def _update_market_data_batch(self, db: Session, symbols: list[str]):
+    async def _update_market_data_batch(
+        self,
+        db: Session,
+        symbols: list[str],
+        provider: BaseStockDataProvider
+    ):
         """
         Update market data using batch requests (recommended).
 
         Only updates market_data, does NOT update stock_info.
+
+        Args:
+            db: Database session
+            symbols: List of stock symbols
+            provider: Stock data provider instance
         """
         import json
 
         stock_service = StockService(db)
 
         # Get market data in batch
-        batch_results = yfinance_batch_service.get_batch_market_data(symbols)
+        logger.info(f"Fetching market data for {len(symbols)} symbols using {provider.__class__.__name__}")
+        batch_results = provider.get_batch_market_data(symbols)
 
         # Process results
         success_count = 0
@@ -153,43 +196,6 @@ class MarketDataScheduler:
 
         logger.info(f"Batch market data update completed: {success_count}/{len(symbols)} succeeded")
 
-    async def _update_market_data_individual(self, db: Session, symbols: list[str]):
-        """
-        Update market data using individual requests (with delays).
-
-        Only updates market_data, does NOT update stock_info.
-        """
-        import json
-        import time
-
-        stock_service = StockService(db)
-
-        for symbol in symbols:
-            try:
-                # Get market data
-                market_data = yfinance_service.get_market_data(symbol)
-                if market_data:
-                    stock_service.update_market_data(market_data['stock_code'], market_data)
-                    logger.info(f"Updated market data: {market_data['stock_code']}")
-
-                    # Cache in Redis
-                    if self.redis_client and market_data:
-                        cache_key = f"market_data:{market_data['stock_code']}"
-                        self.redis_client.setex(
-                            cache_key,
-                            settings.MARKET_DATA_UPDATE_INTERVAL,
-                            json.dumps(market_data, default=str)
-                        )
-
-                # Add delay between symbols to avoid rate limiting
-                time.sleep(settings.YFINANCE_REQUEST_DELAY)
-
-            except Exception as e:
-                logger.error(f"Error updating market data for {symbol}: {str(e)}")
-                continue
-
-        logger.info(f"Individual market data update completed for {len(symbols)} symbols")
-
     async def update_stock_info(self):
         """
         Update stock info for all stocks in database (daily at 8 AM).
@@ -207,6 +213,10 @@ class MarketDataScheduler:
 
                 db: Session = SessionLocal()
                 try:
+                    # Get data provider
+                    provider = self._get_data_provider()
+                    provider_type = settings.STOCK_DATA_PROVIDER
+
                     # Get symbols from database
                     symbols = self._get_active_stock_symbols(db)
 
@@ -215,8 +225,11 @@ class MarketDataScheduler:
                         return
 
                     # Get stock info in batch
-                    logger.info(f"Fetching stock_info for {len(symbols)} symbols")
-                    batch_results = yfinance_batch_service.get_batch_stock_info(symbols)
+                    logger.info(
+                        f"Fetching stock_info for {len(symbols)} symbols "
+                        f"using '{provider_type}' provider"
+                    )
+                    batch_results = provider.get_batch_stock_info(symbols)
 
                     # Process results
                     success_count = 0
@@ -279,6 +292,10 @@ class MarketDataScheduler:
                 db: Session = SessionLocal()
 
                 try:
+                    # Get data provider
+                    provider = self._get_data_provider()
+                    provider_type = settings.STOCK_DATA_PROVIDER
+
                     stock_service = StockService(db)
 
                     # Get symbols from database
@@ -288,19 +305,26 @@ class MarketDataScheduler:
                         logger.warning("No active stocks found in database")
                         return
 
+                    logger.info(
+                        f"Fetching historical data for {len(symbols)} symbols "
+                        f"using '{provider_type}' provider"
+                    )
+
                     for symbol in symbols:
                         try:
                             # Get stock info to get stock_code
-                            stock_info = yfinance_service.get_stock_info(symbol)
+                            stock_info = provider.get_batch_stock_info([symbol]).get(symbol)
                             if not stock_info:
+                                logger.warning(f"No stock info available for {symbol}, skipping")
                                 continue
 
                             stock = stock_service.get_stock_by_code(stock_info['stock_code'])
                             if not stock:
+                                logger.warning(f"Stock {stock_info['stock_code']} not found in database, skipping")
                                 continue
 
                             # Get historical data for the last month
-                            hist_df = yfinance_service.get_historical_data(symbol, period="1mo", interval="1d")
+                            hist_df = provider.get_historical_data(symbol, period="1mo", interval="1d")
 
                             if hist_df is not None:
                                 for _, row in hist_df.iterrows():
@@ -346,6 +370,11 @@ class MarketDataScheduler:
         try:
             self.redis_client = RedisClient.get_client()
 
+            # Initialize data provider and log configuration
+            provider = self._get_data_provider()
+            provider_type = settings.STOCK_DATA_PROVIDER
+            logger.info(f"Stock data provider: {provider_type} ({provider.__class__.__name__})")
+
             # Schedule market data updates every 5 minutes
             self.scheduler.add_job(
                 self.update_market_data,
@@ -375,6 +404,9 @@ class MarketDataScheduler:
 
             self.scheduler.start()
             logger.info("Scheduler started successfully")
+            logger.info("Configuration:")
+            logger.info(f"  - Data Provider: {provider_type}")
+            logger.info(f"  - Update Interval: {settings.MARKET_DATA_UPDATE_INTERVAL}s")
             logger.info("Scheduled jobs:")
             logger.info("  - Market Data Update: Every 5 minutes")
             logger.info("  - Stock Info Update: Daily at 8:00 AM")

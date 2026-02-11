@@ -28,14 +28,11 @@ class Settings(BaseSettings):
     SCHEDULER_ENABLED: bool = True
     MARKET_DATA_UPDATE_INTERVAL: int = 300  # seconds
 
-    # API Rate Limiting
-    YFINANCE_REQUEST_DELAY: float = 0.5  # seconds between requests (default: 0.5s)
-    YFINANCE_USE_BATCH: bool = True  # Use batch requests for better efficiency
-    YFINANCE_MAX_RETRIES: int = 3  # Maximum retry attempts for failed requests
-    YFINANCE_BATCH_SIZE: int = 50  # Maximum symbols per batch request
-
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    # Stock Data Provider
+    STOCK_DATA_PROVIDER: str = "yfinance"  # Options: 'yfinance', 'akshare'
 
     @property
     def DATABASE_URL(self) -> str:
