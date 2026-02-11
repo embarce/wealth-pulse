@@ -11,10 +11,7 @@ from app.core.config import settings
 from app.db.lock import distributed_lock
 from app.db.redis import RedisClient
 from app.db.session import SessionLocal
-from app.services import (
-    get_default_provider,
-    reset_provider
-)
+from app.services.stock_data_provider_factory import get_stock_data_provider, StockDataProviderFactory
 
 logger = logging.getLogger(__name__)
 
@@ -46,15 +43,14 @@ class MarketDataScheduler:
             BaseStockDataProvider instance
         """
         if self._data_provider is None:
-            provider_type = getattr(settings, 'STOCK_DATA_PROVIDER', 'yfinance')
-            logger.info(f"Initializing stock data provider: {provider_type}")
-            self._data_provider = get_default_provider()
+            logger.info(f"Initializing stock data provider: {settings.STOCK_DATA_PROVIDER}")
+            self._data_provider = get_stock_data_provider()
         return self._data_provider
 
     def _refresh_data_provider(self):
         """Force refresh the data provider (useful for config changes)"""
-        reset_provider()
-        self._data_provider = get_default_provider()
+        StockDataProviderFactory.reset_cache()
+        self._data_provider = get_stock_data_provider()
         logger.info(f"Data provider refreshed: {settings.STOCK_DATA_PROVIDER}")
 
     def _get_active_stock_symbols(self, db: Session) -> list[str]:
@@ -164,35 +160,40 @@ class MarketDataScheduler:
 
         stock_service = StockService(db)
 
-        # Get market data in batch
-        logger.info(f"Fetching market data for {len(symbols)} symbols using {provider.__class__.__name__}")
-        batch_results = provider.get_batch_market_data(symbols)
+        # Convert symbols to stock_codes
+        stock_codes = []
+        for symbol in symbols:
+            stock_codes.append(symbol)
+
+        # Get market data in batch using the new provider interface with retry
+        logger.info(f"Fetching market data for {len(stock_codes)} stock_codes using {provider.__class__.__name__}")
+        results = provider.get_batch_market_data_with_retry(stock_codes)
 
         # Process results
         success_count = 0
-        for symbol, market_data in batch_results.items():
+        for result in results:
             try:
-                if market_data:
-                    stock_service.update_market_data(market_data['stock_code'], market_data)
-                    logger.info(f"Updated market data: {market_data['stock_code']}")
+                if result.success and result.data:
+                    stock_service.update_market_data(result.stock_code, result.data)
+                    logger.info(f"Updated market data: {result.stock_code}")
                     success_count += 1
 
                     # Cache in Redis
                     if self.redis_client:
-                        cache_key = f"market_data:{market_data['stock_code']}"
+                        cache_key = f"market_data:{result.stock_code}"
                         self.redis_client.setex(
                             cache_key,
                             settings.MARKET_DATA_UPDATE_INTERVAL,
-                            json.dumps(market_data, default=str)
+                            json.dumps(result.data, default=str)
                         )
                 else:
-                    logger.warning(f"No market data available for {symbol}")
+                    logger.warning(f"No market data available for {result.stock_code}: {result.error_message}")
 
             except Exception as e:
-                logger.error(f"Error updating market data for {symbol}: {str(e)}")
+                logger.error(f"Error updating market data for {result.stock_code}: {str(e)}")
                 continue
 
-        logger.info(f"Batch market data update completed: {success_count}/{len(symbols)} succeeded")
+        logger.info(f"Batch market data update completed: {success_count}/{len(stock_codes)} succeeded")
 
     async def update_historical_data(self):
         """Update historical data (run daily at 6 AM)"""
@@ -225,42 +226,58 @@ class MarketDataScheduler:
                         f"using '{provider_type}' provider"
                     )
 
+                    # Convert symbols to stock_codes
+                    stock_codes = []
                     for symbol in symbols:
+                        if '.' in symbol:
+                            stock_codes.append(symbol)  # Already in stock_code format (e.g., '0700.HK')
+                        else:
+                            stock_codes.append(f"{symbol}.US")  # Convert to stock_code format
+
+                    # Filter out stocks that don't exist in database
+                    valid_stock_codes = []
+                    for stock_code in stock_codes:
+                        stock = stock_service.get_stock_by_code(stock_code)
+                        if stock:
+                            valid_stock_codes.append(stock_code)
+                        else:
+                            logger.warning(f"Stock {stock_code} not found in database, skipping")
+
+                    if not valid_stock_codes:
+                        logger.warning("No valid stocks to update historical data")
+                        return
+
+                    # Get historical date range (last 3 months)
+                    from datetime import date, timedelta
+                    start_date = date.today() - timedelta(days=90)
+                    end_date = date.today()
+
+                    logger.info(f"Fetching batch historical data for {len(valid_stock_codes)} stocks from {start_date} to {end_date}")
+
+                    # Use BATCH method for much better performance!
+                    batch_results = provider.get_batch_history_data(
+                        valid_stock_codes,
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+
+                    # Process batch results
+                    success_count = 0
+                    total_records = 0
+                    for stock_code, history_list in batch_results.items():
                         try:
-                            # Get stock info to get stock_code
-                            stock_info = provider.get_batch_stock_info([symbol]).get(symbol)
-                            if not stock_info:
-                                logger.warning(f"No stock info available for {symbol}, skipping")
-                                continue
-
-                            stock = stock_service.get_stock_by_code(stock_info['stock_code'])
-                            if not stock:
-                                logger.warning(f"Stock {stock_info['stock_code']} not found in database, skipping")
-                                continue
-
-                            # Get historical data for the last month
-                            hist_df = provider.get_historical_data(symbol, period="1mo", interval="1d")
-
-                            if hist_df is not None:
-                                for _, row in hist_df.iterrows():
-                                    hist_data = {
-                                        'trade_date': row['trade_date'],
-                                        'open_price': float(row['open_price']) if row['open_price'] else None,
-                                        'high_price': float(row['high_price']) if row['high_price'] else None,
-                                        'low_price': float(row['low_price']) if row['low_price'] else None,
-                                        'close_price': float(row['close_price']) if row['close_price'] else None,
-                                        'adj_close': float(row['adj_close']) if row['adj_close'] else None,
-                                        'volume': int(row['volume']) if row['volume'] else None,
-                                    }
-                                    stock_service.save_historical_data(stock.stock_code, hist_data)
-
-                                logger.info(f"Updated historical data: {stock.stock_code}")
-
+                            if history_list:
+                                stock_service.update_history_data(stock_code, history_list)
+                                logger.info(f"Updated historical data: {stock_code}, {len(history_list)} records")
+                                success_count += 1
+                                total_records += len(history_list)
+                            else:
+                                logger.warning(f"No historical data available for {stock_code}")
                         except Exception as e:
-                            logger.error(f"Error updating historical data for {symbol}: {str(e)}")
+                            logger.error(f"Error updating historical data for {stock_code}: {str(e)}")
                             continue
 
-                    logger.info("Historical data update completed")
+                    logger.info(f"Historical data batch update completed: {success_count}/{len(valid_stock_codes)} succeeded, {total_records} total records")
 
                 except Exception as e:
                     logger.error(f"Error in historical data update: {str(e)}")

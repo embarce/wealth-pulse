@@ -5,7 +5,6 @@ from datetime import date, datetime
 
 from app.db.session import get_db
 from app.services.stock_service import StockService
-from app.services.yfinance_service import yfinance_service
 from app.schemas.stock import (
     StockInfoResponse,
     StockMarketDataResponse,
@@ -89,17 +88,10 @@ def get_stock(
         stock = stock_service.get_stock_by_code(stock_code)
 
         if not stock:
-            # Try to fetch from yfinance
-            yf_symbol = stock_code.replace('.US', '')
-            stock_info = yfinance_service.get_stock_info(yf_symbol)
-
-            if stock_info:
-                stock = stock_service.get_or_create_stock(stock_info)
-            else:
-                raise ApiException(
-                    msg=f"Stock {stock_code} not found",
-                    code=ResponseCode.NOT_FOUND
-                )
+            raise ApiException(
+                msg=f"Stock {stock_code} not found",
+                code=ResponseCode.NOT_FOUND
+            )
 
         stock_data = {
             "stock_code": stock.stock_code,
@@ -147,18 +139,11 @@ def get_market_data(
             market_data = stock_service.get_latest_market_data(stock_code)
 
         if not market_data:
-            stock = stock_service.get_stock_by_code(stock_code)
-            if not stock:
-                raise ApiException(
-                    msg=f"Stock {stock_code} not found",
-                    code=ResponseCode.NOT_FOUND
-                )
-
-            yf_symbol = stock_code.replace('.US', '')
-            fresh_data = yfinance_service.get_market_data(yf_symbol)
+            # Try to refresh from data provider
+            fresh_data = stock_service.refresh_stock_market_data(stock_code)
 
             if fresh_data:
-                market_data = stock_service.update_market_data(stock_code, fresh_data)
+                market_data = fresh_data
             else:
                 raise ApiException(
                     msg=f"Market data for {stock_code} not found",
@@ -275,10 +260,9 @@ def refresh_market_data(
     Uses distributed lock to prevent concurrent refresh operations.
     """
     try:
-        from app.services.yfinance_batch_service import yfinance_batch_service
         from app.models.stock_info import StockInfo
 
-        # Get symbols to refresh
+        # Get stock codes to refresh
         if stock_codes is None:
             # Refresh all active stocks from database
             stocks = db.query(StockInfo.stock_code).filter(
@@ -289,18 +273,7 @@ def refresh_market_data(
         else:
             logger.info(f"Refreshing {len(stock_codes)} specified stocks")
 
-        # Convert stock_codes to yfinance symbols
-        symbols = []
-        for stock_code in stock_codes:
-            # Convert from stock_code format to yfinance symbol format
-            # e.g., 'NVDA.US' -> 'NVDA', '0700.HK' -> '0700.HK'
-            if stock_code.endswith('.US'):
-                symbol = stock_code[:-3]
-            else:
-                symbol = stock_code
-            symbols.append(symbol)
-
-        if not symbols:
+        if not stock_codes:
             return success_response(
                 data={"results": []},
                 msg="No stocks to refresh"
@@ -314,48 +287,42 @@ def refresh_market_data(
             with distributed_lock(lock_name, timeout=lock_timeout, blocking=False):
                 logger.info(f"Manual market data refresh started by user {current_user.get('username', 'unknown')}")
 
-                # Use batch mode for efficiency
-                batch_results = yfinance_batch_service.get_batch_market_data(symbols)
+                # Use the new StockService batch refresh method
+                stock_service = StockService(db)
+                success_map = stock_service.refresh_batch_market_data(stock_codes)
 
+                # Build results
                 results = []
                 success_count = 0
-                for symbol, market_data in batch_results.items():
-                    try:
-                        if market_data:
-                            stock_service = StockService(db)
-                            stock_service.update_market_data(market_data['stock_code'], market_data)
-                            results.append({
-                                "stock_code": market_data['stock_code'],
-                                "status": "success",
-                                "last_price": market_data.get('last_price')
-                            })
-                            success_count += 1
-                        else:
-                            results.append({
-                                "symbol": symbol,
-                                "status": "failed",
-                                "error": "No market data available"
-                            })
-
-                    except Exception as e:
+                for stock_code in stock_codes:
+                    if success_map.get(stock_code, False):
+                        # Get the updated market data
+                        market_data = stock_service.get_latest_market_data(stock_code)
                         results.append({
-                            "symbol": symbol,
+                            "stock_code": stock_code,
+                            "status": "success",
+                            "last_price": float(market_data.last_price) if market_data and market_data.last_price else None
+                        })
+                        success_count += 1
+                    else:
+                        results.append({
+                            "stock_code": stock_code,
                             "status": "failed",
-                            "error": str(e)
+                            "error": "Failed to refresh market data"
                         })
 
-                logger.info(f"Manual market data refresh completed: {success_count}/{len(symbols)} succeeded")
+                logger.info(f"Manual market data refresh completed: {success_count}/{len(stock_codes)} succeeded")
 
                 return success_response(
                     data={
                         "results": results,
                         "summary": {
-                            "total": len(symbols),
+                            "total": len(stock_codes),
                             "succeeded": success_count,
-                            "failed": len(symbols) - success_count
+                            "failed": len(stock_codes) - success_count
                         }
                     },
-                    msg=f"Market data refresh completed: {success_count}/{len(symbols)} succeeded"
+                    msg=f"Market data refresh completed: {success_count}/{len(stock_codes)} succeeded"
                 )
 
         except RuntimeError:
