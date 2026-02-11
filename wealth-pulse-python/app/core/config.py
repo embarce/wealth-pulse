@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # Stock Data Provider
-    STOCK_DATA_PROVIDER: str = "yfinance"  # Options: 'yfinance', 'akshare'
+    STOCK_DATA_PROVIDER: str = "akshare"  # Options: 'yfinance', 'akshare'
 
     @property
     def DATABASE_URL(self) -> str:
