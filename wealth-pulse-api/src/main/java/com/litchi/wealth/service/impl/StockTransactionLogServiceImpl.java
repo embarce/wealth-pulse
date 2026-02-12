@@ -79,19 +79,58 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
                 // 2. 计算手续费（目前只支持港股HKD）zabank
                 HkStockFeeCalculator.FeeResult feeResult;
                 if ("HKD".equals(currency)) {
-                    feeResult = HkStockFeeCalculator.calculateBuyFee(totalAmount);
-                    log.info("买入手续费: {}", HkStockFeeCalculator.formatFeeInfo(feeResult));
+                    // 检查是否手动输入手续费（优先级最高）
+                    if (request.getManualTotalFee() != null && request.getManualTotalFee().compareTo(BigDecimal.ZERO) > 0) {
+                        feeResult = new HkStockFeeCalculator.FeeResult();
+                        feeResult.setTotalFee(request.getManualTotalFee());
+                        feeResult.setNetAmount(totalAmount.subtract(request.getManualTotalFee()));
+                        feeResult.setPlatformFee(request.getManualTotalFee()); // 简化处理
+                        log.info("使用手动总费用: {}", request.getManualTotalFee());
+                    } else if (request.getManualCommission() != null || request.getManualTax() != null) {
+                        // 使用部分手动费用
+                        HkStockFeeCalculator.FeeResult autoFeeResult = HkStockFeeCalculator.calculateBuyFee(totalAmount);
+                        BigDecimal commission = request.getManualCommission() != null ? request.getManualCommission() : autoFeeResult.getPlatformFee();
+                        BigDecimal tax = request.getManualTax() != null ? request.getManualTax() : autoFeeResult.getStampDuty();
+
+                        feeResult = new HkStockFeeCalculator.FeeResult();
+                        feeResult.setPlatformFee(commission);
+                        feeResult.setStampDuty(tax);
+                        feeResult.setSfcLevy(autoFeeResult.getSfcLevy());
+                        feeResult.setExchangeTradingFee(autoFeeResult.getExchangeTradingFee());
+                        feeResult.setSettlementFee(autoFeeResult.getSettlementFee());
+                        feeResult.setFrcLevy(autoFeeResult.getFrcLevy());
+
+                        // 重新计算总费用
+                        BigDecimal totalFee = commission.add(tax)
+                                .add(autoFeeResult.getSfcLevy())
+                                .add(autoFeeResult.getExchangeTradingFee())
+                                .add(autoFeeResult.getSettlementFee())
+                                .add(autoFeeResult.getFrcLevy());
+                        feeResult.setTotalFee(totalFee);
+                        feeResult.setNetAmount(totalAmount.subtract(totalFee));
+                        log.info("使用部分手动费用 - commission: {}, tax: {}, totalFee: {}", commission, tax, totalFee);
+                    } else {
+                        // 自动计算手续费
+                        feeResult = HkStockFeeCalculator.calculateBuyFee(totalAmount);
+                        log.info("自动计算买入手续费: {}", HkStockFeeCalculator.formatFeeInfo(feeResult));
+                    }
                 } else {
                     // 非港股暂不计算手续费
                     feeResult = new HkStockFeeCalculator.FeeResult();
                     feeResult.setNetAmount(totalAmount);
                 }
 
-                // 3. 检查购买力是否足够（支持T+0交易）
+                // 3. 检查购买力+可用现金是否足够（支持T+0交易）
                 UserAssetSummary assetSummary = getUserAssetSummary(userId);
                 BigDecimal requiredCash = feeResult.getNetAmount();
-                if (assetSummary.getPurchasingPower().compareTo(requiredCash) < 0) {
-                    throw new RuntimeException("购买力不足，无法买入。需要: " + requiredCash + "，购买力: " + assetSummary.getPurchasingPower() + "（可用现金: " + assetSummary.getAvailableCash() + "）");
+
+                // 计算总可用资金（购买力 + 可用现金）
+                BigDecimal totalAvailable = assetSummary.getPurchasingPower().add(assetSummary.getAvailableCash());
+                if (totalAvailable.compareTo(requiredCash) < 0) {
+                    throw new RuntimeException("资金不足，无法买入。需要: " + requiredCash +
+                            "，购买力: " + assetSummary.getPurchasingPower() +
+                            "，可用现金: " + assetSummary.getAvailableCash() +
+                            "，总计: " + totalAvailable);
                 }
 
                 // 4. 创建交易记录（包含手续费信息）
@@ -101,8 +140,8 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
                 // 5. 更新持仓
                 updatePositionForBuy(userId, request, currency);
 
-                // 6. 更新用户资产（扣除所有费用）
-                updateAssetForBuy(userId, totalAmount, feeResult.getTotalFee());
+                // 6. 更新用户资产（扣除所有费用，自动从可用现金补充购买力）
+                updateAssetForBuy(userId, requiredCash, totalAmount, feeResult.getTotalFee());
 
                 log.info("买入股票成功, userId={}, stockCode={}, totalAmount={}, totalFee={}",
                         userId, request.getStockCode(), totalAmount, feeResult.getTotalFee());
@@ -139,8 +178,41 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
                 // 3. 计算手续费（目前只支持港股HKD）
                 HkStockFeeCalculator.FeeResult feeResult;
                 if ("HKD".equals(currency)) {
-                    feeResult = HkStockFeeCalculator.calculateSellFee(totalAmount);
-                    log.info("卖出手续费: {}", HkStockFeeCalculator.formatFeeInfo(feeResult));
+                    // 检查是否手动输入手续费（优先级最高）
+                    if (request.getManualTotalFee() != null && request.getManualTotalFee().compareTo(BigDecimal.ZERO) > 0) {
+                        feeResult = new HkStockFeeCalculator.FeeResult();
+                        feeResult.setTotalFee(request.getManualTotalFee());
+                        feeResult.setNetAmount(totalAmount.subtract(request.getManualTotalFee()));
+                        feeResult.setPlatformFee(request.getManualTotalFee()); // 简化处理
+                        log.info("使用手动总费用: {}", request.getManualTotalFee());
+                    } else if (request.getManualCommission() != null || request.getManualTax() != null) {
+                        // 使用部分手动费用
+                        HkStockFeeCalculator.FeeResult autoFeeResult = HkStockFeeCalculator.calculateSellFee(totalAmount);
+                        BigDecimal commission = request.getManualCommission() != null ? request.getManualCommission() : autoFeeResult.getPlatformFee();
+                        BigDecimal tax = request.getManualTax() != null ? request.getManualTax() : autoFeeResult.getStampDuty();
+
+                        feeResult = new HkStockFeeCalculator.FeeResult();
+                        feeResult.setPlatformFee(commission);
+                        feeResult.setStampDuty(tax);
+                        feeResult.setSfcLevy(autoFeeResult.getSfcLevy());
+                        feeResult.setExchangeTradingFee(autoFeeResult.getExchangeTradingFee());
+                        feeResult.setSettlementFee(autoFeeResult.getSettlementFee());
+                        feeResult.setFrcLevy(autoFeeResult.getFrcLevy());
+
+                        // 重新计算总费用
+                        BigDecimal totalFee = commission.add(tax)
+                                .add(autoFeeResult.getSfcLevy())
+                                .add(autoFeeResult.getExchangeTradingFee())
+                                .add(autoFeeResult.getSettlementFee())
+                                .add(autoFeeResult.getFrcLevy());
+                        feeResult.setTotalFee(totalFee);
+                        feeResult.setNetAmount(totalAmount.subtract(totalFee));
+                        log.info("使用部分手动费用 - commission: {}, tax: {}, totalFee: {}", commission, tax, totalFee);
+                    } else {
+                        // 自动计算手续费
+                        feeResult = HkStockFeeCalculator.calculateSellFee(totalAmount);
+                        log.info("自动计算卖出手续费: {}", HkStockFeeCalculator.formatFeeInfo(feeResult));
+                    }
                 } else {
                     // 非港股暂不计算手续费
                     feeResult = new HkStockFeeCalculator.FeeResult();
@@ -283,45 +355,56 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
     }
 
     /**
-     * 买入时更新用户资产
+     * 买入时更新用户资产（新逻辑：自动从可用现金补充购买力）
      */
-    private void updateAssetForBuy(String userId, BigDecimal totalAmount, BigDecimal totalFee) {
+    private void updateAssetForBuy(String userId, BigDecimal requiredCash, BigDecimal totalAmount, BigDecimal totalFee) {
         UserAssetSummary assetSummary = getUserAssetSummary(userId);
 
-        BigDecimal totalDeduct = totalAmount.add(totalFee);
+        BigDecimal currentPurchasingPower = assetSummary.getPurchasingPower();
+        BigDecimal currentAvailableCash = assetSummary.getAvailableCash();
 
-        // ⚠️ 关键：买入时需要同时处理 availableCash 和 purchasingPower
-        // purchasingPower = availableCash + 未结算卖出资金
-        // 买入时：availableCash 减少，未结算卖出资金不变
-        // 所以：purchasingPower 减少的金额 = availableCash 减少的金额
+        // 1. 如果购买力不足，从可用现金自动补充到购买力
+        BigDecimal transferAmount = BigDecimal.ZERO;
+        BigDecimal newPurchasingPower = currentPurchasingPower;
+        BigDecimal newAvailableCash = currentAvailableCash;
 
-        // 计算从 availableCash 扣除的金额（不超过现有可用现金）
-        BigDecimal deductFromCash = assetSummary.getAvailableCash().min(totalDeduct);
-        BigDecimal newAvailableCash = assetSummary.getAvailableCash().subtract(deductFromCash);
+        if (currentPurchasingPower.compareTo(requiredCash) < 0) {
+            // 购买力不足，计算需要补充的金额
+            transferAmount = requiredCash.subtract(currentPurchasingPower);
+
+            // 从可用现金转账到购买力（只能补充到刚好够买）
+            if (transferAmount.compareTo(currentAvailableCash) > 0) {
+                throw new RuntimeException("可用现金不足以补充购买力。需要补充: " + transferAmount + "，可用现金: " + currentAvailableCash);
+            }
+
+            newPurchasingPower = currentPurchasingPower.add(transferAmount);
+            newAvailableCash = currentAvailableCash.subtract(transferAmount);
+
+            log.info("买入时从可用现金补充购买力, userId={}, transferAmount={}, newPurchasingPower={}, newAvailableCash={}",
+                    userId, transferAmount, newPurchasingPower, newAvailableCash);
+        }
+
+        // 2. 从购买力扣除买入金额（买入优先扣取购买力）
+        newPurchasingPower = newPurchasingPower.subtract(requiredCash);
+
+        // 3. 更新资产摘要
         assetSummary.setAvailableCash(newAvailableCash);
-
-        // purchasingPower 只扣除 deductFromCash（即 availableCash 减少的部分）
-        // 原因：purchasingPower = availableCash + 未结算资金
-        // 买入时，未结算资金不变，availableCash 减少了 deductFromCash
-        // 所以 purchasingPower 也应该只减少 deductFromCash
-        //todo
-        BigDecimal newPurchasingPower = assetSummary.getPurchasingPower().subtract(deductFromCash);
         assetSummary.setPurchasingPower(newPurchasingPower);
 
-        // 增加持仓市值（用交易金额作为市值增量，不含手续费）
+        // 4. 增加持仓市值（用交易金额作为市值增量，不含手续费）
         BigDecimal newPositionValue = assetSummary.getPositionValue().add(totalAmount);
         assetSummary.setPositionValue(newPositionValue);
 
-        // 重新计算总资产 = 可用现金 + 持仓市值
+        // 5. 重新计算总资产 = 可用现金 + 持仓市值
         BigDecimal newTotalAssets = newAvailableCash.add(newPositionValue);
         assetSummary.setTotalAssets(newTotalAssets);
 
-        // 增加买入次数
+        // 6. 增加买入次数
         assetSummary.setTotalBuyCount(assetSummary.getTotalBuyCount() + 1);
 
         userAssetSummaryService.updateById(assetSummary);
-        log.info("买入更新用户资产成功, userId={}, totalAmount={}, totalFee={}, deductFromCash={}, newAvailableCash={}, newPurchasingPower={}, newPositionValue={}",
-                userId, totalAmount, totalFee, deductFromCash, newAvailableCash, newPurchasingPower, newPositionValue);
+        log.info("买入更新用户资产成功, userId={}, requiredCash={}, totalAmount={}, totalFee={}, transferAmount={}, newAvailableCash={}, newPurchasingPower={}, newPositionValue={}",
+                userId, requiredCash, totalAmount, totalFee, transferAmount, newAvailableCash, newPurchasingPower, newPositionValue);
     }
 
     /**
@@ -449,15 +532,39 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
 
         // 更新用户资产
         UserAssetSummary assetSummary = getUserAssetSummary(userId);
+        BigDecimal currentPurchasingPower = assetSummary.getPurchasingPower();
+        BigDecimal currentAvailableCash = assetSummary.getAvailableCash();
 
-        // 将卖出净收入转入可用现金（T+2结算完成）
-        BigDecimal newAvailableCash = assetSummary.getAvailableCash().add(settlementAmount);
+        // T+2结算：将购买力转入可用现金
+        // 卖出时：purchasingPower 增加（资金立即可用于T+0交易）
+        // 结算时：purchasingPower 减少，availableCash 增加（资金可以提现）
+
+        BigDecimal actualTransfer;
+        BigDecimal newPurchasingPower;
+        BigDecimal newAvailableCash;
+
+        if (currentPurchasingPower.compareTo(settlementAmount) >= 0) {
+            // 场景1：购买力充足，全额转入可用现金
+            actualTransfer = settlementAmount;
+            newPurchasingPower = currentPurchasingPower.subtract(settlementAmount);
+            newAvailableCash = currentAvailableCash.add(settlementAmount);
+
+            log.info("结算：购买力充足，全额转入可用现金, userId={}, settlementAmount={}, newPurchasingPower={}, newAvailableCash={}",
+                    userId, settlementAmount, newPurchasingPower, newAvailableCash);
+        } else {
+            // 场景2：购买力不足，说明部分/全部卖出资金已经重新买入
+            // 将剩余购买力全部转入可用现金
+            actualTransfer = currentPurchasingPower;
+            newPurchasingPower = BigDecimal.ZERO;
+            newAvailableCash = currentAvailableCash.add(currentPurchasingPower);
+
+            log.warn("结算：购买力不足，说明已重新投入市场, userId={}, settlementAmount={}, currentPurchasingPower={}, actualTransfer={}, newAvailableCash={}",
+                    userId, settlementAmount, currentPurchasingPower, actualTransfer, newAvailableCash);
+        }
+
+        // 更新资产
+        assetSummary.setPurchasingPower(newPurchasingPower);
         assetSummary.setAvailableCash(newAvailableCash);
-
-        // ⚠️ 不需要重置 purchasingPower！
-        // 原因：purchasingPower 在每次交易时已经被正确维护
-        // 结算后，purchasingPower 应该仍然保持其值（应该等于 newAvailableCash）
-        // 如果不等，说明交易逻辑有问题，应该修正交易逻辑而不是在这里 set
 
         // 重新计算总资产
         BigDecimal newTotalAssets = newAvailableCash.add(assetSummary.getPositionValue());
@@ -465,8 +572,8 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
 
         userAssetSummaryService.updateById(assetSummary);
 
-        log.info("结算交易完成, userId={}, settledCount={}, settlementAmount={}, newAvailableCash={}, newPurchasingPower={}",
-                userId, unsettledTransactions.size(), settlementAmount, newAvailableCash, newAvailableCash);
+        log.info("结算交易完成, userId={}, settledCount={}, settlementAmount={}, actualTransfer={}, newAvailableCash={}, newPurchasingPower={}",
+                userId, unsettledTransactions.size(), settlementAmount, actualTransfer, newAvailableCash, newPurchasingPower);
         return unsettledTransactions.size();
     }
 }

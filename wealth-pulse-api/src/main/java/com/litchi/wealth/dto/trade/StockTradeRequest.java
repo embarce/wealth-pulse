@@ -43,4 +43,13 @@ public class StockTradeRequest {
 
     @Schema(name = "remark", description = "备注", example = "看好长期增长")
     private String remark;
+
+    @Schema(name = "manualCommission", description = "手动输入佣金（可选，用于纠错）", example = "5.00")
+    private BigDecimal manualCommission;
+
+    @Schema(name = "manualTax", description = "手动输入税费（可选，用于纠错）", example = "10.00")
+    private BigDecimal manualTax;
+
+    @Schema(name = "manualTotalFee", description = "手动输入总费用（可选，优先级最高）", example = "15.50")
+    private BigDecimal manualTotalFee;
 }

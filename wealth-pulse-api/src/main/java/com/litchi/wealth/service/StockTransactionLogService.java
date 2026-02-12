@@ -1,7 +1,6 @@
 package com.litchi.wealth.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.litchi.wealth.dto.trade.StockTradeRequest;
 import com.litchi.wealth.entity.StockTransactionLog;

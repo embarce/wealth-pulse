@@ -2,6 +2,8 @@ package com.litchi.wealth.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.litchi.wealth.entity.User;
+import com.litchi.wealth.vo.AssetDashboardVo;
+import com.litchi.wealth.vo.PositionDashboardVo;
 import com.litchi.wealth.vo.UserVo;
 
 /**
@@ -27,5 +29,17 @@ public interface UserService extends IService<User> {
      * @return
      */
     UserVo getUserVo();
+
+    /**
+     * 获取资产总览
+     * @return
+     */
+    AssetDashboardVo getAssetDashboard();
+
+    /**
+     * 获取仓位总览
+     * @return
+     */
+    PositionDashboardVo getPositionDashboard();
 
 }

@@ -2,6 +2,8 @@ package com.litchi.wealth.controller;
 
 import com.litchi.wealth.constant.Result;
 import com.litchi.wealth.service.UserService;
+import com.litchi.wealth.vo.AssetDashboardVo;
+import com.litchi.wealth.vo.PositionDashboardVo;
 import com.litchi.wealth.vo.UserVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -73,7 +75,8 @@ public class UserController {
     })
     @GetMapping("/assets/dashboard")
     public Result getAssets() {
-        return Result.success();
+        AssetDashboardVo dashboard = userService.getAssetDashboard();
+        return Result.success(dashboard);
     }
 
 
@@ -96,6 +99,7 @@ public class UserController {
     })
     @GetMapping("/positions/dashboard")
     public Result getPositions() {
-        return Result.success();
+        PositionDashboardVo dashboard = userService.getPositionDashboard();
+        return Result.success(dashboard);
     }
 }
