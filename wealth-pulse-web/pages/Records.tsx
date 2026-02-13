@@ -1,16 +1,18 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { Transaction, CapitalLog, TransactionType, CapitalType } from '../types';
+import { Transaction, TransactionType, CapitalType } from '../types';
 import ShareModal from '../components/ShareModal';
 import CustomSelect from '../components/CustomSelect';
 import DateRangePicker from '../components/DateRangePicker';
+import { capitalApi, CapitalFlowVo } from '../services/capitalApi';
 
 interface RecordsProps {
   transactions: Transaction[];
-  capitalLogs: CapitalLog[];
+  capitalRefreshTrigger?: number;
 }
 
-const Records: React.FC<RecordsProps> = ({ transactions, capitalLogs }) => {
+const PAGE_SIZE = 20;
+
+const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }) => {
   const [activeSubTab, setActiveSubTab] = useState<'trade' | 'capital'>('trade');
 
   // 交易明细筛选
@@ -19,19 +21,55 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalLogs }) => {
   const [tradeStartDate, setTradeStartDate] = useState('');
   const [tradeEndDate, setTradeEndDate] = useState('');
 
-  // 本金流水筛选
+  // 本金流水筛选（服务端分页）
   const [capitalTypeFilter, setCapitalTypeFilter] = useState<'ALL' | CapitalType.DEPOSIT | CapitalType.WITHDRAW>('ALL');
   const [capitalStartDate, setCapitalStartDate] = useState('');
   const [capitalEndDate, setCapitalEndDate] = useState('');
+  const [capitalRecords, setCapitalRecords] = useState<CapitalFlowVo[]>([]);
+  const [capitalLoading, setCapitalLoading] = useState(false);
+  const [capitalTotalItems, setCapitalTotalItems] = useState(0);
+  const [capitalTotalPages, setCapitalTotalPages] = useState(1);
 
   // 分页
   const [tradePage, setTradePage] = useState(1);
   const [capitalPage, setCapitalPage] = useState(1);
-  const PAGE_SIZE = 20;
 
   // 多选状态
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
   const [isShareOpen, setIsShareOpen] = useState(false);
+
+  // 本金流水从 API 拉取（服务端分页）
+  useEffect(() => {
+    if (activeSubTab !== 'capital') return;
+    let cancelled = false;
+    setCapitalLoading(true);
+    capitalApi
+      .getRecordPage({
+        pageNum: capitalPage,
+        pageSize: PAGE_SIZE,
+        tradeType: capitalTypeFilter === 'ALL' ? undefined : capitalTypeFilter,
+        tradeStartTime: capitalStartDate || undefined,
+        tradeEndTime: capitalEndDate || undefined,
+      })
+      .then((res) => {
+        if (!cancelled) {
+          setCapitalRecords(res.rows || []);
+          setCapitalTotalItems(res.totalCount ?? 0);
+          setCapitalTotalPages(Math.max(1, res.totalPage ?? 1));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCapitalRecords([]);
+          setCapitalTotalItems(0);
+          setCapitalTotalPages(1);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCapitalLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeSubTab, capitalPage, capitalTypeFilter, capitalStartDate, capitalEndDate, capitalRefreshTrigger]);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
@@ -46,23 +84,8 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalLogs }) => {
     });
   }, [transactions, searchTerm, tradeTypeFilter, tradeStartDate, tradeEndDate]);
 
-  const filteredCapitalLogs = useMemo(() => {
-    return capitalLogs.filter(log => {
-      const matchType = capitalTypeFilter === 'ALL' || log.type === capitalTypeFilter;
-      const time = new Date(log.date).getTime();
-      const afterStart = !capitalStartDate || time >= new Date(capitalStartDate).getTime();
-      const beforeEnd =
-        !capitalEndDate ||
-        time <= new Date(capitalEndDate).getTime() + 24 * 60 * 60 * 1000 - 1;
-      return matchType && afterStart && beforeEnd;
-    });
-  }, [capitalLogs, capitalTypeFilter, capitalStartDate, capitalEndDate]);
-
   const tradeTotalItems = filteredTransactions.length;
   const tradeTotalPages = Math.max(1, Math.ceil(tradeTotalItems / PAGE_SIZE));
-
-  const capitalTotalItems = filteredCapitalLogs.length;
-  const capitalTotalPages = Math.max(1, Math.ceil(capitalTotalItems / PAGE_SIZE));
 
   // 当交易筛选条件变化时重置交易分页
   useEffect(() => {
@@ -72,7 +95,7 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalLogs }) => {
   // 当本金筛选条件变化时重置本金分页
   useEffect(() => {
     setCapitalPage(1);
-  }, [capitalLogs.length, capitalTypeFilter, capitalStartDate, capitalEndDate]);
+  }, [capitalTypeFilter, capitalStartDate, capitalEndDate]);
 
   // 切换子标签时回到第一页
   useEffect(() => {
@@ -101,12 +124,6 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalLogs }) => {
     const start = (safePage - 1) * PAGE_SIZE;
     return filteredTransactions.slice(start, start + PAGE_SIZE);
   }, [filteredTransactions, tradePage, tradeTotalPages]);
-
-  const paginatedCapitalLogs = useMemo(() => {
-    const safePage = Math.min(Math.max(capitalPage, 1), capitalTotalPages);
-    const start = (safePage - 1) * PAGE_SIZE;
-    return filteredCapitalLogs.slice(start, start + PAGE_SIZE);
-  }, [filteredCapitalLogs, capitalPage, capitalTotalPages]);
 
   const stats = useMemo(() => {
     const totalTradeVol = transactions.reduce((acc, t) => acc + t.total, 0);
@@ -366,19 +383,31 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalLogs }) => {
           ) : (
             <>
               <div className="p-6 lg:p-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-                {paginatedCapitalLogs.map(log => (
-                  <div key={log.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex justify-between items-center">
-                    <div>
-                      <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest">{new Date(log.date).toLocaleDateString()}</p>
-                      <h5 className={`text-lg lg:text-xl font-black mt-1 ${log.type === CapitalType.DEPOSIT ? 'text-emerald-600' : 'text-slate-800'}`}>
-                        {log.type === CapitalType.DEPOSIT ? '+' : '-'}¥{log.amount.toLocaleString()}
-                      </h5>
-                    </div>
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${log.type === CapitalType.DEPOSIT ? 'bg-emerald-50 text-emerald-500' : 'bg-slate-50 text-slate-400'}`}>
-                      <i className={`fas ${log.type === CapitalType.DEPOSIT ? 'fa-vault' : 'fa-arrow-right-from-bracket'}`}></i>
-                    </div>
+                {capitalLoading ? (
+                  <div className="col-span-full flex justify-center py-12">
+                    <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
                   </div>
-                ))}
+                ) : (
+                  capitalRecords.map((log) => {
+                    const isDeposit = log.operationType === 'DEPOSIT';
+                    const dateStr = log.operationTime || log.operationDate || log.createdAt || '';
+                    return (
+                      <div key={log.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex justify-between items-center">
+                        <div>
+                          <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest">
+                            {dateStr ? new Date(dateStr).toLocaleDateString() : '-'}
+                          </p>
+                          <h5 className={`text-lg lg:text-xl font-black mt-1 ${isDeposit ? 'text-emerald-600' : 'text-slate-800'}`}>
+                            {log.amountDisplay || (isDeposit ? '+' : '-') + '¥' + Math.abs(Number(log.amount)).toLocaleString()}
+                          </h5>
+                        </div>
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isDeposit ? 'bg-emerald-50 text-emerald-500' : 'bg-slate-50 text-slate-400'}`}>
+                          <i className={`fas ${isDeposit ? 'fa-vault' : 'fa-arrow-right-from-bracket'}`}></i>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
 
               {/* 分页条 - 本金流水 */}

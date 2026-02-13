@@ -96,6 +96,8 @@ export const translations = {
     confirm: '确认执行',
     cancel: '取消',
     execute: '执行交易',
+    buyStock: '买入',
+    sellStock: '卖出',
     insufficient_cash: '可用现金不足。',
 
     // Market Trends New
@@ -201,6 +203,8 @@ export const translations = {
     confirm: 'Confirm',
     cancel: 'Cancel',
     execute: 'Execute Trade',
+    buyStock: 'Buy',
+    sellStock: 'Sell',
     insufficient_cash: 'Insufficient cash available.',
 
     // Market Trends New

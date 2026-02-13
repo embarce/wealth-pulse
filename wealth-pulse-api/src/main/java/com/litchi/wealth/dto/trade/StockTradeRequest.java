@@ -38,7 +38,7 @@ public class StockTradeRequest {
     @Positive(message = "交易单价必须为正数")
     private BigDecimal price;
 
-    @Schema(name = "currency", description = "货币代码（默认USD）", example = "USD")
+    @Schema(name = "currency", description = "货币代码（默认HKD）", example = "HKD")
     private String currency;
 
     @Schema(name = "remark", description = "备注", example = "看好长期增长")

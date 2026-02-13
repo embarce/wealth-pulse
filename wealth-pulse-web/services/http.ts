@@ -5,6 +5,11 @@ export interface HttpRequestOptions extends RequestInit {
   autoHandleAuthError?: boolean;
 }
 
+// 默认请求选项（自动处理认证错误）
+export const defaultRequestOptions: HttpRequestOptions = {
+  autoHandleAuthError: true,
+};
+
 class HttpClient {
   private tokenKey = 'pulse_token';
   private authFlagKey = 'pulse_auth';

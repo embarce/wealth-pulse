@@ -28,7 +28,7 @@ public class CapitalOperationRequest {
     @Positive(message = "操作金额必须为正数")
     private BigDecimal amount;
 
-    @Schema(name = "currency", description = "货币代码（默认USD）", example = "USD")
+    @Schema(name = "currency", description = "货币代码（默认HKD）", example = "HKD")
     private String currency;
 
     @Schema(name = "remark", description = "备注", example = "银行转账入金")

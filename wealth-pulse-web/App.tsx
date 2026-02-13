@@ -1,18 +1,22 @@
 
 import React, { useState, useEffect, useMemo, createContext, useContext } from 'react';
-import { 
-  Transaction, 
-  TransactionType, 
-  CapitalLog, 
-  CapitalType, 
+import {
+  Transaction,
+  TransactionType,
+  CapitalLog,
+  CapitalType,
   StockPrice,
   AppConfig
 } from './types';
 import { INITIAL_STOCKS, generateMockHistory } from './constants';
 import { apiService } from './services/backend';
+import { capitalApi } from './services/capitalApi';
 import { getTradeScore, getMarketOutlook } from './services/gemini';
 import { Language, translations } from './i18n';
 import { httpClient } from './services/http';
+import { stockApi, FeeCalculationResponse } from './services/stockApi';
+import { tradeApi } from './services/tradeApi';
+import { ToastProvider, useToast, ToastContainerWrapper } from './contexts/ToastContext';
 
 // Components
 import Modal from './components/Modal';
@@ -35,7 +39,11 @@ export const I18nContext = createContext<{
   setLang: (l: Language) => void;
 }>({ lang: 'zh', t: translations.zh, setLang: () => {} });
 
-const AppContent: React.FC = () => {
+interface AppContentProps {
+  toast?: any;
+}
+
+const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   const { lang, t } = useContext(I18nContext);
   const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem('pulse_auth') === 'true');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'holdings' | 'records' | 'ai' | 'settings' | 'help' | 'market'>('dashboard');
@@ -50,6 +58,7 @@ const AppContent: React.FC = () => {
   const [capitalLogs, setCapitalLogs] = useState<CapitalLog[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [user, setUser] = useState<{ nickName: string; email: string; avatar?: string } | null>(null);
+  const [capitalRefreshTrigger, setCapitalRefreshTrigger] = useState(0);
 
   // Modals State
   const [capitalModalOpen, setCapitalModalOpen] = useState(false);
@@ -57,48 +66,171 @@ const AppContent: React.FC = () => {
   const [customCapitalAmount, setCustomCapitalAmount] = useState<string>('');
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
-  
+
+  // Trade form state
+  const [tradeQuantity, setTradeQuantity] = useState<number>(100);
+  const [tradePrice, setTradePrice] = useState<number>(0);
+  const [tradeFee, setTradeFee] = useState<FeeCalculationResponse | null>(null);
+  const [tradeTime, setTradeTime] = useState<string>(new Date().toISOString().slice(0, 16));
+  const [isLoadingPrice, setIsLoadingPrice] = useState(false);
+  const [isLoadingFee, setIsLoadingFee] = useState(false);
+  const [isTradeExecuting, setIsTradeExecuting] = useState(false);
+
+  // Sell form state
+  const [sellModalOpen, setSellModalOpen] = useState(false);
+  const [sellStock, setSellStock] = useState<StockPrice | null>(null);
+  const [sellQuantity, setSellQuantity] = useState<number>(0);
+  const [sellPrice, setSellPrice] = useState<number>(0);
+  const [sellFee, setSellFee] = useState<FeeCalculationResponse | null>(null);
+  const [isLoadingSellFee, setIsLoadingSellFee] = useState(false);
+
+  // Toast state
+  const [toasts, setToasts] = useState<any[]>([]);
+
   const [aiOutlook, setAiOutlook] = useState(t.loading);
+
+  // 当打开交易模态框或选中股票变化时，获取实时价格
+  useEffect(() => {
+    if (!tradeModalOpen || !selectedStock) {
+      setTradePrice(0);
+      setTradeFee(null);
+      return;
+    };
+
+    const fetchMarketData = async () => {
+      setIsLoadingPrice(true);
+      try {
+        const marketData = await stockApi.getMarketData(selectedStock.symbol);
+        setTradePrice(Number(marketData.lastPrice));
+      } catch (e) {
+        console.error('获取实时价格失败', e);
+        // 使用本地价格作为后备
+        setTradePrice(selectedStock.price);
+      } finally {
+        setIsLoadingPrice(false);
+      }
+    };
+
+    fetchMarketData();
+  }, [tradeModalOpen, selectedStock]);
+
+  // 当价格或数量变化时，计算手续费
+  useEffect(() => {
+    if (!tradePrice || !tradeQuantity || !tradeModalOpen) {
+      setTradeFee(null);
+      return;
+    }
+
+    const calculateFee = async () => {
+      setIsLoadingFee(true);
+      try {
+        const amount = tradePrice * tradeQuantity;
+        const feeResult = await stockApi.calculateFee({
+          instruction: 'BUY',
+          amount: amount,
+          currency: 'HKD'
+        });
+        setTradeFee(feeResult);
+      } catch (e) {
+        console.error('计算手续费失败', e);
+        setTradeFee(null);
+      } finally {
+        setIsLoadingFee(false);
+      }
+    };
+
+    calculateFee();
+  }, [tradePrice, tradeQuantity, tradeModalOpen]);
+
+  // 当卖出数量或价格变化时，计算卖出手续费
+  useEffect(() => {
+    if (!sellPrice || !sellQuantity || !sellModalOpen) {
+      setSellFee(null);
+      return;
+    }
+
+    const calculateSellFee = async () => {
+      setIsLoadingSellFee(true);
+      try {
+        const amount = sellPrice * sellQuantity;
+        const feeResult = await stockApi.calculateFee({
+          instruction: 'SELL',
+          amount: amount,
+          currency: 'HKD'
+        });
+        setSellFee(feeResult);
+      } catch (e) {
+        console.error('计算卖出手续费失败', e);
+        setSellFee(null);
+      } finally {
+        setIsLoadingSellFee(false);
+      }
+    };
+
+    calculateSellFee();
+  }, [sellPrice, sellQuantity, sellModalOpen]);
 
   useEffect(() => {
     const init = async () => {
-      const [txs, logs, cfg] = await Promise.all([
-        apiService.getTransactions(),
-        apiService.getCapitalLogs(),
-        apiService.getConfig()
-      ]);
-      setTransactions(txs);
-      setCapitalLogs(logs);
-      setConfig(cfg);
-      setIsLoading(false);
+      try {
+        // 只加载本地数据，不请求需要认证的 API
+        const [txs, cfg] = await Promise.all([
+          apiService.getTransactions(),
+          apiService.getConfig(),
+        ]);
+        setTransactions(txs);
+        setConfig(cfg);
+        // capitalLogs 将在登录后通过 Records 组件按需加载
+        setCapitalLogs([]);
+      } catch (e) {
+        console.error('初始化失败', e);
+      } finally {
+        setIsLoading(false);
+      }
     };
     init();
   }, []);
 
-  // 登录后拉取用户信息
+  // 登录后拉取用户信息和资产摘要
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserData = async () => {
       if (!isLoggedIn) return;
       try {
-        const res: any = await httpClient.get('/api/user/getUser');
-        // 期望后端返回：
-        // {
-        //   "msg": "success",
-        //   "code": 200,
-        //   "data": {
-        //     "nickName": "admin",
-        //     "email": "xxx",
-        //     "avatar": "https://..."
-        //   }
-        // }
-        if (res?.data) {
-          setUser(res.data);
+        // 并行获取用户信息和资产摘要
+        const [userRes, assetSummary] = await Promise.all([
+          httpClient.get('/api/user/getUser', { autoHandleAuthError: true }),
+          capitalApi.getAssetSummary().catch(() => null) // 资产摘要API可能还未实现，降级处理
+        ]);
+
+        // 处理用户信息
+        if (userRes) {
+          // 期望后端返回：
+          // {
+          //   "msg": "success",
+          //   "code": 200,
+          //   "data": {
+          //     "nickName": "admin",
+          //     "email": "xxx",
+          //     "avatar": "https://..."
+          //   }
+          // }
+          if (userRes?.code === 200 && userRes?.data) {
+            console.log('用户信息:', userRes.data);
+            setUser(userRes.data);
+          }
+        }
+
+        // 处理资产摘要（如果后端实现了该API）
+        if (assetSummary) {
+          // 使用后端返回的总本金
+          console.log('资产摘要:', assetSummary);
+          // TODO: 可以根据后端返回的数据更新 state
         }
       } catch (e) {
-        console.error('获取用户信息失败', e);
+        console.error('获取用户数据失败', e);
       }
     };
-    fetchUser();
+    fetchUserData();
   }, [isLoggedIn]);
 
   const holdings = useMemo(() => {
@@ -153,58 +285,185 @@ const AppContent: React.FC = () => {
 
   const handleCapitalAction = async (type: CapitalType, amount: number) => {
     if (amount <= 0) return;
-    const newLog: CapitalLog = { id: Date.now().toString(), date: new Date().toISOString(), type, amount };
-    await apiService.saveCapitalLog(newLog);
-    setCapitalLogs(prev => [newLog, ...prev]);
-    setCapitalModalOpen(false);
-    setCustomCapitalAmount('');
+    try {
+      const body = { amount, currency: 'HKD' as const };
+      if (type === CapitalType.DEPOSIT) {
+        await capitalApi.deposit(body);
+      } else {
+        await capitalApi.withdraw(body);
+      }
+      const newLog: CapitalLog = { id: Date.now().toString(), date: new Date().toISOString(), type, amount };
+      setCapitalLogs(prev => [newLog, ...prev]);
+      setCapitalRefreshTrigger(Date.now());
+      setCapitalModalOpen(false);
+      setCustomCapitalAmount('');
+      toast.showSuccess(type === CapitalType.DEPOSIT ? '入金成功' : '提现成功');
+    } catch (e: any) {
+      toast.showError(e?.message || (type === CapitalType.DEPOSIT ? '入金失败' : '提现失败'));
+    }
   };
 
-  const handleTradeAction = async (qty: number) => {
-    if (!selectedStock) return;
-    const total = selectedStock.price * qty;
-    if (total > assets.cash) {
-      alert(t.insufficient_cash);
+  const handleTradeAction = async () => {
+    if (!selectedStock || !tradePrice) return;
+
+    const total = tradePrice * tradeQuantity;
+    const feeAmount = tradeFee?.totalFee || 0;
+    const totalWithFee = total + feeAmount;
+
+    if (totalWithFee > assets.cash) {
+      toast.showError(t.insufficient_cash);
       return;
     }
 
-    const newTx: Transaction = {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      symbol: selectedStock.symbol,
-      type: TransactionType.BUY,
-      price: selectedStock.price,
-      quantity: qty,
-      total: total
-    };
-    
-    await apiService.saveTransaction(newTx);
-    setTransactions(prev => [newTx, ...prev]);
-    setTradeModalOpen(false);
-    
-    getTradeScore(newTx, `Price ${selectedStock.price}`, lang).then(async score => {
-       const updatedTxs = transactions.map(tx => tx.id === newTx.id ? { ...tx, aiScore: score.score, aiAdvice: score.rationale } : tx);
-       setTransactions(updatedTxs);
-       await apiService.updateTransactions(updatedTxs);
-    });
+    setIsTradeExecuting(true);
+    try {
+      // 调用后端买入接口
+      await tradeApi.buyStock({
+        stockCode: selectedStock.symbol,
+        quantity: tradeQuantity,
+        price: tradePrice,
+        currency: 'HKD',
+      });
+
+      // 创建本地交易记录（用于前端展示）
+      const newTx: Transaction = {
+        id: Date.now().toString(),
+        date: new Date(tradeTime).toISOString(),
+        symbol: selectedStock.symbol,
+        type: TransactionType.BUY,
+        price: tradePrice,
+        quantity: tradeQuantity,
+        total: total,
+        fee: feeAmount,
+        tradeTime: tradeTime
+      };
+
+      await apiService.saveTransaction(newTx);
+      setTransactions(prev => [newTx, ...prev]);
+      setTradeModalOpen(false);
+
+      // 重置表单
+      setTradeQuantity(100);
+      setTradeTime(new Date().toISOString().slice(0, 16));
+
+      // 获取 AI 评分
+      getTradeScore(newTx, `Price ${tradePrice}`, lang).then(async score => {
+        const updatedTxs = transactions.map(tx => tx.id === newTx.id ? { ...tx, aiScore: score.score, aiAdvice: score.rationale } : tx);
+        setTransactions(updatedTxs);
+        await apiService.updateTransactions(updatedTxs);
+      });
+      toast.showSuccess('买入成功');
+    } catch (e: any) {
+      toast.showError(e?.message || '买入失败');
+    } finally {
+      setIsTradeExecuting(false);
+    }
   };
 
-  const handleSellAction = async (symbol: string) => {
+  // 从持仓页面点击买入
+  const handleBuyFromHoldings = (symbol: string) => {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (stock) {
+      setSelectedStock(stock);
+      setTradeModalOpen(true);
+    }
+  };
+
+  // 从持仓页面点击卖出
+  const handleSellFromHoldings = async (symbol: string, quantity: number) => {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock) return;
+
+    setSellStock(stock);
+    setSellQuantity(quantity);
+    setSellPrice(stock.price);
+    setSellModalOpen(true);
+  };
+
+  // 执行卖出
+  const handleExecuteSell = async () => {
+    if (!sellStock || !sellPrice) return;
+
+    setIsTradeExecuting(true);
+    try {
+      // 调用后端卖出接口
+      await tradeApi.sellStock({
+        stockCode: sellStock.symbol,
+        quantity: sellQuantity,
+        price: sellPrice,
+        currency: 'HKD',
+      });
+
+      // 创建本地交易记录
+      const total = sellPrice * sellQuantity;
+      const newTx: Transaction = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        symbol: sellStock.symbol,
+        type: TransactionType.SELL,
+        price: sellPrice,
+        quantity: sellQuantity,
+        total: total,
+        fee: sellFee?.totalFee || 0,
+      };
+
+      await apiService.saveTransaction(newTx);
+      setTransactions(prev => [newTx, ...prev]);
+      setSellModalOpen(false);
+
+      // 重置表单
+      setSellStock(null);
+      setSellQuantity(0);
+      setSellPrice(0);
+      setSellFee(null);
+      toast.showSuccess('卖出成功');
+    } catch (e: any) {
+      toast.showError(e?.message || '卖出失败');
+    } finally {
+      setIsTradeExecuting(false);
+    }
+  };
+
+  // 清仓（卖出全部持仓）
+  const handleClearPosition = async (symbol: string) => {
     const holding = holdings.find(h => h.symbol === symbol);
     const stock = stocks.find(s => s.symbol === symbol);
     if (!holding || !stock) return;
 
-    const newTx: Transaction = {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      symbol: symbol,
-      type: TransactionType.SELL,
-      price: stock.price,
-      quantity: holding.quantity,
-      total: stock.price * holding.quantity
-    };
-    await apiService.saveTransaction(newTx);
-    setTransactions(prev => [newTx, ...prev]);
+    if (!confirm(`确定要清仓 ${symbol} 吗？将卖出全部 ${holding.quantity} 股。`)) {
+      return;
+    }
+
+    setIsTradeExecuting(true);
+    try {
+      // 调用后端卖出接口
+      await tradeApi.sellStock({
+        stockCode: symbol,
+        quantity: holding.quantity,
+        price: stock.price,
+        currency: 'HKD',
+      });
+
+      // 创建本地交易记录
+      const total = stock.price * holding.quantity;
+      const newTx: Transaction = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        symbol: symbol,
+        type: TransactionType.SELL,
+        price: stock.price,
+        quantity: holding.quantity,
+        total: total,
+      };
+
+      await apiService.saveTransaction(newTx);
+      setTransactions(prev => [newTx, ...prev]);
+      toast.showSuccess(`清仓 ${symbol} 成功`);
+    } catch (e: any) {
+      toast.showError(e?.message || '清仓失败');
+    } finally {
+      setIsTradeExecuting(false);
+    }
   };
 
   // 支持 AILab 批量导入
@@ -281,8 +540,8 @@ const AppContent: React.FC = () => {
 
           {activeTab === 'dashboard' && <Dashboard assets={assets} totalPrincipal={totalPrincipal} holdingsCount={holdings.length} stocks={stocks} holdings={holdings} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} onNavigateToAI={() => setActiveTab('ai')} aiOutlook={aiOutlook} />}
           {activeTab === 'market' && <MarketSearch stocks={stocks} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} />}
-          {activeTab === 'holdings' && <Holdings holdings={holdings} stocks={stocks} onSell={handleSellAction} />}
-          {activeTab === 'records' && <Records transactions={transactions} capitalLogs={capitalLogs} />}
+          {activeTab === 'holdings' && <Holdings holdings={holdings} stocks={stocks} onBuy={handleBuyFromHoldings} onSell={handleSellFromHoldings} onClear={handleClearPosition} />}
+          {activeTab === 'records' && <Records transactions={transactions} capitalRefreshTrigger={capitalRefreshTrigger} />}
           {activeTab === 'ai' && <AILab stocks={stocks} transactions={transactions} onAddTransactions={handleAddTransactions} onUpdateTransaction={handleUpdateTransaction} />}
           {activeTab === 'settings' && <Settings config={config} onUpdateConfig={(cfg) => { const newCfg = { ...config, ...cfg }; setConfig(newCfg); apiService.saveConfig(newCfg); }} />}
           {activeTab === 'help' && <Help />}
@@ -326,10 +585,192 @@ const AppContent: React.FC = () => {
           </div>
         </Modal>
 
-        <Modal isOpen={tradeModalOpen} onClose={() => setTradeModalOpen(false)} title={`${t.generateReport}: ${selectedStock?.symbol}`}>
-          <div className="space-y-6">
-            <input type="number" defaultValue={100} id="buyQty" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-5 text-center text-xl font-black outline-none" />
-            <button onClick={() => { const qty = Number((document.getElementById('buyQty') as HTMLInputElement).value); handleTradeAction(qty); }} className="w-full bg-slate-950 text-white py-6 rounded-3xl font-black uppercase tracking-widest">{t.execute}</button>
+        <Modal isOpen={tradeModalOpen} onClose={() => setTradeModalOpen(false)} title={`${t.buyStock} ${selectedStock?.symbol}`}>
+          <div className="space-y-5">
+            {/* 实时价格 */}
+            <div className="bg-indigo-50 rounded-2xl p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-indigo-600 uppercase tracking-wider">实时价格</span>
+                {isLoadingPrice ? (
+                  <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span className="text-2xl font-black text-indigo-600">¥{tradePrice.toFixed(2)}</span>
+                )}
+              </div>
+            </div>
+
+            {/* 数量输入 */}
+            <div>
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                买入数量
+              </label>
+              <input
+                type="number"
+                value={tradeQuantity}
+                onChange={(e) => setTradeQuantity(Number(e.target.value))}
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-5 text-center text-xl font-black outline-none focus:border-indigo-500 transition-all"
+              />
+            </div>
+
+            {/* 交易金额 */}
+            <div className="bg-slate-50 rounded-2xl p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-wider">交易金额</span>
+                <span className="text-lg font-black text-slate-900">¥{(tradePrice * tradeQuantity).toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* 手续费明细 */}
+            {tradeFee && (
+              <div className="bg-amber-50 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-amber-600 uppercase tracking-wider">手续费明细</span>
+                  <span className="text-sm font-black text-amber-600">¥{tradeFee.totalFee.toFixed(2)}</span>
+                </div>
+                <div className="space-y-1 text-[10px] text-amber-500/70">
+                  <div className="flex justify-between">
+                    <span>平台费</span>
+                    <span>¥{tradeFee.platformFee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>印花税</span>
+                    <span>¥{tradeFee.stampDuty.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>证监会征费</span>
+                    <span>¥{tradeFee.sfcLevy.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>其他费用</span>
+                    <span>¥{(tradeFee.exchangeTradingFee + tradeFee.settlementFee + tradeFee.frcLevy).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 金额汇总 */}
+            <div className="bg-slate-900 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-white/70 uppercase tracking-wider">交易金额</span>
+                <span className="text-lg font-black text-white/90">¥{(tradePrice * tradeQuantity).toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-amber-400 uppercase tracking-wider">手续费</span>
+                <span className="text-lg font-black text-amber-400">¥{(tradeFee?.totalFee || 0).toFixed(2)}</span>
+              </div>
+              <div className="border-t border-white/20 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-white uppercase tracking-wider">总金额</span>
+                  <span className="text-2xl font-black text-white">
+                    ¥{((tradePrice * tradeQuantity) + (tradeFee?.totalFee || 0)).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 买入时间 */}
+            <div>
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                买入时间
+              </label>
+              <input
+                type="datetime-local"
+                value={tradeTime}
+                onChange={(e) => setTradeTime(e.target.value)}
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 text-sm font-black outline-none focus:border-indigo-500 transition-all"
+              />
+            </div>
+
+            {/* 执行按钮 */}
+            <button
+              onClick={handleTradeAction}
+              disabled={!tradePrice || isLoadingFee || isTradeExecuting}
+              className="w-full bg-slate-950 text-white py-6 rounded-3xl font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-all"
+            >
+              {isTradeExecuting ? '执行中...' : (isLoadingFee ? '计算中...' : t.execute)}
+            </button>
+          </div>
+        </Modal>
+
+        {/* 卖出弹窗 */}
+        <Modal isOpen={sellModalOpen} onClose={() => setSellModalOpen(false)} title={`${t.sellStock ? t.sellStock : '卖出'} ${sellStock?.symbol}`}>
+          <div className="space-y-5">
+            {/* 实时价格 */}
+            <div className="bg-rose-50 rounded-2xl p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-rose-600 uppercase tracking-wider">当前价格</span>
+                <span className="text-2xl font-black text-rose-600">¥{sellPrice.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* 卖出数量 */}
+            <div>
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                卖出数量
+              </label>
+              <input
+                type="number"
+                value={sellQuantity}
+                onChange={(e) => setSellQuantity(Number(e.target.value))}
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-5 text-center text-xl font-black outline-none focus:border-rose-500 transition-all"
+              />
+              <p className="text-[10px] text-slate-400 font-bold mt-2 text-center">当前持仓: {sellQuantity} 股</p>
+            </div>
+
+            {/* 预计收入 */}
+            <div className="bg-slate-50 rounded-2xl p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-wider">交易金额</span>
+                <span className="text-lg font-black text-slate-900">¥{(sellPrice * sellQuantity).toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* 手续费明细 */}
+            {sellFee && (
+              <div className="bg-amber-50 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-amber-600 uppercase tracking-wider">手续费明细</span>
+                  <span className="text-sm font-black text-amber-600">¥{sellFee.totalFee.toFixed(2)}</span>
+                </div>
+                <div className="space-y-1 text-[10px] text-amber-500/70">
+                  <div className="flex justify-between">
+                    <span>平台费</span>
+                    <span>¥{sellFee.platformFee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>印花税</span>
+                    <span>¥{sellFee.stampDuty.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>证监会征费</span>
+                    <span>¥{sellFee.sfcLevy.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>其他费用</span>
+                    <span>¥{(sellFee.exchangeTradingFee + sellFee.settlementFee + sellFee.frcLevy).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 实际到账金额 */}
+            <div className="bg-emerald-50 rounded-2xl p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-emerald-600 uppercase tracking-wider">预计到账</span>
+                <span className="text-2xl font-black text-emerald-600">
+                  ¥{((sellPrice * sellQuantity) - (sellFee?.totalFee || 0)).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            {/* 执行卖出按钮 */}
+            <button
+              onClick={handleExecuteSell}
+              disabled={!sellPrice || isTradeExecuting}
+              className="w-full bg-rose-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-700 transition-all"
+            >
+              {isTradeExecuting ? '执行中...' : '确认卖出'}
+            </button>
           </div>
         </Modal>
       </main>
@@ -346,9 +787,42 @@ const App: React.FC = () => {
   }, [lang]);
 
   return (
-    <I18nContext.Provider value={{ lang, t, setLang }}>
-      <AppContent />
-    </I18nContext.Provider>
+    <ToastProvider>
+      <I18nContext.Provider value={{ lang, t, setLang }}>
+        <AppContentWrapper />
+      </I18nContext.Provider>
+    </ToastProvider>
+  );
+};
+
+// Wrapper component to get toast state
+const AppContentWrapper: React.FC = () => {
+  const toast = useToast();
+  const [toasts, setToasts] = useState<any[]>([]);
+
+  // Override toast methods to manage local state
+  const showToast = (message: string, type: any, duration?: number) => {
+    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    setToasts((prev: any[]) => [...prev, { id, type, message, duration }]);
+  };
+
+  // Custom toast object for AppContent
+  const customToast = {
+    showSuccess: (message: string, duration?: number) => showToast(message, 'success', duration),
+    showError: (message: string, duration?: number) => showToast(message, 'error', duration),
+    showWarning: (message: string, duration?: number) => showToast(message, 'warning', duration),
+    showInfo: (message: string, duration?: number) => showToast(message, 'info', duration),
+    showToast: (message: string, type?: any, duration?: number) => showToast(message, type || 'info', duration),
+  };
+
+  return (
+    <>
+      <AppContent toast={customToast as any} />
+      <ToastContainerWrapper
+        toasts={toasts}
+        onRemove={(id) => setToasts((prev: any[]) => prev.filter((t: any) => t.id !== id))}
+      />
+    </>
   );
 };
 

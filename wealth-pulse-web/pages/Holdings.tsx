@@ -7,7 +7,9 @@ import ShareModal from '../components/ShareModal';
 interface HoldingsProps {
   holdings: Holding[];
   stocks: StockPrice[];
-  onSell: (symbol: string) => void;
+  onBuy: (symbol: string) => void;
+  onSell: (symbol: string, quantity?: number) => void;
+  onClear: (symbol: string) => void;
 }
 
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981'];
@@ -39,7 +41,7 @@ const renderActiveShape = (props: any) => {
   );
 };
 
-const Holdings: React.FC<HoldingsProps> = ({ holdings, stocks, onSell }) => {
+const Holdings: React.FC<HoldingsProps> = ({ holdings, stocks, onBuy, onSell, onClear }) => {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number>(-1);
 
@@ -269,12 +271,34 @@ const Holdings: React.FC<HoldingsProps> = ({ holdings, stocks, onSell }) => {
                       </div>
                     </td>
                     <td className="px-10 py-8 text-right">
-                      <button 
-                        onClick={() => onSell(h.symbol)}
-                        className="w-10 h-10 rounded-xl text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center"
-                      >
-                        <i className="fas fa-trash-can text-sm"></i>
-                      </button>
+                      <div className="flex items-center justify-end space-x-2">
+                        {/* 买入按钮 */}
+                        <button
+                              onClick={() => onBuy(h.symbol)}
+                              className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all flex items-center space-x-1.5"
+                          >
+                            <i className="fas fa-plus text-xs"></i>
+                            <span>买入</span>
+                          </button>
+
+                        {/* 卖出按钮 */}
+                        <button
+                          onClick={() => onSell(h.symbol, h.quantity)}
+                          className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-all flex items-center space-x-1.5"
+                        >
+                          <i className="fas fa-minus text-xs"></i>
+                          <span>卖出</span>
+                        </button>
+
+                        {/* 清仓按钮 */}
+                        <button
+                          onClick={() => onClear(h.symbol)}
+                          className="w-10 h-10 rounded-xl text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center"
+                          title="清仓"
+                        >
+                          <i className="fas fa-trash-can text-sm"></i>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

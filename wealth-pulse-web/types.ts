@@ -17,6 +17,8 @@ export interface Transaction {
   price: number;
   quantity: number;
   total: number;
+  fee?: number;           // 交易手续费
+  tradeTime?: string;     // 交易时间（可追溯历史交易）
   aiScore?: number;
   aiAdvice?: string;
   aiDetails?: {

@@ -2,6 +2,7 @@
 import React, { useState, useContext } from 'react';
 import { I18nContext } from '../App';
 import { httpClient } from '../services/http';
+import { useToast } from '../contexts/ToastContext';
 
 interface LoginProps {
   onLogin: () => void;
@@ -9,6 +10,7 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const { lang, t, setLang } = useContext(I18nContext);
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('729374717@qq.com');
   const [password, setPassword] = useState('13602449816');
@@ -19,10 +21,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     try {
       // 调用后端真实登录接口
+      // 登录接口不自动处理 401，因为登录失败需要显示错误信息给用户
       const res: any = await httpClient.post('/api/auth/v1/password/login', {
         email,
         password,
-      });
+      }, { autoHandleAuthError: false });
 
       // 后端返回结构：
       // {
@@ -38,9 +41,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       // 统一保存 token，并让 App 里的 isLoggedIn 生效
       httpClient.setToken(token);
       onLogin();
+      toast.showSuccess('登录成功');
     } catch (err: any) {
       console.error('登录失败', err);
-      alert(err?.message || '登录失败，请检查账号或密码');
+      toast.showError(err?.message || '登录失败，请检查账号或密码');
     } finally {
       setLoading(false);
     }
