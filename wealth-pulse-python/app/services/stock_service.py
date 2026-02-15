@@ -447,3 +447,75 @@ class StockService:
         else:
             logger.warning(f"[StockService] 股票 {stock_code} 不存在，无法更新")
             return None
+
+    def update_financial_indicator(self, stock_code: str) -> Optional[StockInfo]:
+        """
+        更新股票的财务指标（包括市值）
+
+        使用 AkShare 的 stock_hk_financial_indicator_em API 获取港股财务指标
+
+        Args:
+            stock_code: 股票代码（格式：如 '0700.HK'）
+
+        Returns:
+            更新后的股票信息对象，如果失败返回None
+        """
+        try:
+            import akshare as ak
+            import pandas as pd
+
+            # 判断是否为港股代码（格式：如 '0700.HK'）
+            if not stock_code.endswith('.HK'):
+                logger.debug(f"[StockService] {stock_code} 不是港股代码，跳过财务指标更新")
+                return None
+
+            # 标准化股票代码，去除 .HK 后缀并补位到5位（参考 init_stocks.py）
+            normalized_code = stock_code.replace('.HK', '')
+            if len(normalized_code) < 5:
+                normalized_code = normalized_code.zfill(5)
+
+            logger.info(f"[StockService] 正在获取 {stock_code} 的财务指标 (标准化代码: {normalized_code})...")
+
+            # 获取财务指标
+            financial_data = ak.stock_hk_financial_indicator_em(symbol=normalized_code)
+
+            if financial_data.empty:
+                logger.warning(f"[StockService] {stock_code} 没有财务指标数据")
+                return None
+
+            # 获取最新一期的财务数据（第一行）
+            latest_data = financial_data.iloc[0]
+
+            # 提取总市值（优先使用"港股市值(港元)"，其次"总市值(港元)"）
+            market_cap = None
+            for col in ['港股市值(港元)', '总市值(港元)', '总市值(元)', '总市值']:
+                if col in financial_data.columns:
+                    try:
+                        market_cap_value = latest_data[col]
+                        # 转换为易读格式（亿元）
+                        if pd.notna(market_cap_value):
+                            market_cap_num = float(market_cap_value)
+                            market_cap = f"{market_cap_num / 100000000:.2f}亿"
+                            break
+                    except (ValueError, TypeError):
+                        continue
+
+            if market_cap is not None:
+                # 更新市值到数据库
+                result = self.update_stock(stock_code, {'market_cap': market_cap})
+                if result:
+                    logger.info(f"[StockService] 成功更新 {stock_code} 市值: {market_cap}")
+                    return result
+                else:
+                    logger.warning(f"[StockService] 更新 {stock_code} 市值失败")
+                    return None
+            else:
+                logger.warning(f"[StockService] {stock_code} 没有有效的市值数据")
+                return None
+
+        except ImportError:
+            logger.error("[StockService] akshare 模块未安装，无法获取财务指标")
+            return None
+        except Exception as e:
+            logger.error(f"[StockService] 获取 {stock_code} 财务指标失败: {str(e)}")
+            return None

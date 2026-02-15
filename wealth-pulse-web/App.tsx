@@ -11,10 +11,11 @@ import {
 import { INITIAL_STOCKS, generateMockHistory } from './constants';
 import { apiService } from './services/backend';
 import { capitalApi } from './services/capitalApi';
+import { userApi, DashboardData, PositionsDashboardData } from './services/userApi';
 import { getTradeScore, getMarketOutlook } from './services/gemini';
 import { Language, translations } from './i18n';
 import { httpClient } from './services/http';
-import { stockApi, FeeCalculationResponse } from './services/stockApi';
+import { stockApi, FeeCalculationResponse, StockInfo } from './services/stockApi';
 import { tradeApi } from './services/tradeApi';
 import { ToastProvider, useToast, ToastContainerWrapper } from './contexts/ToastContext';
 
@@ -59,6 +60,8 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [user, setUser] = useState<{ nickName: string; email: string; avatar?: string } | null>(null);
   const [capitalRefreshTrigger, setCapitalRefreshTrigger] = useState(0);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [positionsDashboardData, setPositionsDashboardData] = useState<PositionsDashboardData | null>(null);
 
   // Modals State
   const [capitalModalOpen, setCapitalModalOpen] = useState(false);
@@ -75,6 +78,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
   const [isLoadingFee, setIsLoadingFee] = useState(false);
   const [isTradeExecuting, setIsTradeExecuting] = useState(false);
+  const [tradeStockInfo, setTradeStockInfo] = useState<StockInfo | null>(null);
 
   // Sell form state
   const [sellModalOpen, setSellModalOpen] = useState(false);
@@ -83,27 +87,37 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   const [sellPrice, setSellPrice] = useState<number>(0);
   const [sellFee, setSellFee] = useState<FeeCalculationResponse | null>(null);
   const [isLoadingSellFee, setIsLoadingSellFee] = useState(false);
+  const [sellStockInfo, setSellStockInfo] = useState<StockInfo | null>(null);
 
   // Toast state
   const [toasts, setToasts] = useState<any[]>([]);
 
   const [aiOutlook, setAiOutlook] = useState(t.loading);
 
-  // 当打开交易模态框或选中股票变化时，获取实时价格
+  // 当打开交易模态框或选中股票变化时，获取实时价格和股票信息
   useEffect(() => {
     if (!tradeModalOpen || !selectedStock) {
       setTradePrice(0);
       setTradeFee(null);
+      setTradeStockInfo(null);
       return;
     };
 
-    const fetchMarketData = async () => {
+    const fetchStockData = async () => {
       setIsLoadingPrice(true);
       try {
-        const marketData = await stockApi.getMarketData(selectedStock.symbol);
+        // 并行获取实时行情和股票信息
+        const [marketData, stockInfo] = await Promise.all([
+          stockApi.getMarketData(selectedStock.symbol),
+          stockApi.getStockInfo(selectedStock.symbol).catch(() => null)
+        ]);
+
         setTradePrice(Number(marketData.lastPrice));
+        if (stockInfo) {
+          setTradeStockInfo(stockInfo);
+        }
       } catch (e) {
-        console.error('获取实时价格失败', e);
+        console.error('获取股票数据失败', e);
         // 使用本地价格作为后备
         setTradePrice(selectedStock.price);
       } finally {
@@ -111,8 +125,27 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       }
     };
 
-    fetchMarketData();
+    fetchStockData();
   }, [tradeModalOpen, selectedStock]);
+
+  // 当打开卖出模态框或选中股票变化时，获取股票信息
+  useEffect(() => {
+    if (!sellModalOpen || !sellStock) {
+      setSellStockInfo(null);
+      return;
+    };
+
+    const fetchSellStockInfo = async () => {
+      try {
+        const stockInfo = await stockApi.getStockInfo(sellStock.symbol);
+        setSellStockInfo(stockInfo);
+      } catch (e) {
+        console.error('获取卖出股票信息失败', e);
+      }
+    };
+
+    fetchSellStockInfo();
+  }, [sellModalOpen, sellStock]);
 
   // 当价格或数量变化时，计算手续费
   useEffect(() => {
@@ -194,37 +227,37 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   // 登录后拉取用户信息和资产摘要
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!isLoggedIn) return;
+      if (!isLoggedIn) {
+        setDashboardData(null);
+        setPositionsDashboardData(null);
+        return;
+      }
       try {
-        // 并行获取用户信息和资产摘要
-        const [userRes, assetSummary] = await Promise.all([
+        // 并行获取用户信息、Dashboard数据和持仓数据
+        const [userRes, dashboard, positions] = await Promise.all([
           httpClient.get('/api/user/getUser', { autoHandleAuthError: true }),
-          capitalApi.getAssetSummary().catch(() => null) // 资产摘要API可能还未实现，降级处理
+          userApi.getDashboard().catch(() => null),
+          userApi.getPositionsDashboard().catch(() => null)
         ]);
 
         // 处理用户信息
         if (userRes) {
-          // 期望后端返回：
-          // {
-          //   "msg": "success",
-          //   "code": 200,
-          //   "data": {
-          //     "nickName": "admin",
-          //     "email": "xxx",
-          //     "avatar": "https://..."
-          //   }
-          // }
           if (userRes?.code === 200 && userRes?.data) {
             console.log('用户信息:', userRes.data);
             setUser(userRes.data);
           }
         }
 
-        // 处理资产摘要（如果后端实现了该API）
-        if (assetSummary) {
-          // 使用后端返回的总本金
-          console.log('资产摘要:', assetSummary);
-          // TODO: 可以根据后端返回的数据更新 state
+        // 处理Dashboard数据
+        if (dashboard) {
+          console.log('Dashboard数据:', dashboard);
+          setDashboardData(dashboard);
+        }
+
+        // 处理持仓数据
+        if (positions) {
+          console.log('持仓数据:', positions);
+          setPositionsDashboardData(positions);
         }
       } catch (e) {
         console.error('获取用户数据失败', e);
@@ -264,24 +297,63 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
     }
   }, [isLoggedIn, activeTab, transactions, lang, t.outlookPlaceholder]);
 
-  const totalPrincipal = useMemo(() => 
-    capitalLogs.reduce((acc, log) => log.type === CapitalType.DEPOSIT ? acc + log.amount : acc - log.amount, 0), 
-  [capitalLogs]);
-  
+  const totalPrincipal = useMemo(() => {
+    // 如果有后端Dashboard数据，优先使用
+    if (dashboardData) {
+      return dashboardData.totalPrincipal;
+    }
+    // 否则使用本地计算
+    return capitalLogs.reduce((acc, log) => log.type === CapitalType.DEPOSIT ? acc + log.amount : acc - log.amount, 0);
+  }, [capitalLogs, dashboardData]);
+
   const assets = useMemo(() => {
+    // 如果有后端Dashboard数据，优先使用
+    if (dashboardData) {
+      return {
+        stockVal: dashboardData.positionValue,
+        cash: dashboardData.availableCash,
+        total: dashboardData.totalAssets,
+        profit: dashboardData.cumulativeProfitLoss,
+        rate: dashboardData.cumulativeProfitLossRate
+      };
+    }
+
+    // 否则使用本地计算
     const stockVal = holdings.reduce((acc, h) => acc + (h.quantity * (stocks.find(s => s.symbol === h.symbol)?.price || 0)), 0);
     const buyTotal = transactions.filter(t => t.type === TransactionType.BUY).reduce((acc, t) => acc + t.total, 0);
     const sellTotal = transactions.filter(t => t.type === TransactionType.SELL).reduce((acc, t) => acc + t.total, 0);
     const cash = totalPrincipal - buyTotal + sellTotal;
     const total = stockVal + cash;
-    return { 
-      stockVal, 
-      cash, 
-      total, 
-      profit: total - totalPrincipal, 
-      rate: totalPrincipal > 0 ? ((total - totalPrincipal) / totalPrincipal) * 100 : 0 
+    return {
+      stockVal,
+      cash,
+      total,
+      profit: total - totalPrincipal,
+      rate: totalPrincipal > 0 ? ((total - totalPrincipal) / totalPrincipal) * 100 : 0
     };
-  }, [holdings, stocks, transactions, totalPrincipal]);
+  }, [holdings, stocks, transactions, totalPrincipal, dashboardData]);
+
+  // 刷新Dashboard数据
+  const refreshDashboardData = async () => {
+    if (!isLoggedIn) return;
+    try {
+      // 并行刷新Dashboard数据和持仓数据
+      const [dashboard, positions] = await Promise.all([
+        userApi.getDashboard(),
+        userApi.getPositionsDashboard().catch(() => null)
+      ]);
+
+      console.log('刷新Dashboard数据:', dashboard);
+      setDashboardData(dashboard);
+
+      if (positions) {
+        console.log('刷新持仓数据:', positions);
+        setPositionsDashboardData(positions);
+      }
+    } catch (e) {
+      console.error('刷新Dashboard数据失败', e);
+    }
+  };
 
   const handleCapitalAction = async (type: CapitalType, amount: number) => {
     if (amount <= 0) return;
@@ -297,6 +369,10 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       setCapitalRefreshTrigger(Date.now());
       setCapitalModalOpen(false);
       setCustomCapitalAmount('');
+
+      // 刷新Dashboard数据
+      await refreshDashboardData();
+
       toast.showSuccess(type === CapitalType.DEPOSIT ? '入金成功' : '提现成功');
     } catch (e: any) {
       toast.showError(e?.message || (type === CapitalType.DEPOSIT ? '入金失败' : '提现失败'));
@@ -345,6 +421,9 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       // 重置表单
       setTradeQuantity(100);
       setTradeTime(new Date().toISOString().slice(0, 16));
+
+      // 刷新Dashboard数据
+      await refreshDashboardData();
 
       // 获取 AI 评分
       getTradeScore(newTx, `Price ${tradePrice}`, lang).then(async score => {
@@ -416,6 +495,10 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       setSellQuantity(0);
       setSellPrice(0);
       setSellFee(null);
+
+      // 刷新Dashboard数据
+      await refreshDashboardData();
+
       toast.showSuccess('卖出成功');
     } catch (e: any) {
       toast.showError(e?.message || '卖出失败');
@@ -458,6 +541,10 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
 
       await apiService.saveTransaction(newTx);
       setTransactions(prev => [newTx, ...prev]);
+
+      // 刷新Dashboard数据
+      await refreshDashboardData();
+
       toast.showSuccess(`清仓 ${symbol} 成功`);
     } catch (e: any) {
       toast.showError(e?.message || '清仓失败');
@@ -538,7 +625,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
             </button>
           </header>
 
-          {activeTab === 'dashboard' && <Dashboard assets={assets} totalPrincipal={totalPrincipal} holdingsCount={holdings.length} stocks={stocks} holdings={holdings} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} onNavigateToAI={() => setActiveTab('ai')} aiOutlook={aiOutlook} />}
+          {activeTab === 'dashboard' && <Dashboard assets={assets} totalPrincipal={totalPrincipal} holdingsCount={holdings.length} stocks={stocks} holdings={holdings} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} onNavigateToAI={() => setActiveTab('ai')} aiOutlook={aiOutlook} positionsDashboard={positionsDashboardData} />}
           {activeTab === 'market' && <MarketSearch stocks={stocks} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} />}
           {activeTab === 'holdings' && <Holdings holdings={holdings} stocks={stocks} onBuy={handleBuyFromHoldings} onSell={handleSellFromHoldings} onClear={handleClearPosition} />}
           {activeTab === 'records' && <Records transactions={transactions} capitalRefreshTrigger={capitalRefreshTrigger} />}
@@ -587,6 +674,22 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
 
         <Modal isOpen={tradeModalOpen} onClose={() => setTradeModalOpen(false)} title={`${t.buyStock} ${selectedStock?.symbol}`}>
           <div className="space-y-5">
+            {/* 股票信息 */}
+            {tradeStockInfo && (
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-black text-slate-800">{tradeStockInfo.companyNameCn || tradeStockInfo.companyName}</h4>
+                  <span className="text-[10px] font-black bg-indigo-100 text-indigo-600 px-2 py-1 rounded-lg">
+                    {tradeStockInfo.stockType}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="text-slate-600">行业: <span className="font-black text-slate-800">{tradeStockInfo.industry || '-'}</span></div>
+                  <div className="text-slate-600">市值: <span className="font-black text-slate-800">{tradeStockInfo.marketCapDisplay || '-'}</span></div>
+                </div>
+              </div>
+            )}
+
             {/* 实时价格 */}
             <div className="bg-indigo-50 rounded-2xl p-4">
               <div className="flex items-center justify-between">
@@ -641,9 +744,19 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
                     <span>¥{tradeFee.sfcLevy.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>其他费用</span>
-                    <span>¥{(tradeFee.exchangeTradingFee + tradeFee.settlementFee + tradeFee.frcLevy).toFixed(2)}</span>
+                    <span>交易所交易费</span>
+                    <span>¥{tradeFee.exchangeTradingFee.toFixed(2)}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span>结算费</span>
+                    <span>¥{tradeFee.settlementFee.toFixed(2)}</span>
+                  </div>
+                  {tradeFee.frcLevy > 0 && (
+                    <div className="flex justify-between">
+                      <span>会财局征费</span>
+                      <span>¥{tradeFee.frcLevy.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -695,6 +808,22 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
         {/* 卖出弹窗 */}
         <Modal isOpen={sellModalOpen} onClose={() => setSellModalOpen(false)} title={`${t.sellStock ? t.sellStock : '卖出'} ${sellStock?.symbol}`}>
           <div className="space-y-5">
+            {/* 股票信息 */}
+            {sellStockInfo && (
+              <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-black text-slate-800">{sellStockInfo.companyNameCn || sellStockInfo.companyName}</h4>
+                  <span className="text-[10px] font-black bg-rose-100 text-rose-600 px-2 py-1 rounded-lg">
+                    {sellStockInfo.stockType}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="text-slate-600">行业: <span className="font-black text-slate-800">{sellStockInfo.industry || '-'}</span></div>
+                  <div className="text-slate-600">市值: <span className="font-black text-slate-800">{sellStockInfo.marketCapDisplay || '-'}</span></div>
+                </div>
+              </div>
+            )}
+
             {/* 实时价格 */}
             <div className="bg-rose-50 rounded-2xl p-4">
               <div className="flex items-center justify-between">
@@ -746,9 +875,19 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
                     <span>¥{sellFee.sfcLevy.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>其他费用</span>
-                    <span>¥{(sellFee.exchangeTradingFee + sellFee.settlementFee + sellFee.frcLevy).toFixed(2)}</span>
+                    <span>交易所交易费</span>
+                    <span>¥{sellFee.exchangeTradingFee.toFixed(2)}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span>结算费</span>
+                    <span>¥{sellFee.settlementFee.toFixed(2)}</span>
+                  </div>
+                  {sellFee.frcLevy > 0 && (
+                    <div className="flex justify-between">
+                      <span>会财局征费</span>
+                      <span>¥{sellFee.frcLevy.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

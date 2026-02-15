@@ -1,7 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { StockPrice } from '../types';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { stockApi, HotStock } from '../services/stockApi';
 
 interface MarketSearchProps {
   stocks: StockPrice[];
@@ -12,6 +13,25 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
   const [query, setQuery] = useState('');
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [hotStocks, setHotStocks] = useState<HotStock[]>([]);
+  const [isLoadingHot, setIsLoadingHot] = useState(false);
+
+  // 获取热门股票
+  useEffect(() => {
+    const fetchHotStocks = async () => {
+      setIsLoadingHot(true);
+      try {
+        const data = await stockApi.getHotStocks(10);
+        setHotStocks(data);
+      } catch (e) {
+        console.error('获取热门股票失败', e);
+      } finally {
+        setIsLoadingHot(false);
+      }
+    };
+
+    fetchHotStocks();
+  }, []);
 
   // 修复后的搜索逻辑：匹配代码或名称
   const searchResults = useMemo(() => {
@@ -39,9 +59,9 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
             <div className="w-16 h-16 flex items-center justify-center text-slate-400">
               <i className={`fas ${isFocused ? 'fa-terminal text-indigo-500' : 'fa-search'}`}></i>
             </div>
-            <input 
-              type="text" 
-              placeholder="输入证券代码（如 AAPL）或公司名称（如 Apple）..." 
+            <input
+              type="text"
+              placeholder="输入证券代码（如 AAPL）或公司名称（如 Apple）..."
               value={query}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setTimeout(() => setIsFocused(false), 200)}
@@ -56,7 +76,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
               {searchResults.length > 0 ? (
                 <div className="space-y-2">
                   {searchResults.map(s => (
-                    <button 
+                    <button
                       key={s.symbol}
                       onClick={() => handleSelect(s)}
                       className="w-full flex items-center justify-between p-5 hover:bg-slate-50 rounded-2xl transition-all group"
@@ -90,6 +110,49 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
             </div>
           )}
         </div>
+
+        {/* 热门股票 */}
+        {!query.trim() && hotStocks.length > 0 && (
+          <div className="mt-8 bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl p-6 lg:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">热门股票</h3>
+              {isLoadingHot && (
+                <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              {hotStocks.map(stock => (
+                <button
+                  key={stock.stockCode}
+                  onClick={() => {
+                    const stockPrice: StockPrice = {
+                      symbol: stock.stockCode,
+                      name: stock.companyNameCn || stock.companyName,
+                      price: stock.lastPrice,
+                      change: stock.changeNumber,
+                      changePercent: stock.changeRate
+                    };
+                    onTrade(stockPrice);
+                  }}
+                  className="bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 rounded-2xl p-5 transition-all group"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <p className="text-sm font-black text-slate-900 tracking-tight">{stock.companyNameCn || stock.companyName}</p>
+                      <span className={`text-[10px] font-black ${stock.changeRate >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {stock.changeRate >= 0 ? '↑' : '↓'} {Math.abs(stock.changeRate).toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-2xl font-black text-slate-900 tracking-tighter">¥{stock.lastPrice.toFixed(2)}</p>
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{stock.stockCode}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 动态显示区域 */}

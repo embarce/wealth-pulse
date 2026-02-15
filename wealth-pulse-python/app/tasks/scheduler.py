@@ -243,6 +243,17 @@ class MarketDataScheduler:
                         else:
                             logger.warning(f"Stock {stock_code} not found in database, skipping")
 
+                    # Update financial indicators (market_cap) for HK stocks
+                    logger.info("Updating financial indicators for HK stocks...")
+                    financial_update_count = 0
+                    for stock_code in valid_stock_codes:
+                        if stock_code.endswith('.HK'):
+                            result = stock_service.update_financial_indicator(stock_code)
+                            if result:
+                                financial_update_count += 1
+
+                    logger.info(f"Financial indicators update completed: {financial_update_count} HK stocks updated")
+
                     if not valid_stock_codes:
                         logger.warning("No valid stocks to update historical data")
                         return

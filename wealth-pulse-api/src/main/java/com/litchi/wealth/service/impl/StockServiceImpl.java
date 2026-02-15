@@ -46,15 +46,31 @@ public class StockServiceImpl implements StockService {
 
     @Override
     public List<StockMarketDataVo> getHotStocks(Integer limit) {
-        // 查询当日行情数据，按成交额降序排列
+        // 查询所有行情数据，按股票代码和日期降序排列（最新的在前）
+        // todo 排序需要更改
         LambdaQueryWrapper<StockMarketData> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.orderByDesc(StockMarketData::getTurnover)
-                .last("LIMIT " + limit);
+        queryWrapper.orderByDesc(StockMarketData::getMarketDate)
+                .orderByDesc(StockMarketData::getQuoteTime);
 
-        List<StockMarketData> marketDataList = stockMarketDataService.list(queryWrapper);
+        List<StockMarketData> allMarketData = stockMarketDataService.list(queryWrapper);
+
+        // 按股票代码去重，保留每个股票的最新记录
+        List<StockMarketData> uniqueMarketData = allMarketData.stream()
+                .collect(Collectors.groupingBy(
+                        StockMarketData::getStockCode,
+                        Collectors.collectingAndThen(
+                                Collectors.toList(),
+                                list -> list.get(0) // 取第一条（最新的）
+                        )
+                ))
+                .values()
+                .stream()
+                .sorted((d1, d2) -> d2.getTurnover().compareTo(d1.getTurnover())) // 按成交额降序
+                .limit(limit)
+                .toList();
 
         // 转换为VO
-        return marketDataList.stream().map(this::convertToMarketDataVo).collect(Collectors.toList());
+        return uniqueMarketData.stream().map(this::convertToMarketDataVo).collect(Collectors.toList());
     }
 
     @Override

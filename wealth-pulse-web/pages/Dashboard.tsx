@@ -2,6 +2,7 @@
 import React, { useContext } from 'react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { StockPrice, Holding } from '../types';
+import { PositionsDashboardData } from '../services/userApi';
 import LiveMarketWatch from '../components/LiveMarketWatch';
 import { I18nContext } from '../App';
 
@@ -11,12 +12,13 @@ interface DashboardProps {
   holdingsCount: number;
   stocks: StockPrice[];
   holdings: Holding[];
+  positionsDashboard?: PositionsDashboardData | null;
   onTrade: (s: StockPrice) => void;
   onNavigateToAI: () => void;
   aiOutlook: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ assets, totalPrincipal, holdingsCount, stocks, onTrade, onNavigateToAI, aiOutlook }) => {
+const Dashboard: React.FC<DashboardProps> = ({ assets, totalPrincipal, holdingsCount, stocks, onTrade, onNavigateToAI, aiOutlook, positionsDashboard }) => {
   const { t } = useContext(I18nContext);
 
   return (
@@ -122,7 +124,7 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, totalPrincipal, holdingsC
         </div>
 
         <div className="lg:col-span-1 h-full min-h-[500px] lg:min-h-[600px]">
-          <LiveMarketWatch stocks={stocks} onTrade={onTrade} />
+          <LiveMarketWatch onTrade={onTrade} onViewDetail={onTrade} />
         </div>
       </div>
     </div>

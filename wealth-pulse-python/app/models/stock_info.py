@@ -16,6 +16,7 @@ class StockInfo(Base):
     currency: Mapped[str] = mapped_column(String(10), default="USD", comment="交易货币: USD/HKD/CNY等")
     industry: Mapped[str | None] = mapped_column(String(50), comment="行业分类")
     market_cap: Mapped[str | None] = mapped_column(String(255), comment="市值")
+    lot_size: Mapped[int | None] = mapped_column(Integer, comment="每手股数（港股交易单位）")
     display_order: Mapped[int] = mapped_column(Integer, default=0, comment="显示顺序")
     stock_status: Mapped[int] = mapped_column(Integer, default=1, comment="状态: 1-正常交易")
 
