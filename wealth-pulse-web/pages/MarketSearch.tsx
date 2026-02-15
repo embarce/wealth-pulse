@@ -130,7 +130,8 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
                       name: stock.companyNameCn || stock.companyName,
                       price: stock.lastPrice,
                       change: stock.changeNumber,
-                      changePercent: stock.changeRate
+                      changePercent: stock.changeRate,
+                      marketCap: stock.marketCap
                     };
                     onTrade(stockPrice);
                   }}
@@ -240,7 +241,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
               { label: '最高', val: selectedStock.high, icon: 'fa-arrow-trend-up', color: 'text-emerald-500' },
               { label: '最低', val: selectedStock.low, icon: 'fa-arrow-trend-down', color: 'text-rose-500' },
               { label: '开盘', val: selectedStock.price * 0.98, icon: 'fa-door-open', color: 'text-slate-400' },
-              { label: '流通市值', val: '2.84 Trillion', icon: 'fa-landmark', color: 'text-indigo-400' }
+              { label: '流通市值', val: selectedStock.marketCap || '--', icon: 'fa-landmark', color: 'text-indigo-400' }
             ].map(item => (
               <div key={item.label} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col items-center text-center group hover:bg-slate-50 transition-all">
                 <div className={`w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center mb-4 ${item.color} shadow-inner group-hover:scale-110 transition-transform`}>

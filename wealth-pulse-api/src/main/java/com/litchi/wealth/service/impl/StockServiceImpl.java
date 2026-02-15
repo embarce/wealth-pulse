@@ -1,5 +1,7 @@
 package com.litchi.wealth.service.impl;
 
+import cn.hutool.core.date.DateTime;
+import cn.hutool.core.date.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.litchi.wealth.dto.trade.FeeCalculationRequest;
 import com.litchi.wealth.entity.StockInfo;
@@ -19,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -46,38 +49,33 @@ public class StockServiceImpl implements StockService {
 
     @Override
     public List<StockMarketDataVo> getHotStocks(Integer limit) {
-        // 查询所有行情数据，按股票代码和日期降序排列（最新的在前）
-        // todo 排序需要更改
+        // 只查询当天的行情数据，按成交额降序排列
         LambdaQueryWrapper<StockMarketData> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.orderByDesc(StockMarketData::getMarketDate)
-                .orderByDesc(StockMarketData::getQuoteTime);
 
-        List<StockMarketData> allMarketData = stockMarketDataService.list(queryWrapper);
+        // 获取今天的日期
+        LocalDate today = LocalDate.now();
 
-        // 按股票代码去重，保留每个股票的最新记录
-        List<StockMarketData> uniqueMarketData = allMarketData.stream()
-                .collect(Collectors.groupingBy(
-                        StockMarketData::getStockCode,
-                        Collectors.collectingAndThen(
-                                Collectors.toList(),
-                                list -> list.get(0) // 取第一条（最新的）
-                        )
-                ))
-                .values()
-                .stream()
-                .sorted((d1, d2) -> d2.getTurnover().compareTo(d1.getTurnover())) // 按成交额降序
-                .limit(limit)
-                .toList();
+        // 只需要按日期精确匹配和成交额排序
+        queryWrapper.eq(StockMarketData::getMarketDate, today)
+                .orderByDesc(StockMarketData::getTurnover)
+                .last("LIMIT " + limit);
 
-        // 转换为VO
-        return uniqueMarketData.stream().map(this::convertToMarketDataVo).collect(Collectors.toList());
+        List<StockMarketData> marketDataList = stockMarketDataService.list(queryWrapper);
+
+        // 直接转换为VO，无需去重
+        return marketDataList.stream()
+                .map(this::convertToMarketDataVo)
+                .collect(Collectors.toList());
     }
+
 
     @Override
     public StockMarketDataVo getMarketData(String stockCode) {
         // 查询实时行情数据（最新的一条）
+        LocalDate today = LocalDate.now();
         LambdaQueryWrapper<StockMarketData> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(StockMarketData::getStockCode, stockCode)
+                .eq(StockMarketData::getMarketDate, today)
                 .orderByDesc(StockMarketData::getQuoteTime)
                 .last("LIMIT 1");
 

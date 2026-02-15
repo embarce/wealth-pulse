@@ -1,7 +1,5 @@
 import logging
 
-from app.services.stock_data_provider_base import BaseStockDataProvider
-from app.services.stock_service import StockService
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -11,7 +9,9 @@ from app.core.config import settings
 from app.db.lock import distributed_lock
 from app.db.redis import RedisClient
 from app.db.session import SessionLocal
+from app.services.stock_data_provider_base import BaseStockDataProvider
 from app.services.stock_data_provider_factory import get_stock_data_provider, StockDataProviderFactory
+from app.services.stock_service import StockService
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,6 @@ class MarketDataScheduler:
             symbols: List of stock symbols
             provider: Stock data provider instance
         """
-        import json
 
         stock_service = StockService(db)
 
@@ -177,15 +176,6 @@ class MarketDataScheduler:
                     stock_service.update_market_data(result.stock_code, result.data)
                     logger.info(f"Updated market data: {result.stock_code}")
                     success_count += 1
-
-                    # Cache in Redis
-                    if self.redis_client:
-                        cache_key = f"market_data:{result.stock_code}"
-                        self.redis_client.setex(
-                            cache_key,
-                            settings.MARKET_DATA_UPDATE_INTERVAL,
-                            json.dumps(result.data, default=str)
-                        )
                 else:
                     logger.warning(f"No market data available for {result.stock_code}: {result.error_message}")
 
@@ -263,7 +253,8 @@ class MarketDataScheduler:
                     start_date = date.today() - timedelta(days=90)
                     end_date = date.today()
 
-                    logger.info(f"Fetching batch historical data for {len(valid_stock_codes)} stocks from {start_date} to {end_date}")
+                    logger.info(
+                        f"Fetching batch historical data for {len(valid_stock_codes)} stocks from {start_date} to {end_date}")
 
                     # Use BATCH method for much better performance!
                     batch_results = provider.get_batch_history_data(
@@ -288,7 +279,8 @@ class MarketDataScheduler:
                             logger.error(f"Error updating historical data for {stock_code}: {str(e)}")
                             continue
 
-                    logger.info(f"Historical data batch update completed: {success_count}/{len(valid_stock_codes)} succeeded, {total_records} total records")
+                    logger.info(
+                        f"Historical data batch update completed: {success_count}/{len(valid_stock_codes)} succeeded, {total_records} total records")
 
                 except Exception as e:
                     logger.error(f"Error in historical data update: {str(e)}")

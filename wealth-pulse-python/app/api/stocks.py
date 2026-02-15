@@ -8,7 +8,8 @@ from app.services.stock_service import StockService
 from app.schemas.stock import (
     StockInfoResponse,
     StockMarketDataResponse,
-    StockMarketHistoryResponse
+    StockMarketHistoryResponse,
+    StockSecurityProfileResponse
 )
 from app.core.security import get_current_user
 from app.core.exceptions import ApiException
@@ -380,5 +381,595 @@ def get_stocks_public(
         logger.error(f"Error getting stocks: {str(e)}")
         raise ApiException(
             msg=f"Failed to retrieve stocks: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/security-profile", summary="Get HK stock security profile")
+def get_security_profile(
+    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock security profile from Eastmoney (requires authentication)
+
+    This endpoint fetches real-time security profile data from Eastmoney's API,
+    including listing information, issue details, and trading specifications.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 0700.HK, 03900.HK)
+
+    **Data Source:**
+    - AkShare `stock_hk_security_profile_em` API
+    - Eastmoney (emweb.securities.eastmoney.com)
+
+    **Returned Fields:**
+    - stock_code: 证券代码
+    - security_name: 证券简称
+    - listing_date: 上市日期
+    - security_type: 证券类型
+    - issue_price: 发行价
+    - issue_volume: 发行量(股)
+    - lot_size: 每手股数
+    - par_value: 每股面值
+    - exchange: 交易所
+    - sector: 板块
+    - year_end_date: 年结日
+    - isin_code: ISIN（国际证券识别编码）
+    - is_sh_hk_stock: 是否沪港通标的
+    """
+    try:
+        import akshare as ak
+        import pandas as pd
+
+        # 判断是否为港股代码
+        if not stock_code.upper().endswith('.HK'):
+            raise ApiException(
+                msg=f"Invalid stock code format. Expected HK stock code (e.g., 0700.HK, 03900.HK)",
+                code=ResponseCode.BAD_REQUEST
+            )
+
+        # 标准化股票代码（参考 init_stocks.py 的 normalize_stock_code 函数）
+        normalized_code = stock_code.replace('.HK', '').replace('.hk', '')
+        if len(normalized_code) < 5:
+            normalized_code = normalized_code.zfill(5)
+
+        logger.info(f"[SecurityProfile] Fetching security profile for {stock_code} (normalized: {normalized_code})")
+
+        # 调用 AkShare API 获取证券资料
+        security_profile_df = ak.stock_hk_security_profile_em(symbol=normalized_code)
+
+        if security_profile_df.empty:
+            raise ApiException(
+                msg=f"Security profile data not found for stock {stock_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # 获取第一行数据
+        profile_data = security_profile_df.iloc[0]
+
+        # 映射字段到 VO（根据 AkShare 返回的列名）
+        # AkShare 返回的列名: ['证券代码', '证券简称', '上市日期', '证券类型', '发行价', '发行量(股)',
+        #                       '每手股数', '每股面值', '交易所', '板块', '年结日', 'ISIN（国际证券识别编码）', '是否沪港通标的']
+        response_data = {
+            "stock_code": str(profile_data.get('证券代码', stock_code)),
+            "security_name": str(profile_data.get('证券简称', '')),
+            "listing_date": str(profile_data.get('上市日期', '')) if pd.notna(profile_data.get('上市日期')) else None,
+            "security_type": str(profile_data.get('证券类型', '')) if pd.notna(profile_data.get('证券类型')) else None,
+            "issue_price": float(profile_data.get('发行价')) if pd.notna(profile_data.get('发行价')) else None,
+            "issue_volume": int(profile_data.get('发行量(股)')) if pd.notna(profile_data.get('发行量(股)')) else None,
+            "lot_size": int(profile_data.get('每手股数')) if pd.notna(profile_data.get('每手股数')) else None,
+            "par_value": str(profile_data.get('每股面值', '')) if pd.notna(profile_data.get('每股面值')) else None,
+            "exchange": str(profile_data.get('交易所', '')) if pd.notna(profile_data.get('交易所')) else None,
+            "sector": str(profile_data.get('板块', '')) if pd.notna(profile_data.get('板块')) else None,
+            "year_end_date": str(profile_data.get('年结日', '')) if pd.notna(profile_data.get('年结日')) else None,
+            "isin_code": str(profile_data.get('ISIN（国际证券识别编码）', '')) if pd.notna(profile_data.get('ISIN（国际证券识别编码）')) else None,
+            "is_sh_hk_stock": str(profile_data.get('是否沪港通标的', '')) if pd.notna(profile_data.get('是否沪港通标的')) else None,
+        }
+
+        logger.info(f"[SecurityProfile] Successfully fetched security profile for {stock_code}")
+
+        return success_response(
+            data=response_data,
+            msg="Security profile retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except ImportError:
+        logger.error("AkShare module not installed")
+        raise ApiException(
+            msg="AkShare module not available. Please install akshare package.",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+    except Exception as e:
+        logger.error(f"Error fetching security profile for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve security profile: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/public/{stock_code}/security-profile", summary="Get HK stock security profile (public)")
+def get_security_profile_public(
+    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK")
+):
+    """
+    Get HK stock security profile from Eastmoney (public endpoint - no authentication required)
+
+    This is a public version of the security profile endpoint that doesn't require authentication.
+    """
+    try:
+        import akshare as ak
+        import pandas as pd
+
+        # 判断是否为港股代码
+        if not stock_code.upper().endswith('.HK'):
+            raise ApiException(
+                msg=f"Invalid stock code format. Expected HK stock code (e.g., 0700.HK, 03900.HK)",
+                code=ResponseCode.BAD_REQUEST
+            )
+
+        # 标准化股票代码（参考 init_stocks.py 的 normalize_stock_code 函数）
+        normalized_code = stock_code.replace('.HK', '').replace('.hk', '')
+        if len(normalized_code) < 5:
+            normalized_code = normalized_code.zfill(5)
+
+        logger.info(f"[SecurityProfile] Fetching security profile for {stock_code} (normalized: {normalized_code})")
+
+        # 调用 AkShare API 获取证券资料
+        security_profile_df = ak.stock_hk_security_profile_em(symbol=normalized_code)
+
+        if security_profile_df.empty:
+            raise ApiException(
+                msg=f"Security profile data not found for stock {stock_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # 获取第一行数据
+        profile_data = security_profile_df.iloc[0]
+
+        # 映射字段到 VO
+        response_data = {
+            "stock_code": str(profile_data.get('证券代码', stock_code)),
+            "security_name": str(profile_data.get('证券简称', '')),
+            "listing_date": str(profile_data.get('上市日期', '')) if pd.notna(profile_data.get('上市日期')) else None,
+            "security_type": str(profile_data.get('证券类型', '')) if pd.notna(profile_data.get('证券类型')) else None,
+            "issue_price": float(profile_data.get('发行价')) if pd.notna(profile_data.get('发行价')) else None,
+            "issue_volume": int(profile_data.get('发行量(股)')) if pd.notna(profile_data.get('发行量(股)')) else None,
+            "lot_size": int(profile_data.get('每手股数')) if pd.notna(profile_data.get('每手股数')) else None,
+            "par_value": str(profile_data.get('每股面值', '')) if pd.notna(profile_data.get('每股面值')) else None,
+            "exchange": str(profile_data.get('交易所', '')) if pd.notna(profile_data.get('交易所')) else None,
+            "sector": str(profile_data.get('板块', '')) if pd.notna(profile_data.get('板块')) else None,
+            "year_end_date": str(profile_data.get('年结日', '')) if pd.notna(profile_data.get('年结日')) else None,
+            "isin_code": str(profile_data.get('ISIN（国际证券识别编码）', '')) if pd.notna(profile_data.get('ISIN（国际证券识别编码）')) else None,
+            "is_sh_hk_stock": str(profile_data.get('是否沪港通标的', '')) if pd.notna(profile_data.get('是否沪港通标的')) else None,
+        }
+
+        logger.info(f"[SecurityProfile] Successfully fetched security profile for {stock_code}")
+
+        return success_response(
+            data=response_data,
+            msg="Security profile retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except ImportError:
+        logger.error("AkShare module not installed")
+        raise ApiException(
+            msg="AkShare module not available. Please install akshare package.",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+    except Exception as e:
+        logger.error(f"Error fetching security profile for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve security profile: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/company-profile", summary="Get HK stock company profile")
+def get_company_profile(
+    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock company profile from Eastmoney (requires authentication)
+
+    This endpoint fetches detailed company information including contact details,
+    management team, and company description.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 0700.HK, 03900.HK)
+
+    **Data Source:**
+    - AkShare `stock_hk_company_profile_em` API
+    - Eastmoney (emweb.securities.eastmoney.com)
+
+    **Returned Fields:**
+    - stock_code: 证券代码
+    - company_name: 公司名称
+    - company_name_en: 英文名称
+    - registration_place: 注册地
+    - establishment_date: 公司成立日期
+    - industry: 所属行业
+    - chairman: 董事长
+    - company_secretary: 公司秘书
+    - employee_count: 员工人数
+    - office_address: 办公地址
+    - website: 公司网址
+    - email: E-MAIL
+    - year_end_date: 年结日
+    - phone: 联系电话
+    - auditor: 核数师
+    - fax: 传真
+    - company_introduction: 公司介绍
+    """
+    try:
+        import akshare as ak
+        import pandas as pd
+
+        # 判断是否为港股代码
+        if not stock_code.upper().endswith('.HK'):
+            raise ApiException(
+                msg=f"Invalid stock code format. Expected HK stock code (e.g., 0700.HK, 03900.HK)",
+                code=ResponseCode.BAD_REQUEST
+            )
+
+        # 标准化股票代码（参考 init_stocks.py 的 normalize_stock_code 函数）
+        normalized_code = stock_code.replace('.HK', '').replace('.hk', '')
+        if len(normalized_code) < 5:
+            normalized_code = normalized_code.zfill(5)
+
+        logger.info(f"[CompanyProfile] Fetching company profile for {stock_code} (normalized: {normalized_code})")
+
+        # 调用 AkShare API 获取公司资料
+        company_profile_df = ak.stock_hk_company_profile_em(symbol=normalized_code)
+
+        if company_profile_df.empty:
+            raise ApiException(
+                msg=f"Company profile data not found for stock {stock_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # 获取第一行数据
+        profile_data = company_profile_df.iloc[0]
+
+        # 映射字段到 VO（根据 AkShare 返回的列名）
+        # AkShare 返回的列名: ['公司名称', '英文名称', '注册地', '公司成立日期', '所属行业', '董事长',
+        #                       '公司秘书', '员工人数', '办公地址', '公司网址', 'E-MAIL', '年结日', '联系电话',
+        #                       '核数师', '传真', '公司介绍']
+        response_data = {
+            "stock_code": stock_code,
+            "company_name": str(profile_data.get('公司名称', '')),
+            "company_name_en": str(profile_data.get('英文名称', '')),
+            "registration_place": str(profile_data.get('注册地', '')) if pd.notna(profile_data.get('注册地')) else None,
+            "establishment_date": str(profile_data.get('公司成立日期', '')) if pd.notna(profile_data.get('公司成立日期')) else None,
+            "industry": str(profile_data.get('所属行业', '')) if pd.notna(profile_data.get('所属行业')) else None,
+            "chairman": str(profile_data.get('董事长', '')) if pd.notna(profile_data.get('董事长')) else None,
+            "company_secretary": str(profile_data.get('公司秘书', '')) if pd.notna(profile_data.get('公司秘书')) else None,
+            "employee_count": int(profile_data.get('员工人数')) if pd.notna(profile_data.get('员工人数')) else None,
+            "office_address": str(profile_data.get('办公地址', '')) if pd.notna(profile_data.get('办公地址')) else None,
+            "website": str(profile_data.get('公司网址', '')) if pd.notna(profile_data.get('公司网址')) else None,
+            "email": str(profile_data.get('E-MAIL', '')) if pd.notna(profile_data.get('E-MAIL')) else None,
+            "year_end_date": str(profile_data.get('年结日', '')) if pd.notna(profile_data.get('年结日')) else None,
+            "phone": str(profile_data.get('联系电话', '')) if pd.notna(profile_data.get('联系电话')) else None,
+            "auditor": str(profile_data.get('核数师', '')) if pd.notna(profile_data.get('核数师')) else None,
+            "fax": str(profile_data.get('传真', '')) if pd.notna(profile_data.get('传真')) else None,
+            "company_introduction": str(profile_data.get('公司介绍', '')) if pd.notna(profile_data.get('公司介绍')) else None,
+        }
+
+        logger.info(f"[CompanyProfile] Successfully fetched company profile for {stock_code}")
+
+        return success_response(
+            data=response_data,
+            msg="Company profile retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except ImportError:
+        logger.error("AkShare module not installed")
+        raise ApiException(
+            msg="AkShare module not available. Please install akshare package.",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+    except Exception as e:
+        logger.error(f"Error fetching company profile for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve company profile: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/public/{stock_code}/company-profile", summary="Get HK stock company profile (public)")
+def get_company_profile_public(
+    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK")
+):
+    """
+    Get HK stock company profile from Eastmoney (public endpoint - no authentication required)
+
+    This is a public version of the company profile endpoint that doesn't require authentication.
+    """
+    try:
+        import akshare as ak
+        import pandas as pd
+
+        # 判断是否为港股代码
+        if not stock_code.upper().endswith('.HK'):
+            raise ApiException(
+                msg=f"Invalid stock code format. Expected HK stock code (e.g., 0700.HK, 03900.HK)",
+                code=ResponseCode.BAD_REQUEST
+            )
+
+        # 标准化股票代码（参考 init_stocks.py 的 normalize_stock_code 函数）
+        normalized_code = stock_code.replace('.HK', '').replace('.hk', '')
+        if len(normalized_code) < 5:
+            normalized_code = normalized_code.zfill(5)
+
+        logger.info(f"[CompanyProfile] Fetching company profile for {stock_code} (normalized: {normalized_code})")
+
+        # 调用 AkShare API 获取公司资料
+        company_profile_df = ak.stock_hk_company_profile_em(symbol=normalized_code)
+
+        if company_profile_df.empty:
+            raise ApiException(
+                msg=f"Company profile data not found for stock {stock_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # 获取第一行数据
+        profile_data = company_profile_df.iloc[0]
+
+        # 映射字段到 VO
+        response_data = {
+            "stock_code": stock_code,
+            "company_name": str(profile_data.get('公司名称', '')),
+            "company_name_en": str(profile_data.get('英文名称', '')),
+            "registration_place": str(profile_data.get('注册地', '')) if pd.notna(profile_data.get('注册地')) else None,
+            "establishment_date": str(profile_data.get('公司成立日期', '')) if pd.notna(profile_data.get('公司成立日期')) else None,
+            "industry": str(profile_data.get('所属行业', '')) if pd.notna(profile_data.get('所属行业')) else None,
+            "chairman": str(profile_data.get('董事长', '')) if pd.notna(profile_data.get('董事长')) else None,
+            "company_secretary": str(profile_data.get('公司秘书', '')) if pd.notna(profile_data.get('公司秘书')) else None,
+            "employee_count": int(profile_data.get('员工人数')) if pd.notna(profile_data.get('员工人数')) else None,
+            "office_address": str(profile_data.get('办公地址', '')) if pd.notna(profile_data.get('办公地址')) else None,
+            "website": str(profile_data.get('公司网址', '')) if pd.notna(profile_data.get('公司网址')) else None,
+            "email": str(profile_data.get('E-MAIL', '')) if pd.notna(profile_data.get('E-MAIL')) else None,
+            "year_end_date": str(profile_data.get('年结日', '')) if pd.notna(profile_data.get('年结日')) else None,
+            "phone": str(profile_data.get('联系电话', '')) if pd.notna(profile_data.get('联系电话')) else None,
+            "auditor": str(profile_data.get('核数师', '')) if pd.notna(profile_data.get('核数师')) else None,
+            "fax": str(profile_data.get('传真', '')) if pd.notna(profile_data.get('传真')) else None,
+            "company_introduction": str(profile_data.get('公司介绍', '')) if pd.notna(profile_data.get('公司介绍')) else None,
+        }
+
+        logger.info(f"[CompanyProfile] Successfully fetched company profile for {stock_code}")
+
+        return success_response(
+            data=response_data,
+            msg="Company profile retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except ImportError:
+        logger.error("AkShare module not installed")
+        raise ApiException(
+            msg="AkShare module not available. Please install akshare package.",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+    except Exception as e:
+        logger.error(f"Error fetching company profile for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve company profile: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/financial-indicator", summary="Get HK stock financial indicators")
+def get_financial_indicator(
+    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock financial indicators from Eastmoney (requires authentication)
+
+    This endpoint fetches key financial metrics including profitability ratios,
+    valuation metrics, and growth indicators.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 0700.HK, 03900.HK)
+
+    **Data Source:**
+    - AkShare `stock_hk_financial_indicator_em` API
+    - Eastmoney (emweb.securities.eastmoney.com)
+
+    **Returned Fields:**
+    - stock_code: 证券代码
+    - basic_eps: 基本每股收益(元)
+    - net_assets_per_share: 每股净资产(元)
+    - legal_capital: 法定股本(股)
+    - lot_size: 每手股
+    - dividend_per_share_ttm: 每股股息TTM(港元)
+    - payout_ratio: 派息比率(%)
+    - issued_capital: 已发行股本(股)
+    - issued_capital_h_shares: 已发行股本-H股(股)
+    - operating_cash_flow_per_share: 每股经营现金流(元)
+    - dividend_yield_ttm: 股息率TTM(%)
+    - total_market_cap_hkd: 总市值(港元)
+    - hk_market_cap_hkd: 港股市值(港元)
+    - total_operating_revenue: 营业总收入
+    - operating_revenue_growth_yoy: 营业总收入滚动环比增长(%)
+    - net_profit_margin: 销售净利率(%)
+    - net_profit: 净利润
+    - net_profit_growth_yoy: 净利润滚动环比增长(%)
+    - roe: 股东权益回报率(%)
+    - pe_ratio: 市盈率
+    - pb_ratio: 市净率
+    - roa: 总资产回报率(%)
+    """
+    try:
+        import akshare as ak
+        import pandas as pd
+
+        # 判断是否为港股代码
+        if not stock_code.upper().endswith('.HK'):
+            raise ApiException(
+                msg=f"Invalid stock code format. Expected HK stock code (e.g., 0700.HK, 03900.HK)",
+                code=ResponseCode.BAD_REQUEST
+            )
+
+        # 标准化股票代码（参考 init_stocks.py 的 normalize_stock_code 函数）
+        normalized_code = stock_code.replace('.HK', '').replace('.hk', '')
+        if len(normalized_code) < 5:
+            normalized_code = normalized_code.zfill(5)
+
+        logger.info(f"[FinancialIndicator] Fetching financial indicators for {stock_code} (normalized: {normalized_code})")
+
+        # 调用 AkShare API 获取财务指标
+        financial_indicator_df = ak.stock_hk_financial_indicator_em(symbol=normalized_code)
+
+        if financial_indicator_df.empty:
+            raise ApiException(
+                msg=f"Financial indicator data not found for stock {stock_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # 获取第一行数据
+        indicator_data = financial_indicator_df.iloc[0]
+
+        # 映射字段到 VO（根据 AkShare 返回的列名）
+        response_data = {
+            "stock_code": stock_code,
+            "basic_eps": str(indicator_data.get('基本每股收益(元)', '')) if pd.notna(indicator_data.get('基本每股收益(元)')) else None,
+            "net_assets_per_share": str(indicator_data.get('每股净资产(元)', '')) if pd.notna(indicator_data.get('每股净资产(元)')) else None,
+            "legal_capital": str(indicator_data.get('法定股本(股)', '')) if pd.notna(indicator_data.get('法定股本(股)')) else None,
+            "lot_size": str(indicator_data.get('每手股', '')) if pd.notna(indicator_data.get('每手股')) else None,
+            "dividend_per_share_ttm": str(indicator_data.get('每股股息TTM(港元)', '')) if pd.notna(indicator_data.get('每股股息TTM(港元)')) else None,
+            "payout_ratio": str(indicator_data.get('派息比率(%)', '')) if pd.notna(indicator_data.get('派息比率(%)')) else None,
+            "issued_capital": str(indicator_data.get('已发行股本(股)', '')) if pd.notna(indicator_data.get('已发行股本(股)')) else None,
+            "issued_capital_h_shares": int(indicator_data.get('已发行股本-H股(股)')) if pd.notna(indicator_data.get('已发行股本-H股(股)')) else None,
+            "operating_cash_flow_per_share": str(indicator_data.get('每股经营现金流(元)', '')) if pd.notna(indicator_data.get('每股经营现金流(元)')) else None,
+            "dividend_yield_ttm": str(indicator_data.get('股息率TTM(%)', '')) if pd.notna(indicator_data.get('股息率TTM(%)')) else None,
+            "total_market_cap_hkd": str(indicator_data.get('总市值(港元)', '')) if pd.notna(indicator_data.get('总市值(港元)')) else None,
+            "hk_market_cap_hkd": str(indicator_data.get('港股市值(港元)', '')) if pd.notna(indicator_data.get('港股市值(港元)')) else None,
+            "total_operating_revenue": str(indicator_data.get('营业总收入', '')) if pd.notna(indicator_data.get('营业总收入')) else None,
+            "operating_revenue_growth_yoy": str(indicator_data.get('营业总收入滚动环比增长(%)', '')) if pd.notna(indicator_data.get('营业总收入滚动环比增长(%)')) else None,
+            "net_profit_margin": str(indicator_data.get('销售净利率(%)', '')) if pd.notna(indicator_data.get('销售净利率(%)')) else None,
+            "net_profit": str(indicator_data.get('净利润', '')) if pd.notna(indicator_data.get('净利润')) else None,
+            "net_profit_growth_yoy": str(indicator_data.get('净利润滚动环比增长(%)', '')) if pd.notna(indicator_data.get('净利润滚动环比增长(%)')) else None,
+            "roe": str(indicator_data.get('股东权益回报率(%)', '')) if pd.notna(indicator_data.get('股东权益回报率(%)')) else None,
+            "pe_ratio": str(indicator_data.get('市盈率', '')) if pd.notna(indicator_data.get('市盈率')) else None,
+            "pb_ratio": str(indicator_data.get('市净率', '')) if pd.notna(indicator_data.get('市净率')) else None,
+            "roa": str(indicator_data.get('总资产回报率(%)', '')) if pd.notna(indicator_data.get('总资产回报率(%)')) else None,
+        }
+
+        logger.info(f"[FinancialIndicator] Successfully fetched financial indicators for {stock_code}")
+
+        return success_response(
+            data=response_data,
+            msg="Financial indicators retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except ImportError:
+        logger.error("AkShare module not installed")
+        raise ApiException(
+            msg="AkShare module not available. Please install akshare package.",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+    except Exception as e:
+        logger.error(f"Error fetching financial indicators for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve financial indicators: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/public/{stock_code}/financial-indicator", summary="Get HK stock financial indicators (public)")
+def get_financial_indicator_public(
+    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK")
+):
+    """
+    Get HK stock financial indicators from Eastmoney (public endpoint - no authentication required)
+
+    This is a public version of the financial indicator endpoint that doesn't require authentication.
+    """
+    try:
+        import akshare as ak
+        import pandas as pd
+
+        # 判断是否为港股代码
+        if not stock_code.upper().endswith('.HK'):
+            raise ApiException(
+                msg=f"Invalid stock code format. Expected HK stock code (e.g., 0700.HK, 03900.HK)",
+                code=ResponseCode.BAD_REQUEST
+            )
+
+        # 标准化股票代码（参考 init_stocks.py 的 normalize_stock_code 函数）
+        normalized_code = stock_code.replace('.HK', '').replace('.hk', '')
+        if len(normalized_code) < 5:
+            normalized_code = normalized_code.zfill(5)
+
+        logger.info(f"[FinancialIndicator] Fetching financial indicators for {stock_code} (normalized: {normalized_code})")
+
+        # 调用 AkShare API 获取财务指标
+        financial_indicator_df = ak.stock_hk_financial_indicator_em(symbol=normalized_code)
+
+        if financial_indicator_df.empty:
+            raise ApiException(
+                msg=f"Financial indicator data not found for stock {stock_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # 获取第一行数据
+        indicator_data = financial_indicator_df.iloc[0]
+
+        # 映射字段到 VO
+        response_data = {
+            "stock_code": stock_code,
+            "basic_eps": str(indicator_data.get('基本每股收益(元)', '')) if pd.notna(indicator_data.get('基本每股收益(元)')) else None,
+            "net_assets_per_share": str(indicator_data.get('每股净资产(元)', '')) if pd.notna(indicator_data.get('每股净资产(元)')) else None,
+            "legal_capital": str(indicator_data.get('法定股本(股)', '')) if pd.notna(indicator_data.get('法定股本(股)')) else None,
+            "lot_size": str(indicator_data.get('每手股', '')) if pd.notna(indicator_data.get('每手股')) else None,
+            "dividend_per_share_ttm": str(indicator_data.get('每股股息TTM(港元)', '')) if pd.notna(indicator_data.get('每股股息TTM(港元)')) else None,
+            "payout_ratio": str(indicator_data.get('派息比率(%)', '')) if pd.notna(indicator_data.get('派息比率(%)')) else None,
+            "issued_capital": str(indicator_data.get('已发行股本(股)', '')) if pd.notna(indicator_data.get('已发行股本(股)')) else None,
+            "issued_capital_h_shares": int(indicator_data.get('已发行股本-H股(股)')) if pd.notna(indicator_data.get('已发行股本-H股(股)')) else None,
+            "operating_cash_flow_per_share": str(indicator_data.get('每股经营现金流(元)', '')) if pd.notna(indicator_data.get('每股经营现金流(元)')) else None,
+            "dividend_yield_ttm": str(indicator_data.get('股息率TTM(%)', '')) if pd.notna(indicator_data.get('股息率TTM(%)')) else None,
+            "total_market_cap_hkd": str(indicator_data.get('总市值(港元)', '')) if pd.notna(indicator_data.get('总市值(港元)')) else None,
+            "hk_market_cap_hkd": str(indicator_data.get('港股市值(港元)', '')) if pd.notna(indicator_data.get('港股市值(港元)')) else None,
+            "total_operating_revenue": str(indicator_data.get('营业总收入', '')) if pd.notna(indicator_data.get('营业总收入')) else None,
+            "operating_revenue_growth_yoy": str(indicator_data.get('营业总收入滚动环比增长(%)', '')) if pd.notna(indicator_data.get('营业总收入滚动环比增长(%)')) else None,
+            "net_profit_margin": str(indicator_data.get('销售净利率(%)', '')) if pd.notna(indicator_data.get('销售净利率(%)')) else None,
+            "net_profit": str(indicator_data.get('净利润', '')) if pd.notna(indicator_data.get('净利润')) else None,
+            "net_profit_growth_yoy": str(indicator_data.get('净利润滚动环比增长(%)', '')) if pd.notna(indicator_data.get('净利润滚动环比增长(%)')) else None,
+            "roe": str(indicator_data.get('股东权益回报率(%)', '')) if pd.notna(indicator_data.get('股东权益回报率(%)')) else None,
+            "pe_ratio": str(indicator_data.get('市盈率', '')) if pd.notna(indicator_data.get('市盈率')) else None,
+            "pb_ratio": str(indicator_data.get('市净率', '')) if pd.notna(indicator_data.get('市净率')) else None,
+            "roa": str(indicator_data.get('总资产回报率(%)', '')) if pd.notna(indicator_data.get('总资产回报率(%)')) else None,
+        }
+
+        logger.info(f"[FinancialIndicator] Successfully fetched financial indicators for {stock_code}")
+
+        return success_response(
+            data=response_data,
+            msg="Financial indicators retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except ImportError:
+        logger.error("AkShare module not installed")
+        raise ApiException(
+            msg="AkShare module not available. Please install akshare package.",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+    except Exception as e:
+        logger.error(f"Error fetching financial indicators for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve financial indicators: {str(e)}",
             code=ResponseCode.INTERNAL_ERROR
         )

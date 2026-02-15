@@ -40,8 +40,7 @@ export interface StockInfo {
   companyNameEn: string;
   stockType: string;
   listingDate: string;
-  marketCap: number;
-  marketCapDisplay: string;
+  marketCap: string;
   circulatingMarketCap: number;
   circulatingMarketCapDisplay: string;
   outstandingShares: number;
@@ -70,6 +69,7 @@ export interface HotStock {
   quoteTime: string;
   marketDate: string;
   currency: string;
+  marketCap: string;
 }
 
 export interface FeeCalculationRequest {

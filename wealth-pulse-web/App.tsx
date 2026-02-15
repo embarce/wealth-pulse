@@ -685,7 +685,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[10px]">
                   <div className="text-slate-600">行业: <span className="font-black text-slate-800">{tradeStockInfo.industry || '-'}</span></div>
-                  <div className="text-slate-600">市值: <span className="font-black text-slate-800">{tradeStockInfo.marketCapDisplay || '-'}</span></div>
+                  <div className="text-slate-600">市值: <span className="font-black text-slate-800">{tradeStockInfo.marketCap || '-'}</span></div>
                 </div>
               </div>
             )}

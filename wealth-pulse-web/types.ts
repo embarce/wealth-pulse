@@ -59,6 +59,7 @@ export interface StockPrice {
   high: number;
   low: number;
   history: { time: string; price: number }[];
+  marketCap?: string;
 }
 
 export interface AppConfig {

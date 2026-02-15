@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # API
     API_HOST: str = "0.0.0.0"
-    API_PORT: int = 9000
+    API_PORT: int = 9010
     API_RELOAD: bool = False
     API_SECRET_KEY: str = "your-secret-key-change-this-in-production"
     API_CLIENT_ID: str = "wealth-pulse-java"
