@@ -76,8 +76,32 @@ public class PositionDashboardVo {
         @Schema(name = "avgCost", description = "平均成本价")
         private BigDecimal avgCost;
 
-        @Schema(name = "currentPrice", description = "当前价格")
+        @Schema(name = "currentPrice", description = "当前价格（最新价）")
         private BigDecimal currentPrice;
+
+        @Schema(name = "openPrice", description = "开盘价")
+        private BigDecimal openPrice;
+
+        @Schema(name = "highPrice", description = "当日最高价")
+        private BigDecimal highPrice;
+
+        @Schema(name = "lowPrice", description = "当日最低价")
+        private BigDecimal lowPrice;
+
+        @Schema(name = "preClosePrice", description = "前收盘价")
+        private BigDecimal preClosePrice;
+
+        @Schema(name = "changeNumber", description = "涨跌额")
+        private BigDecimal changeNumber;
+
+        @Schema(name = "changeRate", description = "涨跌幅(%)")
+        private BigDecimal changeRate;
+
+        @Schema(name = "volume", description = "成交量")
+        private Long volume;
+
+        @Schema(name = "turnover", description = "成交额")
+        private BigDecimal turnover;
 
         @Schema(name = "marketValue", description = "市值")
         private BigDecimal marketValue;
@@ -99,5 +123,8 @@ public class PositionDashboardVo {
 
         @Schema(name = "lastBuyDate", description = "最后买入日期")
         private String lastBuyDate;
+
+        @Schema(name = "quoteTime", description = "行情时间")
+        private String quoteTime;
     }
 }

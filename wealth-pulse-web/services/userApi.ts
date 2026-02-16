@@ -31,16 +31,33 @@ export interface DashboardData {
   totalSellCount: number;            // 总卖出次数
 }
 
-/** 单个持仓项 */
+/** 单个持仓项（与 /api/user/positions/dashboard 返回结构对齐） */
 export interface PositionItem {
-  stockCode: string;           // 股票代码
-  stockName: string;           // 股票名称
-  quantity: number;            // 持仓数量
-  avgCost: number;            // 平均成本
-  currentPrice: number;        // 当前价格
-  marketValue: number;        // 市值
-  profitLoss: number;         // 盈亏金额
-  profitLossRate: number;     // 盈亏比例
+  stockCode: string;            // 股票代码，例如 1299.HK
+  stockName?: string;           // 股票名称（可选）
+  shortName?: string;           // 简短名称（可选）
+  companyName?: string;         // 英文公司名（可选）
+  companyNameCn?: string;       // 中文公司名（可选）
+  currency?: string;            // 币种，例如 HKD
+  quantity: number;             // 持仓数量
+  avgCost: number;              // 平均成本
+  currentPrice: number;         // 当前价格
+  openPrice?: number;           // 开盘价
+  highPrice?: number;           // 最高价
+  lowPrice?: number;            // 最低价
+  preClosePrice?: number;       // 昨收价
+  changeNumber?: number;        // 涨跌额
+  changeRate?: number;          // 涨跌幅
+  changePercent?: number;       // 涨跌幅（百分比）
+  volume?: number;              // 成交量
+  turnover?: number;            // 成交额
+  marketValue: number;          // 市值
+  costValue?: number;           // 成本金额（可选）
+  profitLoss: number;           // 盈亏金额
+  profitLossRate: number;       // 盈亏比例
+  positionStatus?: 1 | 2 | 3;   // 持仓状态: 1-持有中 2-已清仓 3-部分平仓
+  firstBuyDate?: string;        // 首次买入日期
+  lastBuyDate?: string;         // 最近买入日期
 }
 
 /** 仓位总览数据 */

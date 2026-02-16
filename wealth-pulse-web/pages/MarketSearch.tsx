@@ -131,6 +131,11 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
                       price: stock.lastPrice,
                       change: stock.changeNumber,
                       changePercent: stock.changeRate,
+                      high: stock.highPrice || stock.lastPrice,
+                      low: stock.lowPrice || stock.lastPrice,
+                      open: stock.openPrice || stock.lastPrice,
+                      volume: stock.volume || 0,
+                      history: [],
                       marketCap: stock.marketCap
                     };
                     onTrade(stockPrice);

@@ -8,7 +8,6 @@ import {
   StockPrice,
   AppConfig
 } from './types';
-import { INITIAL_STOCKS, generateMockHistory } from './constants';
 import { apiService } from './services/backend';
 import { capitalApi } from './services/capitalApi';
 import { userApi, DashboardData, PositionsDashboardData } from './services/userApi';
@@ -52,9 +51,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   
   // Data State
   const [isLoading, setIsLoading] = useState(true);
-  const [stocks] = useState<StockPrice[]>(() => 
-    INITIAL_STOCKS.map(s => ({ ...s, history: generateMockHistory(s.price) }))
-  );
+  const [stocks, setStocks] = useState<StockPrice[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [capitalLogs, setCapitalLogs] = useState<CapitalLog[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -62,6 +59,9 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   const [capitalRefreshTrigger, setCapitalRefreshTrigger] = useState(0);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [positionsDashboardData, setPositionsDashboardData] = useState<PositionsDashboardData | null>(null);
+  const [isRefreshingDashboard, setIsRefreshingDashboard] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+  const [nextRefreshTime, setNextRefreshTime] = useState<Date | null>(null);
 
   // Modals State
   const [capitalModalOpen, setCapitalModalOpen] = useState(false);
@@ -258,6 +258,22 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
         if (positions) {
           console.log('持仓数据:', positions);
           setPositionsDashboardData(positions);
+
+          // 从后端持仓数据动态构建 stocks 数组
+          const backendStocks = positions.positions.map(p => ({
+            symbol: p.stockCode,
+            name: p.shortName || p.companyName || p.stockCode,
+            price: p.currentPrice,
+            change: 0,
+            changePercent: p.changePercent || 0,
+            high: p.currentPrice,
+            low: p.currentPrice,
+            open: p.currentPrice,
+            volume: 0,
+            history: []
+          }));
+          setStocks(backendStocks);
+          console.log('从后端构建 stocks 数组:', backendStocks);
         }
       } catch (e) {
         console.error('获取用户数据失败', e);
@@ -336,6 +352,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   // 刷新Dashboard数据
   const refreshDashboardData = async () => {
     if (!isLoggedIn) return;
+    setIsRefreshingDashboard(true);
     try {
       // 并行刷新Dashboard数据和持仓数据
       const [dashboard, positions] = await Promise.all([
@@ -349,11 +366,74 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       if (positions) {
         console.log('刷新持仓数据:', positions);
         setPositionsDashboardData(positions);
+
+        // 从后端持仓数据动态构建 stocks 数组
+        const backendStocks = positions.positions.map(p => ({
+          symbol: p.stockCode,
+          name: p.shortName || p.companyName || p.stockCode,
+          price: p.currentPrice,
+          change: 0,
+          changePercent: p.changePercent || 0,
+          high: p.currentPrice,
+          low: p.currentPrice,
+          open: p.currentPrice,
+          volume: 0,
+          history: []
+        }));
+        setStocks(backendStocks);
+        console.log('从后端更新 stocks 数组:', backendStocks);
       }
+
+      const now = new Date();
+      setLastRefreshTime(now);
+      setNextRefreshTime(new Date(now.getTime() + 30000)); // 下次刷新时间：30秒后
     } catch (e) {
       console.error('刷新Dashboard数据失败', e);
+    } finally {
+      setIsRefreshingDashboard(false);
     }
   };
+
+  // 定时刷新Dashboard数据（每30秒刷新一次）
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    // 初始化时立即刷新一次
+    refreshDashboardData();
+
+    // 设置定时刷新
+    const interval = setInterval(() => {
+      refreshDashboardData();
+    }, 30000); // 30秒刷新一次
+
+    return () => clearInterval(interval);
+  }, [isLoggedIn]);
+
+  // 计算倒计时进度百分比（用于进度条）
+  const [tick, setTick] = useState(0);
+  const refreshProgress = useMemo(() => {
+    if (!lastRefreshTime || !nextRefreshTime) {
+      return { progress: 0, remainingSeconds: 30 };
+    }
+    const now = Date.now();
+    const total = 30000; // 30秒
+    const elapsed = now - lastRefreshTime.getTime();
+    const remaining = Math.max(0, nextRefreshTime.getTime() - now);
+    const progress = Math.min(100, (elapsed / total) * 100);
+    return {
+      progress,
+      remainingSeconds: Math.ceil(remaining / 1000)
+    };
+  }, [lastRefreshTime, nextRefreshTime, tick]);
+
+  // 每秒更新一次进度条显示
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const interval = setInterval(() => {
+      setTick(tick => tick + 1);
+    }, 100); // 每100ms更新一次，让倒计时更流畅
+    return () => clearInterval(interval);
+  }, [isLoggedIn]);
 
   const handleCapitalAction = async (type: CapitalType, amount: number) => {
     if (amount <= 0) return;
@@ -441,22 +521,108 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
 
   // 从持仓页面点击买入
   const handleBuyFromHoldings = (symbol: string) => {
-    const stock = stocks.find(s => s.symbol === symbol);
+    console.log('买入按钮点击，股票代码:', symbol);
+    // 优先从 stocks 中查找
+    let stock = stocks.find(s => s.symbol === symbol);
+
+    // 如果找不到，尝试从后端持仓数据中查找
+    if (!stock && positionsDashboardData?.positions) {
+      const position = positionsDashboardData.positions.find(p => p.stockCode === symbol);
+      if (position) {
+        stock = {
+          symbol: position.stockCode,
+          name: position.shortName || position.companyName || position.stockCode,
+          price: position.currentPrice,
+          change: 0,
+          changePercent: position.changePercent || 0,
+          high: position.currentPrice,
+          low: position.currentPrice,
+          open: position.currentPrice,
+          volume: 0,
+          history: []
+        };
+        console.log('从后端持仓数据找到股票:', stock);
+      }
+    }
+
+    console.log('最终找到的股票:', stock);
+    console.log('当前 stocks 数量:', stocks.length);
+
     if (stock) {
       setSelectedStock(stock);
+      setTradeModalOpen(true);
+      console.log('交易弹窗已打开');
+    } else {
+      console.error('未找到股票:', symbol);
+      // 如果还是找不到，创建最小可用的股票对象
+      const minimalStock: StockPrice = {
+        symbol,
+        name: symbol,
+        price: 0,
+        change: 0,
+        changePercent: 0,
+        high: 0,
+        low: 0,
+        open: 0,
+        volume: 0,
+        history: []
+      };
+      setSelectedStock(minimalStock);
       setTradeModalOpen(true);
     }
   };
 
   // 从持仓页面点击卖出
   const handleSellFromHoldings = async (symbol: string, quantity: number) => {
-    const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock) return;
+    console.log('卖出按钮点击，股票代码:', symbol, '数量:', quantity);
+    // 优先从 stocks 中查找
+    let stock = stocks.find(s => s.symbol === symbol);
+
+    // 如果找不到，尝试从后端持仓数据中查找
+    if (!stock && positionsDashboardData?.positions) {
+      const position = positionsDashboardData.positions.find(p => p.stockCode === symbol);
+      if (position) {
+        stock = {
+          symbol: position.stockCode,
+          name: position.shortName || position.companyName || position.stockCode,
+          price: position.currentPrice,
+          change: 0,
+          changePercent: position.changePercent || 0,
+          high: position.currentPrice,
+          low: position.currentPrice,
+          open: position.currentPrice,
+          volume: 0,
+          history: []
+        };
+        console.log('从后端持仓数据找到股票:', stock);
+      }
+    }
+
+    console.log('最终找到的股票:', stock);
+
+    if (!stock) {
+      console.error('未找到股票:', symbol);
+      // 如果还是找不到，创建最小可用的股票对象
+      const minimalStock: StockPrice = {
+        symbol,
+        name: symbol,
+        price: 0,
+        change: 0,
+        changePercent: 0,
+        high: 0,
+        low: 0,
+        open: 0,
+        volume: 0,
+        history: []
+      };
+      stock = minimalStock;
+    }
 
     setSellStock(stock);
     setSellQuantity(quantity);
     setSellPrice(stock.price);
     setSellModalOpen(true);
+    console.log('卖出弹窗已打开');
   };
 
   // 执行卖出
@@ -509,11 +675,22 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
 
   // 清仓（卖出全部持仓）
   const handleClearPosition = async (symbol: string) => {
-    const holding = holdings.find(h => h.symbol === symbol);
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!holding || !stock) return;
+    if (!stock) return;
 
-    if (!confirm(`确定要清仓 ${symbol} 吗？将卖出全部 ${holding.quantity} 股。`)) {
+    // 优先使用本地 holdings 数量
+    let quantity = holdings.find(h => h.symbol === symbol)?.quantity;
+
+    // 如果本地没有持仓记录，则从后端 positionsDashboard 中兜底
+    if (!quantity || quantity <= 0) {
+      const backendPosition = positionsDashboardData?.positions?.find(p => p.stockCode === symbol);
+      if (!backendPosition || backendPosition.quantity <= 0) {
+        return;
+      }
+      quantity = backendPosition.quantity;
+    }
+
+    if (!confirm(`确定要清仓 ${symbol} 吗？将卖出全部 ${quantity} 股。`)) {
       return;
     }
 
@@ -522,20 +699,20 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       // 调用后端卖出接口
       await tradeApi.sellStock({
         stockCode: symbol,
-        quantity: holding.quantity,
+        quantity,
         price: stock.price,
         currency: 'HKD',
       });
 
       // 创建本地交易记录
-      const total = stock.price * holding.quantity;
+      const total = stock.price * quantity;
       const newTx: Transaction = {
         id: Date.now().toString(),
         date: new Date().toISOString(),
         symbol: symbol,
         type: TransactionType.SELL,
         price: stock.price,
-        quantity: holding.quantity,
+        quantity,
         total: total,
       };
 
@@ -625,9 +802,21 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
             </button>
           </header>
 
-          {activeTab === 'dashboard' && <Dashboard assets={assets} totalPrincipal={totalPrincipal} holdingsCount={holdings.length} stocks={stocks} holdings={holdings} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} onNavigateToAI={() => setActiveTab('ai')} aiOutlook={aiOutlook} positionsDashboard={positionsDashboardData} />}
+          {activeTab === 'dashboard' && <Dashboard assets={assets} totalPrincipal={totalPrincipal} holdingsCount={holdings.length} stocks={stocks} holdings={holdings} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} onNavigateToAI={() => setActiveTab('ai')} aiOutlook={aiOutlook} positionsDashboard={positionsDashboardData} isRefreshing={isRefreshingDashboard} lastRefreshTime={lastRefreshTime} refreshProgress={refreshProgress} onManualRefresh={refreshDashboardData} />}
           {activeTab === 'market' && <MarketSearch stocks={stocks} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} />}
-          {activeTab === 'holdings' && <Holdings holdings={holdings} stocks={stocks} onBuy={handleBuyFromHoldings} onSell={handleSellFromHoldings} onClear={handleClearPosition} />}
+          {activeTab === 'holdings' && (
+            <Holdings
+              holdings={holdings}
+              stocks={stocks}
+              onBuy={handleBuyFromHoldings}
+              onSell={handleSellFromHoldings}
+              onClear={handleClearPosition}
+              positionsDashboard={positionsDashboardData}
+              isRefreshing={isRefreshingDashboard}
+              refreshProgress={refreshProgress}
+              onManualRefresh={refreshDashboardData}
+            />
+          )}
           {activeTab === 'records' && <Records transactions={transactions} capitalRefreshTrigger={capitalRefreshTrigger} />}
           {activeTab === 'ai' && <AILab stocks={stocks} transactions={transactions} onAddTransactions={handleAddTransactions} onUpdateTransaction={handleUpdateTransaction} />}
           {activeTab === 'settings' && <Settings config={config} onUpdateConfig={(cfg) => { const newCfg = { ...config, ...cfg }; setConfig(newCfg); apiService.saveConfig(newCfg); }} />}
@@ -819,7 +1008,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[10px]">
                   <div className="text-slate-600">行业: <span className="font-black text-slate-800">{sellStockInfo.industry || '-'}</span></div>
-                  <div className="text-slate-600">市值: <span className="font-black text-slate-800">{sellStockInfo.marketCapDisplay || '-'}</span></div>
+                  <div className="text-slate-600">市值: <span className="font-black text-slate-800">{sellStockInfo.marketCap || '-'}</span></div>
                 </div>
               </div>
             )}

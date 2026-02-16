@@ -21,6 +21,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, title, data })
   const cardRef = useRef<HTMLDivElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [reportNo] = useState(() => Math.random().toString(36).substr(2, 6).toUpperCase());
 
   useEffect(() => {
     if (isOpen) {
@@ -89,7 +90,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, title, data })
               </div>
               <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl">
                 <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">Report No.</p>
-                <p className="text-[10px] font-black mt-1">#{Math.random().toString(36).substr(2, 6).toUpperCase()}</p>
+                <p className="text-[10px] font-black mt-1">#{reportNo}</p>
               </div>
             </div>
 

@@ -97,6 +97,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                     .build();
         }
 
+        // 实时计算持仓市值并回写数据库
+        assetSummary = userAssetSummaryService.recalculateAssetsWithRealtimePrice(userId);
+
         // 计算今日盈亏
         BigDecimal todayProfitLoss = calculateTodayProfitLoss(assetSummary);
         BigDecimal todayProfitLossRate = calculateRate(todayProfitLoss, assetSummary.getYesterdayTotalAssets());
@@ -145,6 +148,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
 
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+        SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
         // 构建持仓明细列表
         List<PositionDashboardVo.PositionItemVo> positionItems = positions.stream().map(position -> {
@@ -153,18 +157,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             stockInfoQuery.eq(StockInfo::getStockCode, position.getStockCode());
             StockInfo stockInfo = stockInfoService.getOne(stockInfoQuery);
 
-            // 获取当前市场价格
+            // 获取当前市场行情数据
             LambdaQueryWrapper<StockMarketData> marketDataQuery = new LambdaQueryWrapper<>();
             marketDataQuery.eq(StockMarketData::getStockCode, position.getStockCode())
                     .orderByDesc(StockMarketData::getQuoteTime)
                     .last("LIMIT 1");
             StockMarketData marketData = stockMarketDataService.getOne(marketDataQuery);
 
-            BigDecimal currentPrice = marketData != null ? marketData.getLastPrice() : BigDecimal.ZERO;
+            BigDecimal currentPrice = marketData != null && marketData.getLastPrice() != null
+                    ? marketData.getLastPrice() : BigDecimal.ZERO;
             BigDecimal marketValue = position.getQuantity().multiply(currentPrice);
             BigDecimal costValue = position.getQuantity().multiply(position.getAvgCost());
             BigDecimal profitLoss = marketValue.subtract(costValue);
             BigDecimal profitLossRate = calculateRate(profitLoss, costValue);
+
+            // 格式化行情时间
+            String quoteTime = null;
+            if (marketData != null && marketData.getQuoteTime() != null) {
+                quoteTime = dateTimeFormat.format(marketData.getQuoteTime());
+            }
 
             return PositionDashboardVo.PositionItemVo.builder()
                     .stockCode(position.getStockCode())
@@ -173,7 +184,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                     .currency(position.getCostCurrency())
                     .quantity(position.getQuantity())
                     .avgCost(position.getAvgCost())
+                    // 行情数据
                     .currentPrice(currentPrice)
+                    .openPrice(marketData != null ? marketData.getOpenPrice() : null)
+                    .highPrice(marketData != null ? marketData.getHighPrice() : null)
+                    .lowPrice(marketData != null ? marketData.getLowPrice() : null)
+                    .preClosePrice(marketData != null ? marketData.getPreClose() : null)
+                    .changeNumber(marketData != null ? marketData.getChangeNumber() : null)
+                    .changeRate(marketData != null ? marketData.getChangeRate() : null)
+                    .volume(marketData != null ? marketData.getVolume() : null)
+                    .turnover(marketData != null ? marketData.getTurnover() : null)
+                    .quoteTime(quoteTime)
+                    // 计算数据
                     .marketValue(marketValue)
                     .costValue(costValue)
                     .profitLoss(profitLoss)

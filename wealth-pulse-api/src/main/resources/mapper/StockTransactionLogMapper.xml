@@ -31,18 +31,26 @@
             AND t.instruction = #{query.tradeType}
         </if>
         <if test="query.name != null and query.name != ''">
-            AND (s.company_name LIKE CONCAT('%', #{query.name}, '%') OR s.short_name LIKE CONCAT('%', #{query.name}, '%'))
+            AND (t.stock_code LIKE CONCAT('%', #{query.name}, '%') OR s.company_name LIKE CONCAT('%', #{query.name}, '%') OR s.short_name LIKE CONCAT('%', #{query.name}, '%'))
         </if>
-        <if test="query.id != null and query.id != ''">
-            AND t.stock_code = #{query.id}
-        </if>
-        <if test="query.tradeStartTime != null and query.tradeStartTime != ''"><![CDATA[
+        <if test="query.tradeStartTime != null"><![CDATA[
             AND DATE(t.execution_datetime) >= #{query.tradeStartTime}
         ]]></if>
-        <if test="query.tradeEndTime != null and query.tradeEndTime != ''"><![CDATA[
+        <if test="query.tradeEndTime != null"><![CDATA[
             AND DATE(t.execution_datetime) <= #{query.tradeEndTime}
         ]]></if>
         ORDER BY t.execution_datetime DESC, t.created_at DESC
+    </select>
+
+    <!-- 查询近一个月的交易统计数据 -->
+    <select id="selectTradeStatistics" resultType="com.litchi.wealth.vo.TradeStatisticsVo">
+        SELECT
+            COALESCE(SUM(t.total_amount), 0) AS totalTradeVol,
+            SUM(CASE WHEN t.instruction = 'BUY' THEN 1 ELSE 0 END) AS buyCount,
+            SUM(CASE WHEN t.instruction = 'SELL' THEN 1 ELSE 0 END) AS sellCount
+        FROM stock_transaction_log t
+        WHERE t.user_id = #{userId}
+          AND t.execution_datetime >= #{startDate}
     </select>
 
 </mapper>

@@ -6,6 +6,7 @@ import com.litchi.wealth.dto.trade.StockTradeRequest;
 import com.litchi.wealth.entity.StockTransactionLog;
 import com.litchi.wealth.qo.TradePageQo;
 import com.litchi.wealth.vo.TradeRecordVo;
+import com.litchi.wealth.vo.TradeStatisticsVo;
 
 /**
 * @description 股票交易流水表（记录买入和卖出操作） 服务类
@@ -48,4 +49,12 @@ public interface StockTransactionLogService extends IService<StockTransactionLog
      * @return 结算的交易数量
      */
     int settleTransactions(String userId);
+
+    /**
+     * 获取近一个月的交易统计数据
+     *
+     * @param userId 用户ID
+     * @return 交易统计数据
+     */
+    TradeStatisticsVo getTradeStatistics(String userId);
 }

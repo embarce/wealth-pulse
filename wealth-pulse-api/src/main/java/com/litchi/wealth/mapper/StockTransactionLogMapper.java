@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.litchi.wealth.entity.StockTransactionLog;
 import com.litchi.wealth.qo.TradePageQo;
 import com.litchi.wealth.vo.TradeRecordVo;
+import com.litchi.wealth.vo.TradeStatisticsVo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -29,4 +30,13 @@ public interface StockTransactionLogMapper extends BaseMapper<StockTransactionLo
     IPage<TradeRecordVo> selectTradeRecordPage(Page<TradeRecordVo> page,
                                                 @Param("userId") String userId,
                                                 @Param("query") TradePageQo query);
+
+    /**
+     * 查询近一个月的交易统计数据
+     *
+     * @param userId 用户ID
+     * @param startDate 统计起始日期
+     * @return 交易统计数据
+     */
+    TradeStatisticsVo selectTradeStatistics(@Param("userId") String userId, @Param("startDate") java.util.Date startDate);
 }

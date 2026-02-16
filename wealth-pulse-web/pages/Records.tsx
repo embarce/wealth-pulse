@@ -4,6 +4,7 @@ import ShareModal from '../components/ShareModal';
 import CustomSelect from '../components/CustomSelect';
 import DateRangePicker from '../components/DateRangePicker';
 import { capitalApi, CapitalFlowVo } from '../services/capitalApi';
+import { tradeApi, TradeRecord, TradeRecordQuery, TradeStatistics } from '../services/tradeApi';
 
 interface RecordsProps {
   transactions: Transaction[];
@@ -15,11 +16,16 @@ const PAGE_SIZE = 20;
 const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }) => {
   const [activeSubTab, setActiveSubTab] = useState<'trade' | 'capital'>('trade');
 
-  // 交易明细筛选
-  const [searchTerm, setSearchTerm] = useState('');
+  // 交易明细筛选（服务端分页）
+  const [searchInput, setSearchInput] = useState(''); // 搜索输入框
+  const [searchKeyword, setSearchKeyword] = useState(''); // 实际用于搜索的关键词
   const [tradeTypeFilter, setTradeTypeFilter] = useState<'ALL' | TransactionType.BUY | TransactionType.SELL>('ALL');
   const [tradeStartDate, setTradeStartDate] = useState('');
   const [tradeEndDate, setTradeEndDate] = useState('');
+  const [tradeRecords, setTradeRecords] = useState<TradeRecord[]>([]);
+  const [tradeLoading, setTradeLoading] = useState(false);
+  const [tradeTotalItems, setTradeTotalItems] = useState(0);
+  const [tradeTotalPages, setTradeTotalPages] = useState(1);
 
   // 本金流水筛选（服务端分页）
   const [capitalTypeFilter, setCapitalTypeFilter] = useState<'ALL' | CapitalType.DEPOSIT | CapitalType.WITHDRAW>('ALL');
@@ -37,6 +43,94 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }
   // 多选状态
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
   const [isShareOpen, setIsShareOpen] = useState(false);
+
+  // 交易统计数据
+  const [tradeStatistics, setTradeStatistics] = useState<TradeStatistics>({
+    totalTradeVol: 0,
+    buyCount: 0,
+    sellCount: 0,
+  });
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  // 交易明细从 API 拉取（服务端分页）
+  useEffect(() => {
+    if (activeSubTab !== 'trade') return;
+    let cancelled = false;
+    setTradeLoading(true);
+
+    const queryParams: TradeRecordQuery = {
+      pageNum: tradePage,
+      pageSize: PAGE_SIZE,
+      tradeType: tradeTypeFilter === 'ALL' ? undefined : tradeTypeFilter,
+      tradeStartTime: tradeStartDate || undefined,
+      tradeEndTime: tradeEndDate || undefined,
+    };
+
+    // 添加搜索参数 - name 同时支持股票代码和公司名称搜索
+    if (searchKeyword.trim()) {
+      queryParams.name = searchKeyword.trim();
+    }
+
+    tradeApi
+      .getRecordPage(queryParams)
+      .then((res) => {
+        if (!cancelled) {
+          setTradeRecords(res.rows || []);
+          setTradeTotalItems(res.totalCount ?? 0);
+          setTradeTotalPages(Math.max(1, res.totalPage ?? 1));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTradeRecords([]);
+          setTradeTotalItems(0);
+          setTradeTotalPages(1);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTradeLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeSubTab, tradePage, tradeTypeFilter, tradeStartDate, tradeEndDate, searchKeyword]);
+
+  // 执行搜索
+  const handleSearch = () => {
+    setSearchKeyword(searchInput);
+    setTradePage(1); // 重置到第一页
+  };
+
+  // 清除搜索
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setSearchKeyword('');
+    setTradePage(1);
+  };
+
+  // 获取交易统计数据
+  useEffect(() => {
+    let cancelled = false;
+    setStatsLoading(true);
+    tradeApi
+      .getStatistics()
+      .then((res) => {
+        if (!cancelled) {
+          setTradeStatistics(res);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTradeStatistics({
+            totalTradeVol: 0,
+            buyCount: 0,
+            sellCount: 0,
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setStatsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // 本金流水从 API 拉取（服务端分页）
   useEffect(() => {
@@ -71,26 +165,13 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }
     return () => { cancelled = true; };
   }, [activeSubTab, capitalPage, capitalTypeFilter, capitalStartDate, capitalEndDate, capitalRefreshTrigger]);
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      const matchSymbol = t.symbol.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchType = tradeTypeFilter === 'ALL' || t.type === tradeTypeFilter;
-      const time = new Date(t.date).getTime();
-      const afterStart = !tradeStartDate || time >= new Date(tradeStartDate).getTime();
-      const beforeEnd =
-        !tradeEndDate ||
-        time <= new Date(tradeEndDate).getTime() + 24 * 60 * 60 * 1000 - 1; // 包含结束日
-      return matchSymbol && matchType && afterStart && beforeEnd;
-    });
-  }, [transactions, searchTerm, tradeTypeFilter, tradeStartDate, tradeEndDate]);
-
-  const tradeTotalItems = filteredTransactions.length;
-  const tradeTotalPages = Math.max(1, Math.ceil(tradeTotalItems / PAGE_SIZE));
+  // 移除客户端筛选，直接使用后端返回的数据
+  const displayTradeRecords = tradeRecords;
 
   // 当交易筛选条件变化时重置交易分页
   useEffect(() => {
     setTradePage(1);
-  }, [searchTerm, transactions.length, tradeTypeFilter, tradeStartDate, tradeEndDate]);
+  }, [tradeTypeFilter, tradeStartDate, tradeEndDate]);
 
   // 当本金筛选条件变化时重置本金分页
   useEffect(() => {
@@ -119,18 +200,26 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }
     }
   }, [capitalPage, capitalTotalPages]);
 
-  const paginatedTransactions = useMemo(() => {
-    const safePage = Math.min(Math.max(tradePage, 1), tradeTotalPages);
-    const start = (safePage - 1) * PAGE_SIZE;
-    return filteredTransactions.slice(start, start + PAGE_SIZE);
-  }, [filteredTransactions, tradePage, tradeTotalPages]);
+  // 将 TradeRecord 转换为 Transaction 用于多选和分享功能
+  const displayTransactions = useMemo(() => {
+    return displayTradeRecords.map(t => ({
+      id: t.id,
+      symbol: t.stockCode,
+      type: t.instruction === 'BUY' ? TransactionType.BUY : TransactionType.SELL,
+      date: t.executionDatetime,
+      price: t.price,
+      quantity: t.quantity,
+      total: t.totalAmount,
+    }));
+  }, [displayTradeRecords]);
 
-  const stats = useMemo(() => {
-    const totalTradeVol = transactions.reduce((acc, t) => acc + t.total, 0);
-    const buyCount = transactions.filter(t => t.type === TransactionType.BUY).length;
-    const sellCount = transactions.filter(t => t.type === TransactionType.SELL).length;
-    return { totalTradeVol, buyCount, sellCount };
-  }, [transactions]);
+  // 移除旧的客户端统计逻辑，使用后端统计数据
+  // const stats = useMemo(() => {
+  //   const totalTradeVol = displayTradeRecords.reduce((acc, t) => acc + t.totalAmount, 0);
+  //   const buyCount = displayTradeRecords.filter(t => t.instruction === 'BUY').length;
+  //   const sellCount = displayTradeRecords.filter(t => t.instruction === 'SELL').length;
+  //   return { totalTradeVol, buyCount, sellCount };
+  // }, [displayTradeRecords]);
 
   const toggleSelect = (id: string) => {
     const next = new Set(selectedTxIds);
@@ -147,7 +236,7 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }
   };
 
   const getBatchShareData = () => {
-    const selectedTxs = transactions.filter(t => selectedTxIds.has(t.id)).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const selectedTxs = displayTransactions.filter(t => selectedTxIds.has(t.id)).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     if (selectedTxs.length === 0) return { type: 'batch' as const, mainValue: '0', subLabel: '', subValue: '' };
 
     const totalBuy = selectedTxs.filter(t => t.type === TransactionType.BUY).reduce((acc, t) => acc + t.total, 0);
@@ -178,19 +267,31 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }
       {/* 统计指标 - 响应式网格 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <div className="bg-white p-6 lg:p-8 rounded-[2rem] border border-slate-100 shadow-sm">
-          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">累计交易流水</p>
-          <h4 className="text-xl lg:text-2xl font-black text-slate-800 tracking-tighter">¥{stats.totalTradeVol.toLocaleString()}</h4>
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">近一个月累计交易流水</p>
+          {statsLoading ? (
+            <div className="h-8 lg:h-10 flex items-center">
+              <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <h4 className="text-xl lg:text-2xl font-black text-slate-800 tracking-tighter">¥{tradeStatistics.totalTradeVol.toLocaleString()}</h4>
+          )}
         </div>
         <div className="bg-white p-6 lg:p-8 rounded-[2rem] border border-slate-100 shadow-sm">
           <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">买卖比例</p>
-          <div className="flex items-center space-x-3 mt-3">
-            <span className="text-sm font-black text-indigo-500">{stats.buyCount}B</span>
-            <div className="flex-grow h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
-              <div className="h-full bg-indigo-500" style={{ width: `${(stats.buyCount / ((stats.buyCount + stats.sellCount) || 1)) * 100}%` }}></div>
-              <div className="h-full bg-rose-500" style={{ width: `${(stats.sellCount / ((stats.buyCount + stats.sellCount) || 1)) * 100}%` }}></div>
+          {statsLoading ? (
+            <div className="h-6 lg:h-8 flex items-center">
+              <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
-            <span className="text-sm font-black text-rose-500">{stats.sellCount}S</span>
-          </div>
+          ) : (
+            <div className="flex items-center space-x-3 mt-3">
+              <span className="text-sm font-black text-indigo-500">{tradeStatistics.buyCount}B</span>
+              <div className="flex-grow h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                <div className="h-full bg-indigo-500" style={{ width: `${(tradeStatistics.buyCount / ((tradeStatistics.buyCount + tradeStatistics.sellCount) || 1)) * 100}%` }}></div>
+                <div className="h-full bg-rose-500" style={{ width: `${(tradeStatistics.sellCount / ((tradeStatistics.buyCount + tradeStatistics.sellCount) || 1)) * 100}%` }}></div>
+              </div>
+              <span className="text-sm font-black text-rose-500">{tradeStatistics.sellCount}S</span>
+            </div>
+          )}
         </div>
         <div className="bg-white p-6 lg:p-8 rounded-[2rem] border border-slate-100 shadow-sm col-span-1 sm:col-span-2 flex items-center justify-between">
           <div>
@@ -208,7 +309,7 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }
             <div className="flex items-center space-x-4 lg:space-x-8">
               <p className="text-xs font-black tracking-tight">已选 {selectedTxIds.size} 项</p>
               <div className="h-4 w-px bg-white/20 hidden sm:block"></div>
-              <p className="text-[10px] font-black uppercase tracking-widest hidden sm:block">金额: ¥{transactions.filter(t => selectedTxIds.has(t.id)).reduce((acc, t) => acc + t.total, 0).toLocaleString()}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest hidden sm:block">金额: ¥{displayTransactions.filter(t => selectedTxIds.has(t.id)).reduce((acc, t) => acc + t.total, 0).toLocaleString()}</p>
             </div>
             <div className="flex items-center space-x-4 w-full sm:w-auto">
               <button onClick={clearSelection} className="flex-grow sm:flex-none text-[10px] font-black uppercase hover:underline">取消</button>
@@ -231,17 +332,39 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }
 
             {/* 搜索框 - 移动到 Tab 旁边但在 Trade 模式下显示 */}
             {activeSubTab === 'trade' && (
-              <div className="relative group w-full sm:w-64">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <i className="fas fa-search text-slate-300 group-focus-within:text-indigo-400 transition-colors"></i>
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <div className="relative group flex-grow sm:flex-none sm:w-64">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <i className="fas fa-search text-slate-300 group-focus-within:text-indigo-400 transition-colors"></i>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="搜索 ID/代码/名称..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSearch();
+                      }
+                    }}
+                    className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-100 rounded-2xl pl-11 pr-4 py-3 text-xs font-bold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-50/50 transition-all"
+                  />
                 </div>
-                <input
-                  type="text"
-                  placeholder="搜索证券代码..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-100 rounded-2xl pl-11 pr-4 py-3 text-xs font-bold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-50/50 transition-all"
-                />
+                <button
+                  onClick={handleSearch}
+                  className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-2xl transition-all flex items-center space-x-2 whitespace-nowrap"
+                >
+                  <i className="fas fa-search"></i>
+                  <span>搜索</span>
+                </button>
+                {searchInput && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-2xl transition-all whitespace-nowrap"
+                  >
+                    清除
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -304,55 +427,85 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }
         <div className="overflow-x-auto custom-scrollbar">
           {activeSubTab === 'trade' ? (
             <>
-              <table className="w-full text-left min-w-[700px]">
-                <thead>
-                  <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 bg-slate-50/20">
-                    <th className="px-6 lg:px-10 py-6 w-12"></th>
-                    <th className="px-4 py-6">执行时间</th>
-                    <th className="px-4 py-6">证券标的</th>
-                    <th className="px-4 py-6 text-center">指令</th>
-                    <th className="px-4 py-6 text-right">单价/数量</th>
-                    <th className="px-6 lg:px-10 py-6 text-right">成交总额</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {paginatedTransactions.map(t => (
-                    <tr
-                      key={t.id}
-                      onClick={() => toggleSelect(t.id)}
-                      className={`group cursor-pointer transition-all ${selectedTxIds.has(t.id) ? 'bg-indigo-50/50' : 'hover:bg-slate-50/50'}`}
-                    >
-                      <td className="px-6 lg:px-10 py-6">
-                        <div className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center ${selectedTxIds.has(t.id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-200 group-hover:border-indigo-300'}`}>
-                          {selectedTxIds.has(t.id) && <i className="fas fa-check text-[10px] text-white"></i>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-6">
-                        <p className="text-sm font-black text-slate-800">{new Date(t.date).toLocaleDateString()}</p>
-                        <p className="text-[10px] text-slate-300 font-bold uppercase">{new Date(t.date).toLocaleTimeString()}</p>
-                      </td>
-                      <td className="px-4 py-6">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[9px] font-black">{t.symbol.slice(0, 2)}</div>
-                          <p className="font-black text-slate-800 text-sm tracking-tight">{t.symbol}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-6 text-center">
-                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${t.type === TransactionType.BUY ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
-                          {t.type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-6 text-right">
-                        <p className="text-sm font-black text-slate-800">¥{t.price.toFixed(2)}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">{t.quantity} Shares</p>
-                      </td>
-                      <td className="px-6 lg:px-10 py-6 text-right">
-                        <p className="text-sm font-black text-slate-900">¥{t.total.toLocaleString()}</p>
-                      </td>
+              {tradeLoading ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <table className="w-full text-left min-w-[1000px]">
+                  <thead>
+                    <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 bg-slate-50/20">
+                      <th className="px-6 lg:px-10 py-6 w-12"></th>
+                      <th className="px-4 py-6">执行时间</th>
+                      <th className="px-4 py-6">证券信息</th>
+                      <th className="px-4 py-6 text-center">指令</th>
+                      <th className="px-4 py-6 text-right">单价/数量</th>
+                      <th className="px-4 py-6 text-right">成交总额</th>
+                      <th className="px-4 py-6 text-right">手续费</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {displayTransactions.map((t, idx) => {
+                      const originalRecord = displayTradeRecords[idx];
+                      return (
+                        <tr
+                          key={t.id}
+                          onClick={() => toggleSelect(t.id)}
+                          className={`group cursor-pointer transition-all ${selectedTxIds.has(t.id) ? 'bg-indigo-50/50' : 'hover:bg-slate-50/50'}`}
+                        >
+                          <td className="px-6 lg:px-10 py-6">
+                            <div className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center ${selectedTxIds.has(t.id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-200 group-hover:border-indigo-300'}`}>
+                              {selectedTxIds.has(t.id) && <i className="fas fa-check text-[10px] text-white"></i>}
+                            </div>
+                          </td>
+                          <td className="px-4 py-6">
+                            <p className="text-sm font-black text-slate-800">{new Date(t.date).toLocaleDateString()}</p>
+                            <p className="text-[10px] text-slate-300 font-bold uppercase">{new Date(t.date).toLocaleTimeString()}</p>
+                          </td>
+                          <td className="px-4 py-6">
+                            <div className="flex items-start space-x-3">
+                              <div className="w-10 h-10 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[10px] font-black flex-shrink-0 mt-0.5">
+                                {t.symbol.slice(0, 2)}
+                              </div>
+                              <div className="flex flex-col">
+                                <p className="font-black text-slate-800 text-sm tracking-tight">{t.symbol}</p>
+                                <p className="text-xs font-bold text-slate-600 mt-0.5">
+                                  {originalRecord?.companyName || originalRecord?.shortName || '-'}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                  {originalRecord?.shortName || ''}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-6 text-center">
+                            <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${t.type === TransactionType.BUY ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                              {t.type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-6 text-right">
+                            <p className="text-sm font-black text-slate-800">¥{t.price.toFixed(2)}</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">{t.quantity} 股</p>
+                          </td>
+                          <td className="px-4 py-6 text-right">
+                            <p className="text-sm font-black text-slate-900">¥{t.total.toLocaleString()}</p>
+                          </td>
+                          <td className="px-4 py-6 text-right">
+                            <p className={`text-sm font-black ${(originalRecord?.feeTotal || 0) > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                              ¥{(originalRecord?.feeTotal || 0).toFixed(2)}
+                            </p>
+                            {(originalRecord?.feeTotal || 0) > 0 && (
+                              <p className="text-[9px] text-slate-400 font-medium mt-0.5">
+                                ¥{(originalRecord?.commission || 0).toFixed(2)} + ¥{(originalRecord?.tax || 0).toFixed(2)}
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
 
               {/* 分页条 - 交易明细 */}
               <div className="px-6 lg:px-10 py-4 border-t border-slate-50 flex flex-col md:flex-row items-center justify-between gap-3">

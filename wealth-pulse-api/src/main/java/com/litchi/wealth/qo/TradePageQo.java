@@ -1,7 +1,11 @@
 package com.litchi.wealth.qo;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.springframework.format.annotation.DateTimeFormat;
+
+import java.util.Date;
 
 /**
  * @author Embrace
@@ -15,9 +19,13 @@ public class TradePageQo extends BasePageQo{
     @Schema(name = "tradeType", description = "交易类型")
     private String tradeType;
 
-    @Schema(name = "tradeStartTime", description = "交易开始时间")
-    private String tradeStartTime;
+    @Schema(name = "tradeStartTime", description = "交易开始时间", example = "2026-01-16 13:50:22")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date tradeStartTime;
 
-    @Schema(name = "tradeEndTime", description = "交易结束时间")
-    private String tradeEndTime;
+    @Schema(name = "tradeEndTime", description = "交易结束时间", example = "2026-03-16 13:50:22")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date tradeEndTime;
 }

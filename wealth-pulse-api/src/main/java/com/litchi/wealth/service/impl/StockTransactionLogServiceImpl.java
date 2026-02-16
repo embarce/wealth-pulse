@@ -1,5 +1,8 @@
 package com.litchi.wealth.service.impl;
 
+import cn.hutool.core.date.DateField;
+import cn.hutool.core.date.DateTime;
+import cn.hutool.core.date.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -16,6 +19,7 @@ import com.litchi.wealth.service.UserPositionService;
 import com.litchi.wealth.utils.HkStockFeeCalculator;
 import com.litchi.wealth.utils.RedissonLock;
 import com.litchi.wealth.vo.TradeRecordVo;
+import com.litchi.wealth.vo.TradeStatisticsVo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -575,5 +579,13 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
         log.info("结算交易完成, userId={}, settledCount={}, settlementAmount={}, actualTransfer={}, newAvailableCash={}, newPurchasingPower={}",
                 userId, unsettledTransactions.size(), settlementAmount, actualTransfer, newAvailableCash, newPurchasingPower);
         return unsettledTransactions.size();
+    }
+
+    @Override
+    public TradeStatisticsVo getTradeStatistics(String userId) {
+        DateTime offset = DateUtil.offset(new Date(), DateField.MONTH, -1);
+        log.info("查询近一个月交易统计数据, userId={}, startDate={}", userId, offset);
+        TradeStatisticsVo statistics = baseMapper.selectTradeStatistics(userId, offset);
+        return statistics;
     }
 }

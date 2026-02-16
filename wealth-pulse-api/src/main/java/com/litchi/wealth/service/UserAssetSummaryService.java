@@ -11,4 +11,12 @@ import com.litchi.wealth.entity.UserAssetSummary;
 */
 public interface UserAssetSummaryService extends IService<UserAssetSummary> {
 
+    /**
+     * 实时计算并更新用户资产数据（基于最新股价）
+     * 会重新计算持仓市值、总资产，并回写数据库
+     *
+     * @param userId 用户ID
+     * @return 更新后的用户资产数据
+     */
+    UserAssetSummary recalculateAssetsWithRealtimePrice(String userId);
 }

@@ -58,6 +58,8 @@ export interface StockPrice {
   changePercent: number;
   high: number;
   low: number;
+  open: number;
+  volume: number;
   history: { time: string; price: number }[];
   marketCap?: string;
 }

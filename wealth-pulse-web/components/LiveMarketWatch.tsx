@@ -34,6 +34,8 @@ const LiveMarketWatch: React.FC<LiveMarketWatchProps> = ({ onTrade, onViewDetail
       changePercent: hotStock.changeRate,
       high: hotStock.highPrice,
       low: hotStock.lowPrice,
+      open: hotStock.openPrice || hotStock.lastPrice,
+      volume: hotStock.volume || 0,
       history,
       marketCap: hotStock.marketCap
     };

@@ -11,6 +11,7 @@ import com.litchi.wealth.service.UserAssetSummaryService;
 import com.litchi.wealth.utils.SecurityUtils;
 import com.litchi.wealth.utils.ToPageUtils;
 import com.litchi.wealth.vo.TradeRecordVo;
+import com.litchi.wealth.vo.TradeStatisticsVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -164,5 +165,28 @@ public class TradeController {
         String userId = SecurityUtils.getUserId();
         int settledCount = stockTransactionLogService.settleTransactions(userId);
         return Result.success("已结算 " + settledCount + " 笔交易");
+    }
+
+    @Operation(
+            summary = "交易统计",
+            description = "获取近一个月的交易统计数据",
+            method = "GET",
+            tags = {"交易管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "获取成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = TradeStatisticsVo.class)
+                    )
+            )
+    })
+    @GetMapping("/statistics")
+    public Result getTradeStatistics() {
+        String userId = SecurityUtils.getUserId();
+        TradeStatisticsVo statistics = stockTransactionLogService.getTradeStatistics(userId);
+        return Result.success(statistics);
     }
 }
