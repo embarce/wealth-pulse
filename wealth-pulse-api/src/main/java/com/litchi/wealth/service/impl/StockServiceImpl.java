@@ -16,6 +16,7 @@ import com.litchi.wealth.vo.FeeCalculationVo;
 import com.litchi.wealth.vo.StockHistoryVo;
 import com.litchi.wealth.vo.StockInfoVo;
 import com.litchi.wealth.vo.StockMarketDataVo;
+import com.litchi.wealth.vo.StockSearchResultVo;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -111,6 +112,7 @@ public class StockServiceImpl implements StockService {
                 .industry(stockInfo.getIndustry())
                 .marketCap(stockInfo.getMarketCap())
                 .stockStatus(stockInfo.getStockStatus())
+                .lotSize(stockInfo.getLotSize())
                 .build();
     }
 
@@ -193,6 +195,38 @@ public class StockServiceImpl implements StockService {
         return result;
     }
 
+    @Override
+    public List<StockSearchResultVo> searchStocks(String key) {
+        if (key == null || key.trim().isEmpty()) {
+            return List.of();
+        }
+
+        // 模糊查询股票信息（股票代码、公司名称、公司简称）
+        LambdaQueryWrapper<StockInfo> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.and(wrapper -> wrapper
+                .like(StockInfo::getStockCode, key)
+                .or()
+                .like(StockInfo::getCompanyName, key)
+                .or()
+                .like(StockInfo::getCompanyNameCn, key)
+                .or()
+                .like(StockInfo::getShortName, key)
+        );
+
+        // 只返回正常交易的股票
+        queryWrapper.eq(StockInfo::getStockStatus, 1);
+
+        // 限制返回数量
+        queryWrapper.last("LIMIT 50");
+
+        List<StockInfo> stockInfoList = stockInfoService.list(queryWrapper);
+
+        // 转换为搜索结果 VO
+        return stockInfoList.stream()
+                .map(this::convertToSearchResultVo)
+                .collect(Collectors.toList());
+    }
+
     /**
      * 将 StockMarketData 实体转换为 StockMarketDataVo
      */
@@ -223,6 +257,40 @@ public class StockServiceImpl implements StockService {
                 .quoteTime(formatDate(marketData.getQuoteTime(), "HH:mm:ss"))
                 .marketDate(formatDate(marketData.getMarketDate(), "yyyy-MM-dd"))
                 .currency(stockInfo != null ? stockInfo.getCurrency() : null)
+                .build();
+    }
+
+    /**
+     * 将 StockInfo 实体转换为 StockSearchResultVo（包含实时价格）
+     */
+    private StockSearchResultVo convertToSearchResultVo(StockInfo stockInfo) {
+        // 查询实时行情数据
+        LocalDate today = LocalDate.now();
+        LambdaQueryWrapper<StockMarketData> marketQuery = new LambdaQueryWrapper<>();
+        marketQuery.eq(StockMarketData::getStockCode, stockInfo.getStockCode())
+                .eq(StockMarketData::getMarketDate, today)
+                .orderByDesc(StockMarketData::getQuoteTime)
+                .last("LIMIT 1");
+        StockMarketData marketData = stockMarketDataService.getOne(marketQuery);
+
+        return StockSearchResultVo.builder()
+                .stockCode(stockInfo.getStockCode())
+                .companyName(stockInfo.getCompanyName())
+                .companyNameCn(stockInfo.getCompanyNameCn())
+                .shortName(stockInfo.getShortName())
+                .stockType(stockInfo.getStockType())
+                .exchange(stockInfo.getExchange())
+                .currency(stockInfo.getCurrency())
+                .industry(stockInfo.getIndustry())
+                .lotSize(stockInfo.getLotSize())
+                // 实时行情数据
+                .lastPrice(marketData != null ? marketData.getLastPrice() : null)
+                .changeNumber(marketData != null ? marketData.getChangeNumber() : null)
+                .changeRate(marketData != null ? marketData.getChangeRate() : null)
+                .marketCap(marketData != null ? marketData.getMarketCap() : null)
+                .quoteTime(marketData != null ? formatDate(marketData.getQuoteTime(), "HH:mm:ss") : null)
+                .marketDate(marketData != null ? formatDate(marketData.getMarketDate(), "yyyy-MM-dd") : null)
+                .hasMarketData(marketData != null)
                 .build();
     }
 

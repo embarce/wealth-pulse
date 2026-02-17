@@ -67,6 +67,10 @@ public class StockInfo {
     @TableField("stock_status")
     private Integer stockStatus;
 
+    @TableField("lot_size")
+    @Schema(name = "lot_size", description = "每手股数")
+    private Integer lotSize;
+
     @Schema(name = "createTime", description = "创建时间")
     @TableField("create_time")
     private Date createTime;

@@ -84,18 +84,11 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
                 HkStockFeeCalculator.FeeResult feeResult;
                 if ("HKD".equals(currency)) {
                     // 检查是否手动输入手续费（优先级最高）
-                    if (request.getManualTotalFee() != null && request.getManualTotalFee().compareTo(BigDecimal.ZERO) > 0) {
-                        feeResult = new HkStockFeeCalculator.FeeResult();
-                        feeResult.setTotalFee(request.getManualTotalFee());
-                        feeResult.setNetAmount(totalAmount.subtract(request.getManualTotalFee()));
-                        feeResult.setPlatformFee(request.getManualTotalFee()); // 简化处理
-                        log.info("使用手动总费用: {}", request.getManualTotalFee());
-                    } else if (request.getManualCommission() != null || request.getManualTax() != null) {
+                    if (request.getManualCommission() != null) {
                         // 使用部分手动费用
                         HkStockFeeCalculator.FeeResult autoFeeResult = HkStockFeeCalculator.calculateBuyFee(totalAmount);
                         BigDecimal commission = request.getManualCommission() != null ? request.getManualCommission() : autoFeeResult.getPlatformFee();
-                        BigDecimal tax = request.getManualTax() != null ? request.getManualTax() : autoFeeResult.getStampDuty();
-
+                        BigDecimal tax = autoFeeResult.getStampDuty();
                         feeResult = new HkStockFeeCalculator.FeeResult();
                         feeResult.setPlatformFee(commission);
                         feeResult.setStampDuty(tax);
@@ -103,7 +96,6 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
                         feeResult.setExchangeTradingFee(autoFeeResult.getExchangeTradingFee());
                         feeResult.setSettlementFee(autoFeeResult.getSettlementFee());
                         feeResult.setFrcLevy(autoFeeResult.getFrcLevy());
-
                         // 重新计算总费用
                         BigDecimal totalFee = commission.add(tax)
                                 .add(autoFeeResult.getSfcLevy())
@@ -183,17 +175,11 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
                 HkStockFeeCalculator.FeeResult feeResult;
                 if ("HKD".equals(currency)) {
                     // 检查是否手动输入手续费（优先级最高）
-                    if (request.getManualTotalFee() != null && request.getManualTotalFee().compareTo(BigDecimal.ZERO) > 0) {
-                        feeResult = new HkStockFeeCalculator.FeeResult();
-                        feeResult.setTotalFee(request.getManualTotalFee());
-                        feeResult.setNetAmount(totalAmount.subtract(request.getManualTotalFee()));
-                        feeResult.setPlatformFee(request.getManualTotalFee()); // 简化处理
-                        log.info("使用手动总费用: {}", request.getManualTotalFee());
-                    } else if (request.getManualCommission() != null || request.getManualTax() != null) {
+                    if (request.getManualCommission() != null) {
                         // 使用部分手动费用
                         HkStockFeeCalculator.FeeResult autoFeeResult = HkStockFeeCalculator.calculateSellFee(totalAmount);
                         BigDecimal commission = request.getManualCommission() != null ? request.getManualCommission() : autoFeeResult.getPlatformFee();
-                        BigDecimal tax = request.getManualTax() != null ? request.getManualTax() : autoFeeResult.getStampDuty();
+                        BigDecimal tax = autoFeeResult.getStampDuty();
 
                         feeResult = new HkStockFeeCalculator.FeeResult();
                         feeResult.setPlatformFee(commission);
@@ -438,7 +424,7 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
         assetSummary.setPositionValue(newPositionValue);
 
         // 重新计算总资产（注意：这里不包含未结算的卖出资金）
-        BigDecimal newTotalAssets = assetSummary.getAvailableCash().add(newPositionValue);
+        BigDecimal newTotalAssets = assetSummary.getAvailableCash().add(newPositionValue).subtract(cost);
         assetSummary.setTotalAssets(newTotalAssets);
 
         // 增加卖出次数
@@ -509,10 +495,14 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public int settleTransactions(String userId) {
+    public int settleTransactions(String userId, Date date) {
+        log.info("开始结算用户交易, userId={}, date={}", userId, date);
+        DateTime offset = DateUtil.offset(date, DateField.DAY_OF_YEAR, -1);
+        DateTime dateTime = DateUtil.beginOfDay(offset);
         // 查询所有未结算的交易
         LambdaQueryWrapper<StockTransactionLog> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(StockTransactionLog::getUserId, userId)
+                .le(StockTransactionLog::getExecutionDate, dateTime)
                 .eq(StockTransactionLog::getIsSettled, false);
         List<StockTransactionLog> unsettledTransactions = list(queryWrapper);
 

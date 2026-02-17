@@ -148,14 +148,6 @@ public class UserCapitalFlowServiceImpl extends ServiceImpl<UserCapitalFlowMappe
         BigDecimal newAvailableCash = assetSummary.getAvailableCash().add(amount);
         assetSummary.setAvailableCash(newAvailableCash);
 
-        // 增加购买力（存入的本金立即可用于交易）
-        if (assetSummary.getPurchasingPower() == null) {
-            assetSummary.setPurchasingPower(newAvailableCash);
-        } else {
-            BigDecimal newPurchasingPower = assetSummary.getPurchasingPower().add(amount);
-            assetSummary.setPurchasingPower(newPurchasingPower);
-        }
-
         // 增加总资产
         BigDecimal newTotalAssets = assetSummary.getTotalAssets().add(amount);
         assetSummary.setTotalAssets(newTotalAssets);

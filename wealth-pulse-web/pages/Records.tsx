@@ -213,13 +213,6 @@ const Records: React.FC<RecordsProps> = ({ transactions, capitalRefreshTrigger }
     }));
   }, [displayTradeRecords]);
 
-  // 移除旧的客户端统计逻辑，使用后端统计数据
-  // const stats = useMemo(() => {
-  //   const totalTradeVol = displayTradeRecords.reduce((acc, t) => acc + t.totalAmount, 0);
-  //   const buyCount = displayTradeRecords.filter(t => t.instruction === 'BUY').length;
-  //   const sellCount = displayTradeRecords.filter(t => t.instruction === 'SELL').length;
-  //   return { totalTradeVol, buyCount, sellCount };
-  // }, [displayTradeRecords]);
 
   const toggleSelect = (id: string) => {
     const next = new Set(selectedTxIds);

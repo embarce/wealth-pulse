@@ -5,6 +5,7 @@ import com.litchi.wealth.vo.FeeCalculationVo;
 import com.litchi.wealth.vo.StockHistoryVo;
 import com.litchi.wealth.vo.StockInfoVo;
 import com.litchi.wealth.vo.StockMarketDataVo;
+import com.litchi.wealth.vo.StockSearchResultVo;
 
 import java.util.Date;
 import java.util.List;
@@ -61,4 +62,12 @@ public interface StockService {
      * @return 手续费计算结果
      */
     FeeCalculationVo calculateFee(FeeCalculationRequest request);
+
+    /**
+     * 搜索股票（模糊查询）
+     *
+     * @param key 搜索关键词（股票代码/公司名称/公司简称）
+     * @return 搜索结果列表（包含股票信息和实时价格）
+     */
+    List<StockSearchResultVo> searchStocks(String key);
 }

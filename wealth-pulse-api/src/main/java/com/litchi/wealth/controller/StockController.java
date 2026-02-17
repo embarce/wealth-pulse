@@ -7,6 +7,7 @@ import com.litchi.wealth.vo.FeeCalculationVo;
 import com.litchi.wealth.vo.StockHistoryVo;
 import com.litchi.wealth.vo.StockInfoVo;
 import com.litchi.wealth.vo.StockMarketDataVo;
+import com.litchi.wealth.vo.StockSearchResultVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -120,6 +121,30 @@ public class StockController {
             return Result.error("未找到股票 " + stockCode + " 的基本信息");
         }
         return Result.success(result);
+    }
+
+    @Operation(
+            summary = "搜索股票",
+            description = "根据关键词模糊搜索股票（支持股票代码、公司名称、公司简称），返回股票信息和实时价格",
+            method = "GET",
+            tags = {"股票信息管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "搜索成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = StockSearchResultVo.class))
+                    )
+            )
+    })
+    @GetMapping("/search")
+    public Result searchStocks(
+            @Parameter(description = "搜索关键词（股票代码/公司名称/公司简称）", example = "NVDA", required = true)
+            @RequestParam String key) {
+        List<StockSearchResultVo> resultList = stockService.searchStocks(key);
+        return Result.success(resultList);
     }
 
     @Operation(

@@ -24,7 +24,7 @@
             t.fee_total AS feeTotal,
             t.created_at AS createdAt,
             t.updated_at AS updatedAt
-        FROM stock_transaction_log t
+        FROM tb_stock_transaction_log t
         LEFT JOIN tb_stock_info s ON t.stock_code = s.stock_code
         WHERE t.user_id = #{userId}
         <if test="query.tradeType != null and query.tradeType != ''">
@@ -48,7 +48,7 @@
             COALESCE(SUM(t.total_amount), 0) AS totalTradeVol,
             SUM(CASE WHEN t.instruction = 'BUY' THEN 1 ELSE 0 END) AS buyCount,
             SUM(CASE WHEN t.instruction = 'SELL' THEN 1 ELSE 0 END) AS sellCount
-        FROM stock_transaction_log t
+        FROM tb_stock_transaction_log t
         WHERE t.user_id = #{userId}
           AND t.execution_datetime >= #{startDate}
     </select>

@@ -18,7 +18,7 @@ import java.util.Date;
 */
 @Data
 @EqualsAndHashCode(callSuper = false)
-@TableName("stock_transaction_log")
+@TableName("tb_stock_transaction_log")
 @Schema(name="StockTransactionLog对象", description="股票交易流水表（记录买入和卖出操作）")
 @Builder
 @AllArgsConstructor

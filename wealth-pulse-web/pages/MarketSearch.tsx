@@ -1,20 +1,25 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StockPrice } from '../types';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { stockApi, HotStock } from '../services/stockApi';
 
 interface MarketSearchProps {
-  stocks: StockPrice[];
   onTrade: (s: StockPrice) => void;
 }
 
-const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
+const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
   const [query, setQuery] = useState('');
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [hotStocks, setHotStocks] = useState<HotStock[]>([]);
   const [isLoadingHot, setIsLoadingHot] = useState(false);
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false); // 控制AI分析面板显示
+
+  // 搜索状态
+  const [searchResults, setSearchResults] = useState<HotStock[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchDebounceTimer, setSearchDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
   // 获取热门股票
   useEffect(() => {
@@ -33,15 +38,40 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
     fetchHotStocks();
   }, []);
 
-  // 修复后的搜索逻辑：匹配代码或名称
-  const searchResults = useMemo(() => {
-    const trimmed = query.trim().toLowerCase();
-    if (!trimmed) return [];
-    return stocks.filter(s => 
-      s.symbol.toLowerCase().includes(trimmed) || 
-      s.name.toLowerCase().includes(trimmed)
-    ).slice(0, 5); // 限制展示前5个
-  }, [query, stocks]);
+  // 后端搜索（防抖）
+  useEffect(() => {
+    // 清除之前的定时器
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+    }
+
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    // 设置新的防抖定时器（300ms）
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await stockApi.searchStocks(trimmed);
+        setSearchResults(results.slice(0, 50)); // 限制展示前50个
+      } catch (e) {
+        console.error('搜索股票失败', e);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    setSearchDebounceTimer(timer);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [query]);
 
   const handleSelect = (stock: StockPrice) => {
     setSelectedStock(stock);
@@ -61,7 +91,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
             </div>
             <input
               type="text"
-              placeholder="输入证券代码（如 AAPL）或公司名称（如 Apple）..."
+              placeholder="输入证券代码（如 1810.HKHK）或公司名称（如 小米集团）..."
               value={query}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setTimeout(() => setIsFocused(false), 200)}
@@ -73,27 +103,47 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
           {/* 实时搜索结果下拉框 */}
           {query.trim() && (
             <div className="absolute top-full left-0 right-0 mt-4 bg-white rounded-[2rem] border border-slate-100 shadow-2xl p-4 animate-in zoom-in-95 duration-200 z-50 overflow-hidden">
-              {searchResults.length > 0 ? (
+              {isSearching ? (
+                <div className="py-12 text-center">
+                  <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">搜索中...</p>
+                </div>
+              ) : searchResults.length > 0 ? (
                 <div className="space-y-2">
                   {searchResults.map(s => (
                     <button
-                      key={s.symbol}
-                      onClick={() => handleSelect(s)}
+                      key={s.stockCode}
+                      onClick={() => {
+                        const stockPrice: StockPrice = {
+                          symbol: s.stockCode,
+                          name: s.companyNameCn || s.companyName,
+                          price: s.lastPrice ?? 0,
+                          change: s.changeNumber ?? 0,
+                          changePercent: s.changeRate ?? 0,
+                          high: s.highPrice ?? s.lastPrice ?? 0,
+                          low: s.lowPrice ?? s.lastPrice ?? 0,
+                          open: s.openPrice ?? s.lastPrice ?? 0,
+                          volume: s.volume ?? 0,
+                          history: [],
+                          marketCap: s.marketCap,
+                        };
+                        handleSelect(stockPrice);
+                      }}
                       className="w-full flex items-center justify-between p-5 hover:bg-slate-50 rounded-2xl transition-all group"
                     >
                       <div className="flex items-center space-x-5">
                         <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black text-xs italic group-hover:scale-110 transition-transform">
-                          {s.symbol.slice(0, 2)}
+                          {s.stockCode.slice(0, 2)}
                         </div>
                         <div className="text-left">
-                          <p className="text-sm font-black text-slate-900 tracking-tight">{s.symbol}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.name}</p>
+                          <p className="text-sm font-black text-slate-900 tracking-tight">{s.stockCode}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.companyNameCn || s.companyName}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-black text-slate-900">¥{s.price.toFixed(2)}</p>
-                        <p className={`text-[10px] font-black ${s.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {s.changePercent >= 0 ? '↑' : '↓'} {Math.abs(s.changePercent).toFixed(2)}%
+                        <p className="text-sm font-black text-slate-900">¥{(s.lastPrice ?? 0).toFixed(2)}</p>
+                        <p className={`text-[10px] font-black ${s.changeRate >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                          {s.changeRate >= 0 ? '↑' : '↓'} {Math.abs(s.changeRate ?? 0).toFixed(2)}%
                         </p>
                       </div>
                     </button>
@@ -128,17 +178,19 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
                     const stockPrice: StockPrice = {
                       symbol: stock.stockCode,
                       name: stock.companyNameCn || stock.companyName,
-                      price: stock.lastPrice,
-                      change: stock.changeNumber,
-                      changePercent: stock.changeRate,
-                      high: stock.highPrice || stock.lastPrice,
-                      low: stock.lowPrice || stock.lastPrice,
-                      open: stock.openPrice || stock.lastPrice,
-                      volume: stock.volume || 0,
+                      price: stock.lastPrice ?? 0,
+                      change: stock.changeNumber ?? 0,
+                      changePercent: stock.changeRate ?? 0,
+                      high: stock.highPrice ?? stock.lastPrice ?? 0,
+                      low: stock.lowPrice ?? stock.lastPrice ?? 0,
+                      open: stock.openPrice ?? stock.lastPrice ?? 0,
+                      volume: stock.volume ?? 0,
                       history: [],
                       marketCap: stock.marketCap
                     };
-                    onTrade(stockPrice);
+                    // 点击热门股票查看详情，而不是直接交易
+                    setSelectedStock(stockPrice);
+                    setQuery('');
                   }}
                   className="bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 rounded-2xl p-5 transition-all group"
                 >
@@ -146,11 +198,11 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
                     <div className="flex items-start justify-between">
                       <p className="text-sm font-black text-slate-900 tracking-tight">{stock.companyNameCn || stock.companyName}</p>
                       <span className={`text-[10px] font-black ${stock.changeRate >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {stock.changeRate >= 0 ? '↑' : '↓'} {Math.abs(stock.changeRate).toFixed(2)}%
+                        {stock.changeRate >= 0 ? '↑' : '↓'} {Math.abs(stock.changeRate ?? 0).toFixed(2)}%
                       </span>
                     </div>
                     <div className="flex items-baseline justify-between">
-                      <p className="text-2xl font-black text-slate-900 tracking-tighter">¥{stock.lastPrice.toFixed(2)}</p>
+                      <p className="text-2xl font-black text-slate-900 tracking-tighter">¥{(stock.lastPrice ?? 0).toFixed(2)}</p>
                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{stock.stockCode}</p>
                     </div>
                   </div>
@@ -228,14 +280,22 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
 
             {/* 交易操作浮动手写条 */}
             <div className="mt-12 flex flex-col sm:flex-row items-stretch sm:items-center gap-6">
-              <button 
+              <button
                 onClick={() => onTrade(selectedStock)}
                 className="flex-grow bg-indigo-600 text-white py-6 rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-600/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center group"
               >
                 <i className="fas fa-plus-circle mr-3 group-hover:rotate-90 transition-transform"></i> 立即执行申购
               </button>
-              <button className="px-10 py-6 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center">
-                <i className="fas fa-star mr-3 text-amber-400"></i> 加入监控
+              <button
+                onClick={() => setShowAIAnalysis(!showAIAnalysis)}
+                className={`px-10 py-6 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center shadow-xl ${
+                  showAIAnalysis
+                    ? 'bg-slate-800 text-white border-2 border-slate-600'
+                    : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-purple-600/30'
+                }`}
+              >
+                <i className={`fas ${showAIAnalysis ? 'fa-times' : 'fa-brain'} mr-3 ${showAIAnalysis ? 'text-slate-300' : 'text-amber-300'}`}></i>
+                {showAIAnalysis ? '收起分析' : 'AI分析'}
               </button>
             </div>
           </div>
@@ -260,6 +320,75 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
             ))}
           </div>
 
+          {/* AI 分析面板 - 预留功能 */}
+          {showAIAnalysis && (
+            <div className="mt-10 bg-gradient-to-br from-purple-50 via-indigo-50 to-blue-50 rounded-[3rem] border-2 border-purple-200 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-700">
+              {/* 头部 */}
+              <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-10 py-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
+                      <i className="fas fa-brain text-white text-2xl"></i>
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-white">AI 智能分析</h3>
+                      <p className="text-purple-100 text-sm font-medium mt-1">
+                        {selectedStock.symbol} - {selectedStock.name}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex items-center space-x-2">
+                    <span className="px-4 py-2 bg-white/20 rounded-full text-white text-xs font-black">
+                      Gemini 3 驱动
+                    </span>
+                    <span className="px-4 py-2 bg-white/20 rounded-full text-white text-xs font-black">
+                      实时数据分析
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 内容区域 - 预留 */}
+              <div className="p-10">
+                {/* 功能占位提示 */}
+                <div className="text-center py-16">
+                  <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i className="fas fa-chart-line text-purple-400 text-4xl"></i>
+                  </div>
+                  <h4 className="text-xl font-black text-slate-800 mb-3">AI 分析功能开发中</h4>
+                  <p className="text-slate-500 text-base max-w-md mx-auto leading-relaxed">
+                    即将推出 K 线图形态识别、技术指标分析、AI 预测等功能。
+                    <br />敬请期待！
+                  </p>
+                  <div className="mt-8 flex items-center justify-center space-x-4 text-sm text-slate-400">
+                    <div className="flex items-center space-x-2">
+                      <i className="fas fa-check-circle text-emerald-400"></i>
+                      <span>K线解读</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <i className="fas fa-check-circle text-emerald-400"></i>
+                      <span>趋势预测</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <i className="fas fa-check-circle text-emerald-400"></i>
+                      <span>智能建议</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 预留的图表区域 */}
+                <div className="mt-8 border-2 border-dashed border-purple-300 rounded-2xl p-8 bg-white/50">
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-center">
+                      <i className="fas fa-chart-area text-purple-300 text-5xl mb-4 opacity-50"></i>
+                      <p className="text-purple-400 text-sm font-black">图表区域预留</p>
+                      <p className="text-purple-300 text-xs mt-2">K线图 / 技术指标 / AI 分析结果</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* 零状态引导 */
@@ -275,17 +404,6 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ stocks, onTrade }) => {
           <p className="text-slate-400 text-base font-medium mt-4 max-w-sm leading-relaxed">
             输入资产代码解锁 <span className="text-indigo-600 font-bold">Gemini 3 实时行情诊断</span> 与专业的风险评估终端。
           </p>
-          <div className="mt-10 flex flex-wrap justify-center gap-3">
-            {['NVDA', 'AAPL', 'TSLA', 'MSFT'].map(hot => (
-              <button 
-                key={hot}
-                onClick={() => handleSelect(stocks.find(s => s.symbol === hot) || stocks[0])}
-                className="px-6 py-2.5 bg-white border border-slate-100 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest hover:border-indigo-500 hover:text-indigo-600 hover:shadow-xl transition-all"
-              >
-                快速浏览 {hot}
-              </button>
-            ))}
-          </div>
         </div>
       )}
     </div>

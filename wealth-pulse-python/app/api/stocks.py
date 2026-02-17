@@ -1,21 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
-from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import date, datetime
-
-from app.db.session import get_db
-from app.services.stock_service import StockService
-from app.schemas.stock import (
-    StockInfoResponse,
-    StockMarketDataResponse,
-    StockMarketHistoryResponse,
-    StockSecurityProfileResponse
-)
-from app.core.security import get_current_user
-from app.core.exceptions import ApiException
-from app.schemas.common import success_response, page_response, ResponseCode
-from app.db.lock import distributed_lock
 import logging
+from datetime import date, datetime
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, Query, Path
+from sqlalchemy.orm import Session
+
+from app.core.exceptions import ApiException
+from app.core.security import get_current_user
+from app.db.lock import distributed_lock
+from app.db.session import get_db
+from app.schemas.common import success_response, ResponseCode
+from app.services.stock_service import StockService
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +23,10 @@ router = APIRouter(prefix="/api/stocks", tags=["stocks"])
     description="Retrieve a list of all stocks in the database with pagination support."
 )
 def get_stocks(
-    skip: int = Query(0, ge=0, description="Number of records to skip", example=0),
-    limit: int = Query(100, ge=1, le=500, description="Maximum number of records to return", example=100),
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+        skip: int = Query(0, ge=0, description="Number of records to skip", example=0),
+        limit: int = Query(100, ge=1, le=500, description="Maximum number of records to return", example=100),
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     Get all stocks (requires authentication)
@@ -74,9 +69,9 @@ def get_stocks(
 
 @router.get("/{stock_code}", summary="Get stock by code")
 def get_stock(
-    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, NVDA.US)", example="0700.HK"),
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, NVDA.US)", example="0700.HK"),
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     Get stock by stock_code (requires authentication)
@@ -123,10 +118,10 @@ def get_stock(
 
 @router.get("/{stock_code}/market-data", summary="Get market data")
 def get_market_data(
-    stock_code: str = Path(..., description="Stock code", example="0700.HK"),
-    market_date: Optional[date] = Query(None, description="Market date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+        stock_code: str = Path(..., description="Stock code", example="0700.HK"),
+        market_date: Optional[date] = Query(None, description="Market date (YYYY-MM-DD)"),
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     Get market data for a stock (requires authentication)
@@ -187,12 +182,12 @@ def get_market_data(
 
 @router.get("/{stock_code}/history", summary="Get historical data")
 def get_historical_data(
-    stock_code: str = Path(..., description="Stock code", example="0700.HK"),
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-    limit: int = Query(100, ge=1, le=1000, description="Max records to return"),
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+        stock_code: str = Path(..., description="Stock code", example="0700.HK"),
+        start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+        end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+        limit: int = Query(100, ge=1, le=1000, description="Max records to return"),
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     Get historical data for a stock (requires authentication)
@@ -244,9 +239,9 @@ def get_historical_data(
 
 @router.post("/refresh", summary="Refresh market data")
 def refresh_market_data(
-    stock_codes: Optional[List[str]] = None,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+        stock_codes: Optional[List[str]] = None,
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     Manually trigger market data refresh (requires authentication)
@@ -302,7 +297,8 @@ def refresh_market_data(
                         results.append({
                             "stock_code": stock_code,
                             "status": "success",
-                            "last_price": float(market_data.last_price) if market_data and market_data.last_price else None
+                            "last_price": float(
+                                market_data.last_price) if market_data and market_data.last_price else None
                         })
                         success_count += 1
                     else:
@@ -347,9 +343,9 @@ def refresh_market_data(
 # Public endpoint (no authentication)
 @router.get("/public/list", summary="Get stocks (public)")
 def get_stocks_public(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db)
+        skip: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=500),
+        db: Session = Depends(get_db)
 ):
     """
     Get all stocks (public endpoint - no authentication required)
@@ -387,8 +383,8 @@ def get_stocks_public(
 
 @router.get("/{stock_code}/security-profile", summary="Get HK stock security profile")
 def get_security_profile(
-    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK"),
-    current_user: dict = Depends(get_current_user)
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK"),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     Get HK stock security profile from Eastmoney (requires authentication)
@@ -463,8 +459,10 @@ def get_security_profile(
             "exchange": str(profile_data.get('交易所', '')) if pd.notna(profile_data.get('交易所')) else None,
             "sector": str(profile_data.get('板块', '')) if pd.notna(profile_data.get('板块')) else None,
             "year_end_date": str(profile_data.get('年结日', '')) if pd.notna(profile_data.get('年结日')) else None,
-            "isin_code": str(profile_data.get('ISIN（国际证券识别编码）', '')) if pd.notna(profile_data.get('ISIN（国际证券识别编码）')) else None,
-            "is_sh_hk_stock": str(profile_data.get('是否沪港通标的', '')) if pd.notna(profile_data.get('是否沪港通标的')) else None,
+            "isin_code": str(profile_data.get('ISIN（国际证券识别编码）', '')) if pd.notna(
+                profile_data.get('ISIN（国际证券识别编码）')) else None,
+            "is_sh_hk_stock": str(profile_data.get('是否沪港通标的', '')) if pd.notna(
+                profile_data.get('是否沪港通标的')) else None,
         }
 
         logger.info(f"[SecurityProfile] Successfully fetched security profile for {stock_code}")
@@ -492,7 +490,7 @@ def get_security_profile(
 
 @router.get("/public/{stock_code}/security-profile", summary="Get HK stock security profile (public)")
 def get_security_profile_public(
-    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK")
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK")
 ):
     """
     Get HK stock security profile from Eastmoney (public endpoint - no authentication required)
@@ -542,8 +540,10 @@ def get_security_profile_public(
             "exchange": str(profile_data.get('交易所', '')) if pd.notna(profile_data.get('交易所')) else None,
             "sector": str(profile_data.get('板块', '')) if pd.notna(profile_data.get('板块')) else None,
             "year_end_date": str(profile_data.get('年结日', '')) if pd.notna(profile_data.get('年结日')) else None,
-            "isin_code": str(profile_data.get('ISIN（国际证券识别编码）', '')) if pd.notna(profile_data.get('ISIN（国际证券识别编码）')) else None,
-            "is_sh_hk_stock": str(profile_data.get('是否沪港通标的', '')) if pd.notna(profile_data.get('是否沪港通标的')) else None,
+            "isin_code": str(profile_data.get('ISIN（国际证券识别编码）', '')) if pd.notna(
+                profile_data.get('ISIN（国际证券识别编码）')) else None,
+            "is_sh_hk_stock": str(profile_data.get('是否沪港通标的', '')) if pd.notna(
+                profile_data.get('是否沪港通标的')) else None,
         }
 
         logger.info(f"[SecurityProfile] Successfully fetched security profile for {stock_code}")
@@ -571,8 +571,8 @@ def get_security_profile_public(
 
 @router.get("/{stock_code}/company-profile", summary="Get HK stock company profile")
 def get_company_profile(
-    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK"),
-    current_user: dict = Depends(get_current_user)
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK"),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     Get HK stock company profile from Eastmoney (requires authentication)
@@ -645,10 +645,12 @@ def get_company_profile(
             "company_name": str(profile_data.get('公司名称', '')),
             "company_name_en": str(profile_data.get('英文名称', '')),
             "registration_place": str(profile_data.get('注册地', '')) if pd.notna(profile_data.get('注册地')) else None,
-            "establishment_date": str(profile_data.get('公司成立日期', '')) if pd.notna(profile_data.get('公司成立日期')) else None,
+            "establishment_date": str(profile_data.get('公司成立日期', '')) if pd.notna(
+                profile_data.get('公司成立日期')) else None,
             "industry": str(profile_data.get('所属行业', '')) if pd.notna(profile_data.get('所属行业')) else None,
             "chairman": str(profile_data.get('董事长', '')) if pd.notna(profile_data.get('董事长')) else None,
-            "company_secretary": str(profile_data.get('公司秘书', '')) if pd.notna(profile_data.get('公司秘书')) else None,
+            "company_secretary": str(profile_data.get('公司秘书', '')) if pd.notna(
+                profile_data.get('公司秘书')) else None,
             "employee_count": int(profile_data.get('员工人数')) if pd.notna(profile_data.get('员工人数')) else None,
             "office_address": str(profile_data.get('办公地址', '')) if pd.notna(profile_data.get('办公地址')) else None,
             "website": str(profile_data.get('公司网址', '')) if pd.notna(profile_data.get('公司网址')) else None,
@@ -657,7 +659,8 @@ def get_company_profile(
             "phone": str(profile_data.get('联系电话', '')) if pd.notna(profile_data.get('联系电话')) else None,
             "auditor": str(profile_data.get('核数师', '')) if pd.notna(profile_data.get('核数师')) else None,
             "fax": str(profile_data.get('传真', '')) if pd.notna(profile_data.get('传真')) else None,
-            "company_introduction": str(profile_data.get('公司介绍', '')) if pd.notna(profile_data.get('公司介绍')) else None,
+            "company_introduction": str(profile_data.get('公司介绍', '')) if pd.notna(
+                profile_data.get('公司介绍')) else None,
         }
 
         logger.info(f"[CompanyProfile] Successfully fetched company profile for {stock_code}")
@@ -685,7 +688,7 @@ def get_company_profile(
 
 @router.get("/public/{stock_code}/company-profile", summary="Get HK stock company profile (public)")
 def get_company_profile_public(
-    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK")
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK")
 ):
     """
     Get HK stock company profile from Eastmoney (public endpoint - no authentication required)
@@ -728,10 +731,12 @@ def get_company_profile_public(
             "company_name": str(profile_data.get('公司名称', '')),
             "company_name_en": str(profile_data.get('英文名称', '')),
             "registration_place": str(profile_data.get('注册地', '')) if pd.notna(profile_data.get('注册地')) else None,
-            "establishment_date": str(profile_data.get('公司成立日期', '')) if pd.notna(profile_data.get('公司成立日期')) else None,
+            "establishment_date": str(profile_data.get('公司成立日期', '')) if pd.notna(
+                profile_data.get('公司成立日期')) else None,
             "industry": str(profile_data.get('所属行业', '')) if pd.notna(profile_data.get('所属行业')) else None,
             "chairman": str(profile_data.get('董事长', '')) if pd.notna(profile_data.get('董事长')) else None,
-            "company_secretary": str(profile_data.get('公司秘书', '')) if pd.notna(profile_data.get('公司秘书')) else None,
+            "company_secretary": str(profile_data.get('公司秘书', '')) if pd.notna(
+                profile_data.get('公司秘书')) else None,
             "employee_count": int(profile_data.get('员工人数')) if pd.notna(profile_data.get('员工人数')) else None,
             "office_address": str(profile_data.get('办公地址', '')) if pd.notna(profile_data.get('办公地址')) else None,
             "website": str(profile_data.get('公司网址', '')) if pd.notna(profile_data.get('公司网址')) else None,
@@ -740,7 +745,8 @@ def get_company_profile_public(
             "phone": str(profile_data.get('联系电话', '')) if pd.notna(profile_data.get('联系电话')) else None,
             "auditor": str(profile_data.get('核数师', '')) if pd.notna(profile_data.get('核数师')) else None,
             "fax": str(profile_data.get('传真', '')) if pd.notna(profile_data.get('传真')) else None,
-            "company_introduction": str(profile_data.get('公司介绍', '')) if pd.notna(profile_data.get('公司介绍')) else None,
+            "company_introduction": str(profile_data.get('公司介绍', '')) if pd.notna(
+                profile_data.get('公司介绍')) else None,
         }
 
         logger.info(f"[CompanyProfile] Successfully fetched company profile for {stock_code}")
@@ -768,8 +774,8 @@ def get_company_profile_public(
 
 @router.get("/{stock_code}/financial-indicator", summary="Get HK stock financial indicators")
 def get_financial_indicator(
-    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK"),
-    current_user: dict = Depends(get_current_user)
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK"),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     Get HK stock financial indicators from Eastmoney (requires authentication)
@@ -824,7 +830,8 @@ def get_financial_indicator(
         if len(normalized_code) < 5:
             normalized_code = normalized_code.zfill(5)
 
-        logger.info(f"[FinancialIndicator] Fetching financial indicators for {stock_code} (normalized: {normalized_code})")
+        logger.info(
+            f"[FinancialIndicator] Fetching financial indicators for {stock_code} (normalized: {normalized_code})")
 
         # 调用 AkShare API 获取财务指标
         financial_indicator_df = ak.stock_hk_financial_indicator_em(symbol=normalized_code)
@@ -841,27 +848,44 @@ def get_financial_indicator(
         # 映射字段到 VO（根据 AkShare 返回的列名）
         response_data = {
             "stock_code": stock_code,
-            "basic_eps": str(indicator_data.get('基本每股收益(元)', '')) if pd.notna(indicator_data.get('基本每股收益(元)')) else None,
-            "net_assets_per_share": str(indicator_data.get('每股净资产(元)', '')) if pd.notna(indicator_data.get('每股净资产(元)')) else None,
-            "legal_capital": str(indicator_data.get('法定股本(股)', '')) if pd.notna(indicator_data.get('法定股本(股)')) else None,
+            "basic_eps": str(indicator_data.get('基本每股收益(元)', '')) if pd.notna(
+                indicator_data.get('基本每股收益(元)')) else None,
+            "net_assets_per_share": str(indicator_data.get('每股净资产(元)', '')) if pd.notna(
+                indicator_data.get('每股净资产(元)')) else None,
+            "legal_capital": str(indicator_data.get('法定股本(股)', '')) if pd.notna(
+                indicator_data.get('法定股本(股)')) else None,
             "lot_size": str(indicator_data.get('每手股', '')) if pd.notna(indicator_data.get('每手股')) else None,
-            "dividend_per_share_ttm": str(indicator_data.get('每股股息TTM(港元)', '')) if pd.notna(indicator_data.get('每股股息TTM(港元)')) else None,
-            "payout_ratio": str(indicator_data.get('派息比率(%)', '')) if pd.notna(indicator_data.get('派息比率(%)')) else None,
-            "issued_capital": str(indicator_data.get('已发行股本(股)', '')) if pd.notna(indicator_data.get('已发行股本(股)')) else None,
-            "issued_capital_h_shares": int(indicator_data.get('已发行股本-H股(股)')) if pd.notna(indicator_data.get('已发行股本-H股(股)')) else None,
-            "operating_cash_flow_per_share": str(indicator_data.get('每股经营现金流(元)', '')) if pd.notna(indicator_data.get('每股经营现金流(元)')) else None,
-            "dividend_yield_ttm": str(indicator_data.get('股息率TTM(%)', '')) if pd.notna(indicator_data.get('股息率TTM(%)')) else None,
-            "total_market_cap_hkd": str(indicator_data.get('总市值(港元)', '')) if pd.notna(indicator_data.get('总市值(港元)')) else None,
-            "hk_market_cap_hkd": str(indicator_data.get('港股市值(港元)', '')) if pd.notna(indicator_data.get('港股市值(港元)')) else None,
-            "total_operating_revenue": str(indicator_data.get('营业总收入', '')) if pd.notna(indicator_data.get('营业总收入')) else None,
-            "operating_revenue_growth_yoy": str(indicator_data.get('营业总收入滚动环比增长(%)', '')) if pd.notna(indicator_data.get('营业总收入滚动环比增长(%)')) else None,
-            "net_profit_margin": str(indicator_data.get('销售净利率(%)', '')) if pd.notna(indicator_data.get('销售净利率(%)')) else None,
+            "dividend_per_share_ttm": str(indicator_data.get('每股股息TTM(港元)', '')) if pd.notna(
+                indicator_data.get('每股股息TTM(港元)')) else None,
+            "payout_ratio": str(indicator_data.get('派息比率(%)', '')) if pd.notna(
+                indicator_data.get('派息比率(%)')) else None,
+            "issued_capital": str(indicator_data.get('已发行股本(股)', '')) if pd.notna(
+                indicator_data.get('已发行股本(股)')) else None,
+            "issued_capital_h_shares": int(indicator_data.get('已发行股本-H股(股)')) if pd.notna(
+                indicator_data.get('已发行股本-H股(股)')) else None,
+            "operating_cash_flow_per_share": str(indicator_data.get('每股经营现金流(元)', '')) if pd.notna(
+                indicator_data.get('每股经营现金流(元)')) else None,
+            "dividend_yield_ttm": str(indicator_data.get('股息率TTM(%)', '')) if pd.notna(
+                indicator_data.get('股息率TTM(%)')) else None,
+            "total_market_cap_hkd": str(indicator_data.get('总市值(港元)', '')) if pd.notna(
+                indicator_data.get('总市值(港元)')) else None,
+            "hk_market_cap_hkd": str(indicator_data.get('港股市值(港元)', '')) if pd.notna(
+                indicator_data.get('港股市值(港元)')) else None,
+            "total_operating_revenue": str(indicator_data.get('营业总收入', '')) if pd.notna(
+                indicator_data.get('营业总收入')) else None,
+            "operating_revenue_growth_yoy": str(indicator_data.get('营业总收入滚动环比增长(%)', '')) if pd.notna(
+                indicator_data.get('营业总收入滚动环比增长(%)')) else None,
+            "net_profit_margin": str(indicator_data.get('销售净利率(%)', '')) if pd.notna(
+                indicator_data.get('销售净利率(%)')) else None,
             "net_profit": str(indicator_data.get('净利润', '')) if pd.notna(indicator_data.get('净利润')) else None,
-            "net_profit_growth_yoy": str(indicator_data.get('净利润滚动环比增长(%)', '')) if pd.notna(indicator_data.get('净利润滚动环比增长(%)')) else None,
-            "roe": str(indicator_data.get('股东权益回报率(%)', '')) if pd.notna(indicator_data.get('股东权益回报率(%)')) else None,
+            "net_profit_growth_yoy": str(indicator_data.get('净利润滚动环比增长(%)', '')) if pd.notna(
+                indicator_data.get('净利润滚动环比增长(%)')) else None,
+            "roe": str(indicator_data.get('股东权益回报率(%)', '')) if pd.notna(
+                indicator_data.get('股东权益回报率(%)')) else None,
             "pe_ratio": str(indicator_data.get('市盈率', '')) if pd.notna(indicator_data.get('市盈率')) else None,
             "pb_ratio": str(indicator_data.get('市净率', '')) if pd.notna(indicator_data.get('市净率')) else None,
-            "roa": str(indicator_data.get('总资产回报率(%)', '')) if pd.notna(indicator_data.get('总资产回报率(%)')) else None,
+            "roa": str(indicator_data.get('总资产回报率(%)', '')) if pd.notna(
+                indicator_data.get('总资产回报率(%)')) else None,
         }
 
         logger.info(f"[FinancialIndicator] Successfully fetched financial indicators for {stock_code}")
@@ -889,7 +913,7 @@ def get_financial_indicator(
 
 @router.get("/public/{stock_code}/financial-indicator", summary="Get HK stock financial indicators (public)")
 def get_financial_indicator_public(
-    stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK")
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 03900.HK)", example="03900.HK")
 ):
     """
     Get HK stock financial indicators from Eastmoney (public endpoint - no authentication required)
@@ -912,7 +936,8 @@ def get_financial_indicator_public(
         if len(normalized_code) < 5:
             normalized_code = normalized_code.zfill(5)
 
-        logger.info(f"[FinancialIndicator] Fetching financial indicators for {stock_code} (normalized: {normalized_code})")
+        logger.info(
+            f"[FinancialIndicator] Fetching financial indicators for {stock_code} (normalized: {normalized_code})")
 
         # 调用 AkShare API 获取财务指标
         financial_indicator_df = ak.stock_hk_financial_indicator_em(symbol=normalized_code)
@@ -929,27 +954,44 @@ def get_financial_indicator_public(
         # 映射字段到 VO
         response_data = {
             "stock_code": stock_code,
-            "basic_eps": str(indicator_data.get('基本每股收益(元)', '')) if pd.notna(indicator_data.get('基本每股收益(元)')) else None,
-            "net_assets_per_share": str(indicator_data.get('每股净资产(元)', '')) if pd.notna(indicator_data.get('每股净资产(元)')) else None,
-            "legal_capital": str(indicator_data.get('法定股本(股)', '')) if pd.notna(indicator_data.get('法定股本(股)')) else None,
+            "basic_eps": str(indicator_data.get('基本每股收益(元)', '')) if pd.notna(
+                indicator_data.get('基本每股收益(元)')) else None,
+            "net_assets_per_share": str(indicator_data.get('每股净资产(元)', '')) if pd.notna(
+                indicator_data.get('每股净资产(元)')) else None,
+            "legal_capital": str(indicator_data.get('法定股本(股)', '')) if pd.notna(
+                indicator_data.get('法定股本(股)')) else None,
             "lot_size": str(indicator_data.get('每手股', '')) if pd.notna(indicator_data.get('每手股')) else None,
-            "dividend_per_share_ttm": str(indicator_data.get('每股股息TTM(港元)', '')) if pd.notna(indicator_data.get('每股股息TTM(港元)')) else None,
-            "payout_ratio": str(indicator_data.get('派息比率(%)', '')) if pd.notna(indicator_data.get('派息比率(%)')) else None,
-            "issued_capital": str(indicator_data.get('已发行股本(股)', '')) if pd.notna(indicator_data.get('已发行股本(股)')) else None,
-            "issued_capital_h_shares": int(indicator_data.get('已发行股本-H股(股)')) if pd.notna(indicator_data.get('已发行股本-H股(股)')) else None,
-            "operating_cash_flow_per_share": str(indicator_data.get('每股经营现金流(元)', '')) if pd.notna(indicator_data.get('每股经营现金流(元)')) else None,
-            "dividend_yield_ttm": str(indicator_data.get('股息率TTM(%)', '')) if pd.notna(indicator_data.get('股息率TTM(%)')) else None,
-            "total_market_cap_hkd": str(indicator_data.get('总市值(港元)', '')) if pd.notna(indicator_data.get('总市值(港元)')) else None,
-            "hk_market_cap_hkd": str(indicator_data.get('港股市值(港元)', '')) if pd.notna(indicator_data.get('港股市值(港元)')) else None,
-            "total_operating_revenue": str(indicator_data.get('营业总收入', '')) if pd.notna(indicator_data.get('营业总收入')) else None,
-            "operating_revenue_growth_yoy": str(indicator_data.get('营业总收入滚动环比增长(%)', '')) if pd.notna(indicator_data.get('营业总收入滚动环比增长(%)')) else None,
-            "net_profit_margin": str(indicator_data.get('销售净利率(%)', '')) if pd.notna(indicator_data.get('销售净利率(%)')) else None,
+            "dividend_per_share_ttm": str(indicator_data.get('每股股息TTM(港元)', '')) if pd.notna(
+                indicator_data.get('每股股息TTM(港元)')) else None,
+            "payout_ratio": str(indicator_data.get('派息比率(%)', '')) if pd.notna(
+                indicator_data.get('派息比率(%)')) else None,
+            "issued_capital": str(indicator_data.get('已发行股本(股)', '')) if pd.notna(
+                indicator_data.get('已发行股本(股)')) else None,
+            "issued_capital_h_shares": int(indicator_data.get('已发行股本-H股(股)')) if pd.notna(
+                indicator_data.get('已发行股本-H股(股)')) else None,
+            "operating_cash_flow_per_share": str(indicator_data.get('每股经营现金流(元)', '')) if pd.notna(
+                indicator_data.get('每股经营现金流(元)')) else None,
+            "dividend_yield_ttm": str(indicator_data.get('股息率TTM(%)', '')) if pd.notna(
+                indicator_data.get('股息率TTM(%)')) else None,
+            "total_market_cap_hkd": str(indicator_data.get('总市值(港元)', '')) if pd.notna(
+                indicator_data.get('总市值(港元)')) else None,
+            "hk_market_cap_hkd": str(indicator_data.get('港股市值(港元)', '')) if pd.notna(
+                indicator_data.get('港股市值(港元)')) else None,
+            "total_operating_revenue": str(indicator_data.get('营业总收入', '')) if pd.notna(
+                indicator_data.get('营业总收入')) else None,
+            "operating_revenue_growth_yoy": str(indicator_data.get('营业总收入滚动环比增长(%)', '')) if pd.notna(
+                indicator_data.get('营业总收入滚动环比增长(%)')) else None,
+            "net_profit_margin": str(indicator_data.get('销售净利率(%)', '')) if pd.notna(
+                indicator_data.get('销售净利率(%)')) else None,
             "net_profit": str(indicator_data.get('净利润', '')) if pd.notna(indicator_data.get('净利润')) else None,
-            "net_profit_growth_yoy": str(indicator_data.get('净利润滚动环比增长(%)', '')) if pd.notna(indicator_data.get('净利润滚动环比增长(%)')) else None,
-            "roe": str(indicator_data.get('股东权益回报率(%)', '')) if pd.notna(indicator_data.get('股东权益回报率(%)')) else None,
+            "net_profit_growth_yoy": str(indicator_data.get('净利润滚动环比增长(%)', '')) if pd.notna(
+                indicator_data.get('净利润滚动环比增长(%)')) else None,
+            "roe": str(indicator_data.get('股东权益回报率(%)', '')) if pd.notna(
+                indicator_data.get('股东权益回报率(%)')) else None,
             "pe_ratio": str(indicator_data.get('市盈率', '')) if pd.notna(indicator_data.get('市盈率')) else None,
             "pb_ratio": str(indicator_data.get('市净率', '')) if pd.notna(indicator_data.get('市净率')) else None,
-            "roa": str(indicator_data.get('总资产回报率(%)', '')) if pd.notna(indicator_data.get('总资产回报率(%)')) else None,
+            "roa": str(indicator_data.get('总资产回报率(%)', '')) if pd.notna(
+                indicator_data.get('总资产回报率(%)')) else None,
         }
 
         logger.info(f"[FinancialIndicator] Successfully fetched financial indicators for {stock_code}")
@@ -971,5 +1013,229 @@ def get_financial_indicator_public(
         logger.error(f"Error fetching financial indicators for {stock_code}: {str(e)}")
         raise ApiException(
             msg=f"Failed to retrieve financial indicators: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/minute-history", summary="Get HK stock minute-level history")
+def get_minute_history(
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 01611.HK)", example="01611.HK"),
+        period: str = Query('1', description="Period: 1=1min, 5=5min, 15=15min, 30=30min, 60=60min",
+                            regex="^(1|5|15|30|60)$"),
+        adjust: str = Query('', description="Adjustment type: ''=no adjust, 'hfq'=post-adjust"),
+        start_date: Optional[datetime] = Query(None, description="Start datetime (YYYY-MM-DD HH:MM:SS)"),
+        end_date: Optional[datetime] = Query(None, description="End datetime (YYYY-MM-DD HH:MM:SS)"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock minute-level historical data from Eastmoney (requires authentication)
+
+    This endpoint fetches intraday historical data with different time intervals.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code (e.g., 0700.HK, 01611.HK)
+
+    **Query Parameters:**
+    - `period`: Time period ('1', '5', '15', '30', '60' for minutes)
+    - `adjust`: Adjustment type (''=none, 'hfq'=post-adjustment)
+    - `start_date`: Start datetime (default: 1 day ago)
+    - `end_date`: End datetime (default: now)
+
+    **Data Source:**
+    - AkShare `stock_hk_hist_min_em` API
+    - Eastmoney
+
+    **Returned Fields (1-minute data):**
+    - trade_time: 交易时间
+    - open_price: 开盘价(港元)
+    - close_price: 收盘价(港元)
+    - high_price: 最高价(港元)
+    - low_price: 最低价(港元)
+    - volume: 成交量(股)
+    - turnover: 成交额(港元)
+    - latest_price: 最新价(港元)
+
+    **Returned Fields (5/15/30/60-minute data):**
+    - trade_time: 交易时间
+    - open_price: 开盘价(港元)
+    - close_price: 收盘价(港元)
+    - high_price: 最高价(港元)
+    - low_price: 最低价(港元)
+    - volume: 成交量(股)
+    - turnover: 成交额(港元)
+    - change_rate: 涨跌幅(%)
+    - change_number: 涨跌额(港元)
+    - amplitude: 振幅(%)
+    - turnover_rate: 换手率(%)
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[MinuteHistory] Fetching minute history for {stock_code}: period={period}, adjust={adjust}")
+
+        # 使用 AkShareProvider 获取数据
+        provider = AkShareProvider()
+        history_data = provider.get_stock_minute_history(
+            stock_code=stock_code,
+            period=period,
+            adjust=adjust,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        if not history_data:
+            raise ApiException(
+                msg=f"Minute history data not found for stock {stock_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # 转换为响应格式
+        response_data = []
+        for item in history_data:
+            response_item = {
+                "trade_time": item['trade_time'].isoformat() if isinstance(item['trade_time'], datetime) else item[
+                    'trade_time'],
+                "stock_code": item['stock_code'],
+                "period": item['period'],
+                "open_price": float(item['open_price']) if item.get('open_price') is not None else None,
+                "close_price": float(item['close_price']) if item.get('close_price') is not None else None,
+                "high_price": float(item['high_price']) if item.get('high_price') is not None else None,
+                "low_price": float(item['low_price']) if item.get('low_price') is not None else None,
+                "volume": float(item['volume']) if item.get('volume') is not None else None,
+                "turnover": float(item['turnover']) if item.get('turnover') is not None else None,
+            }
+
+            # 1分钟数据特有字段
+            if period == '1':
+                response_item['latest_price'] = float(item['latest_price']) if item.get(
+                    'latest_price') is not None else None
+
+            # 其他周期字段
+            else:
+                response_item['change_rate'] = float(item['change_rate']) if item.get(
+                    'change_rate') is not None else None
+                response_item['change_number'] = float(item['change_number']) if item.get(
+                    'change_number') is not None else None
+                response_item['amplitude'] = float(item['amplitude']) if item.get('amplitude') is not None else None
+                response_item['turnover_rate'] = float(item['turnover_rate']) if item.get(
+                    'turnover_rate') is not None else None
+
+            response_data.append(response_item)
+
+        logger.info(f"[MinuteHistory] Successfully fetched {len(response_data)} records for {stock_code}")
+
+        return success_response(
+            data=response_data,
+            msg=f"Minute history retrieved successfully: {len(response_data)} records"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching minute history for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve minute history: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/enhanced-history", summary="Get HK stock enhanced history with period")
+def get_enhanced_history(
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 01611.HK)", example="0700.HK"),
+        period: str = Query('daily', description="Period: 'daily'=daily, 'weekly'=weekly, 'monthly'=monthly",
+                            regex="^(daily|weekly|monthly)$"),
+        adjust: str = Query('', description="Adjustment type: ''=no adjust, 'qfq'=pre-adjust, 'hfq'=post-adjust"),
+        start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+        end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock enhanced historical data with period support (requires authentication)
+
+    This endpoint fetches enhanced historical data with different time periods.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code (e.g., 0700.HK, 01611.HK)
+
+    **Query Parameters:**
+    - `period`: Time period ('daily', 'weekly', 'monthly')
+    - `adjust`: Adjustment type (''=none, 'qfq'=pre-adjustment, 'hfq'=post-adjustment)
+    - `start_date`: Start date (default: 1 year ago)
+    - `end_date`: End date (default: today)
+
+    **Data Source:**
+    - AkShare `stock_hk_hist` API
+    - Eastmoney
+
+    **Returned Fields:**
+    - stock_code: 股票代码
+    - period: 周期类型
+    - trade_date: 交易日期
+    - open_price: 开盘价(港元)
+    - close_price: 收盘价(港元)
+    - high_price: 最高价(港元)
+    - low_price: 最低价(港元)
+    - volume: 成交量(股)
+    - turnover: 成交额(港元)
+    - amplitude: 振幅(%)
+    - change_rate: 涨跌幅(%)
+    - change_number: 涨跌额(港元)
+    - turnover_rate: 换手率(%)
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[EnhancedHistory] Fetching enhanced history for {stock_code}: period={period}, adjust={adjust}")
+
+        # 使用 AkShareProvider 获取数据
+        provider = AkShareProvider()
+        history_data = provider.get_stock_daily_history_enhanced(
+            stock_code=stock_code,
+            start_date=start_date,
+            end_date=end_date,
+            period=period,
+            adjust=adjust
+        )
+
+        if not history_data:
+            raise ApiException(
+                msg=f"Enhanced history data not found for stock {stock_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # 转换为响应格式
+        response_data = []
+        for item in history_data:
+            response_item = {
+                "stock_code": item['stock_code'],
+                "period": item['period'],
+                "trade_date": item['trade_date'].isoformat() if isinstance(item['trade_date'], date) else item[
+                    'trade_date'],
+                "open_price": float(item['open_price']) if item.get('open_price') is not None else None,
+                "close_price": float(item['close_price']) if item.get('close_price') is not None else None,
+                "high_price": float(item['high_price']) if item.get('high_price') is not None else None,
+                "low_price": float(item['low_price']) if item.get('low_price') is not None else None,
+                "volume": int(item['volume']) if item.get('volume') is not None else None,
+                "turnover": float(item['turnover']) if item.get('turnover') is not None else None,
+                "amplitude": float(item['amplitude']) if item.get('amplitude') is not None else None,
+                "change_rate": float(item['change_rate']) if item.get('change_rate') is not None else None,
+                "change_number": float(item['change_number']) if item.get('change_number') is not None else None,
+                "turnover_rate": float(item['turnover_rate']) if item.get('turnover_rate') is not None else None,
+            }
+            response_data.append(response_item)
+
+        logger.info(f"[EnhancedHistory] Successfully fetched {len(response_data)} records for {stock_code}")
+
+        return success_response(
+            data=response_data,
+            msg=f"Enhanced history retrieved successfully: {len(response_data)} records"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching enhanced history for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve enhanced history: {str(e)}",
             code=ResponseCode.INTERNAL_ERROR
         )

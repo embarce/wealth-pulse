@@ -300,3 +300,163 @@ class AkShareProvider(BaseStockDataProvider):
             return int(float(value))
         except (ValueError, TypeError):
             return None
+
+    def get_stock_minute_history(
+        self,
+        stock_code: str,
+        period: str = '1',
+        adjust: str = '',
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取港股分钟级历史数据
+
+        Args:
+            stock_code: 股票代码（如: "00700", "0700.HK"）
+            period: 周期类型（'1'=1分钟, '5'=5分钟, '15'=15分钟, '30'=30分钟, '60'=60分钟）
+            adjust: 复权类型（''=不复权, 'hfq'=后复权）
+            start_date: 开始时间
+            end_date: 结束时间
+
+        Returns:
+            分钟级历史数据列表，如果失败返回None
+        """
+        try:
+            norm_code = self._normalize_stock_code(stock_code)
+
+            # 设置默认时间范围（最近1个交易日）
+            if not end_date:
+                end_date = datetime.now()
+            if not start_date:
+                start_date = end_date - timedelta(days=1)
+
+            # 格式化时间参数
+            start_date_str = start_date.strftime('%Y-%m-%d %H:%M:%S')
+            end_date_str = end_date.strftime('%Y-%m-%d %H:%M:%S')
+
+            logger.info(f"[akshare] 获取 {stock_code} 分钟级数据: period={period}, adjust={adjust}, "
+                       f"start={start_date_str}, end={end_date_str}")
+
+            # 调用 AkShare 接口
+            df = ak.stock_hk_hist_min_em(
+                symbol=norm_code,
+                period=period,
+                adjust=adjust,
+                start_date=start_date_str,
+                end_date=end_date_str
+            )
+
+            if df.empty:
+                logger.warning(f"[akshare] 港股 {stock_code} 没有分钟级数据")
+                return None
+
+            history_data = []
+            for _, row in df.iterrows():
+                # 基础字段（所有周期都有）
+                data_item = {
+                    'trade_time': pd.to_datetime(row['时间']),
+                    'stock_code': stock_code,
+                    'period': period,
+                    'open_price': self._safe_float(row.get('开盘')),
+                    'close_price': self._safe_float(row.get('收盘')),
+                    'high_price': self._safe_float(row.get('最高')),
+                    'low_price': self._safe_float(row.get('最低')),
+                    'volume': self._safe_float(row.get('成交量')),
+                    'turnover': self._safe_float(row.get('成交额')),
+                }
+
+                # 1分钟数据特有字段
+                if period == '1':
+                    data_item['latest_price'] = self._safe_float(row.get('最新价'))
+
+                # 其他周期字段（5, 15, 30, 60分钟）
+                else:
+                    data_item['change_rate'] = self._safe_float(row.get('涨跌幅'))
+                    data_item['change_number'] = self._safe_float(row.get('涨跌额'))
+                    data_item['amplitude'] = self._safe_float(row.get('振幅'))
+                    data_item['turnover_rate'] = self._safe_float(row.get('换手率'))
+
+                history_data.append(data_item)
+
+            logger.info(f"[akshare] 获取 {stock_code} 分钟级数据成功，共 {len(history_data)} 条记录")
+            return history_data
+
+        except Exception as e:
+            logger.error(f"[akshare] 获取 {stock_code} 分钟级数据失败: {str(e)}")
+            raise
+
+    def get_stock_daily_history_enhanced(
+        self,
+        stock_code: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        period: str = 'daily',
+        adjust: str = ''
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取港股增强型历史数据（包含振幅、涨跌幅、换手率等）
+
+        Args:
+            stock_code: 股票代码（如: "00700", "0700.HK"）
+            start_date: 开始日期
+            end_date: 结束日期
+            period: 周期类型 ('daily'=日线, 'weekly'=周线, 'monthly'=月线)
+            adjust: 复权类型（''=不复权, 'qfq'=前复权, 'hfq'=后复权）
+
+        Returns:
+            增强型历史数据列表，如果失败返回None
+        """
+        try:
+            norm_code = self._normalize_stock_code(stock_code)
+
+            # 设置默认日期范围（最近1年）
+            if not start_date:
+                start_date = date.today() - timedelta(days=365)
+            if not end_date:
+                end_date = date.today()
+
+            # 格式化日期参数（YYYYMMDD格式）
+            start_date_str = start_date.strftime('%Y%m%d')
+            end_date_str = end_date.strftime('%Y%m%d')
+
+            logger.info(f"[akshare] 获取 {stock_code} 增强型{period}数据: adjust={adjust}, "
+                       f"start={start_date_str}, end={end_date_str}")
+
+            # 调用 AkShare 接口
+            df = ak.stock_hk_hist(
+                symbol=norm_code,
+                period=period,
+                start_date=start_date_str,
+                end_date=end_date_str,
+                adjust=adjust
+            )
+
+            if df.empty:
+                logger.warning(f"[akshare] 港股 {stock_code} 没有增强型{period}数据")
+                return None
+
+            history_data = []
+            for _, row in df.iterrows():
+                history_data.append({
+                    'stock_code': stock_code,
+                    'period': period,
+                    'trade_date': pd.to_datetime(row['日期']).date(),
+                    'open_price': self._safe_float(row.get('开盘')),
+                    'close_price': self._safe_float(row.get('收盘')),
+                    'high_price': self._safe_float(row.get('最高')),
+                    'low_price': self._safe_float(row.get('最低')),
+                    'volume': self._safe_int(row.get('成交量')),
+                    'turnover': self._safe_float(row.get('成交额')),
+                    'amplitude': self._safe_float(row.get('振幅')),
+                    'change_rate': self._safe_float(row.get('涨跌幅')),
+                    'change_number': self._safe_float(row.get('涨跌额')),
+                    'turnover_rate': self._safe_float(row.get('换手率')),
+                })
+
+            logger.info(f"[akshare] 获取 {stock_code} 增强型{period}数据成功，共 {len(history_data)} 条记录")
+            return history_data
+
+        except Exception as e:
+            logger.error(f"[akshare] 获取 {stock_code} 增强型{period}数据失败: {str(e)}")
+            raise

@@ -103,7 +103,7 @@ interface ToastContainerProps {
 
 const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onRemove }) => {
   return createPortal(
-    <div className="fixed top-4 right-4 left-4 sm:left-auto z-[100] flex flex-col space-y-3 max-w-md w-full sm:w-auto pointer-events-none">
+    <div className="fixed top-4 right-4 left-4 sm:left-auto z-[10000] flex flex-col space-y-3 max-w-md w-full sm:w-auto pointer-events-none">
       {toasts.map((toast) => (
         <div key={toast.id} className="pointer-events-auto">
           <ToastItem toast={toast} onRemove={onRemove} />

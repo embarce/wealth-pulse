@@ -13,7 +13,7 @@ export const translations = {
     login_loading: '正在验证身份...',
     
     // Sidebar
-    dashboard: '资产总览',
+    dashboard: '财富面板',
     market: '行情搜索',
     holdings: '我的持仓',
     records: '交易记录',
@@ -120,7 +120,7 @@ export const translations = {
     login_loading: 'Verifying Identity...',
 
     // Sidebar
-    dashboard: 'Dashboard',
+    dashboard: 'Wealth Panel',
     market: 'Market Search',
     holdings: 'Holdings',
     records: 'Records',

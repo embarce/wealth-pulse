@@ -4,7 +4,8 @@
       "Bash(npx tsc:*)",
       "Bash(pnpm build:*)",
       "Bash(pnpm dev:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(pnpm run build:*)"
     ],
     "deny": [],
     "ask": []

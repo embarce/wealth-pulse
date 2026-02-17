@@ -14,7 +14,7 @@ import { userApi, DashboardData, PositionsDashboardData } from './services/userA
 import { getTradeScore, getMarketOutlook } from './services/gemini';
 import { Language, translations } from './i18n';
 import { httpClient } from './services/http';
-import { stockApi, FeeCalculationResponse, StockInfo } from './services/stockApi';
+import { stockApi } from './services/stockApi';
 import { tradeApi } from './services/tradeApi';
 import { ToastProvider, useToast, ToastContainerWrapper } from './contexts/ToastContext';
 
@@ -22,6 +22,7 @@ import { ToastProvider, useToast, ToastContainerWrapper } from './contexts/Toast
 import Modal from './components/Modal';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
+import TradeModal from './components/TradeModal';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -69,139 +70,15 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   const [customCapitalAmount, setCustomCapitalAmount] = useState<string>('');
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
-
-  // Trade form state
-  const [tradeQuantity, setTradeQuantity] = useState<number>(100);
-  const [tradePrice, setTradePrice] = useState<number>(0);
-  const [tradeFee, setTradeFee] = useState<FeeCalculationResponse | null>(null);
-  const [tradeTime, setTradeTime] = useState<string>(new Date().toISOString().slice(0, 16));
-  const [isLoadingPrice, setIsLoadingPrice] = useState(false);
-  const [isLoadingFee, setIsLoadingFee] = useState(false);
-  const [isTradeExecuting, setIsTradeExecuting] = useState(false);
-  const [tradeStockInfo, setTradeStockInfo] = useState<StockInfo | null>(null);
-
-  // Sell form state
   const [sellModalOpen, setSellModalOpen] = useState(false);
   const [sellStock, setSellStock] = useState<StockPrice | null>(null);
-  const [sellQuantity, setSellQuantity] = useState<number>(0);
-  const [sellPrice, setSellPrice] = useState<number>(0);
-  const [sellFee, setSellFee] = useState<FeeCalculationResponse | null>(null);
-  const [isLoadingSellFee, setIsLoadingSellFee] = useState(false);
-  const [sellStockInfo, setSellStockInfo] = useState<StockInfo | null>(null);
+  const [sellMaxQuantity, setSellMaxQuantity] = useState<number>(0);
+  const [isClearingPosition, setIsClearingPosition] = useState(false);
 
   // Toast state
   const [toasts, setToasts] = useState<any[]>([]);
 
   const [aiOutlook, setAiOutlook] = useState(t.loading);
-
-  // 当打开交易模态框或选中股票变化时，获取实时价格和股票信息
-  useEffect(() => {
-    if (!tradeModalOpen || !selectedStock) {
-      setTradePrice(0);
-      setTradeFee(null);
-      setTradeStockInfo(null);
-      return;
-    };
-
-    const fetchStockData = async () => {
-      setIsLoadingPrice(true);
-      try {
-        // 并行获取实时行情和股票信息
-        const [marketData, stockInfo] = await Promise.all([
-          stockApi.getMarketData(selectedStock.symbol),
-          stockApi.getStockInfo(selectedStock.symbol).catch(() => null)
-        ]);
-
-        setTradePrice(Number(marketData.lastPrice));
-        if (stockInfo) {
-          setTradeStockInfo(stockInfo);
-        }
-      } catch (e) {
-        console.error('获取股票数据失败', e);
-        // 使用本地价格作为后备
-        setTradePrice(selectedStock.price);
-      } finally {
-        setIsLoadingPrice(false);
-      }
-    };
-
-    fetchStockData();
-  }, [tradeModalOpen, selectedStock]);
-
-  // 当打开卖出模态框或选中股票变化时，获取股票信息
-  useEffect(() => {
-    if (!sellModalOpen || !sellStock) {
-      setSellStockInfo(null);
-      return;
-    };
-
-    const fetchSellStockInfo = async () => {
-      try {
-        const stockInfo = await stockApi.getStockInfo(sellStock.symbol);
-        setSellStockInfo(stockInfo);
-      } catch (e) {
-        console.error('获取卖出股票信息失败', e);
-      }
-    };
-
-    fetchSellStockInfo();
-  }, [sellModalOpen, sellStock]);
-
-  // 当价格或数量变化时，计算手续费
-  useEffect(() => {
-    if (!tradePrice || !tradeQuantity || !tradeModalOpen) {
-      setTradeFee(null);
-      return;
-    }
-
-    const calculateFee = async () => {
-      setIsLoadingFee(true);
-      try {
-        const amount = tradePrice * tradeQuantity;
-        const feeResult = await stockApi.calculateFee({
-          instruction: 'BUY',
-          amount: amount,
-          currency: 'HKD'
-        });
-        setTradeFee(feeResult);
-      } catch (e) {
-        console.error('计算手续费失败', e);
-        setTradeFee(null);
-      } finally {
-        setIsLoadingFee(false);
-      }
-    };
-
-    calculateFee();
-  }, [tradePrice, tradeQuantity, tradeModalOpen]);
-
-  // 当卖出数量或价格变化时，计算卖出手续费
-  useEffect(() => {
-    if (!sellPrice || !sellQuantity || !sellModalOpen) {
-      setSellFee(null);
-      return;
-    }
-
-    const calculateSellFee = async () => {
-      setIsLoadingSellFee(true);
-      try {
-        const amount = sellPrice * sellQuantity;
-        const feeResult = await stockApi.calculateFee({
-          instruction: 'SELL',
-          amount: amount,
-          currency: 'HKD'
-        });
-        setSellFee(feeResult);
-      } catch (e) {
-        console.error('计算卖出手续费失败', e);
-        setSellFee(null);
-      } finally {
-        setIsLoadingSellFee(false);
-      }
-    };
-
-    calculateSellFee();
-  }, [sellPrice, sellQuantity, sellModalOpen]);
 
   useEffect(() => {
     const init = async () => {
@@ -233,11 +110,12 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
         return;
       }
       try {
-        // 并行获取用户信息、Dashboard数据和持仓数据
-        const [userRes, dashboard, positions] = await Promise.all([
+        // 并行获取用户信息、Dashboard数据、持仓数据和交易记录
+        const [userRes, dashboard, positions, tradeRecords] = await Promise.all([
           httpClient.get('/api/user/getUser', { autoHandleAuthError: true }),
           userApi.getDashboard().catch(() => null),
-          userApi.getPositionsDashboard().catch(() => null)
+          userApi.getPositionsDashboard().catch(() => null),
+          tradeApi.getRecordPage({ pageNum: 1, pageSize: 1000 }).catch(() => null)
         ]);
 
         // 处理用户信息
@@ -274,6 +152,27 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
           }));
           setStocks(backendStocks);
           console.log('从后端构建 stocks 数组:', backendStocks);
+        }
+
+        // 处理交易记录：从后端同步到本地状态
+        if (tradeRecords?.rows) {
+          console.log('从后端获取交易记录:', tradeRecords.rows);
+          const backendTransactions: Transaction[] = tradeRecords.rows.map(r => ({
+            id: r.id,
+            date: r.executionDatetime || r.executionDate,
+            symbol: r.stockCode,
+            type: r.instruction === 'BUY' ? TransactionType.BUY : TransactionType.SELL,
+            price: r.price,
+            quantity: r.quantity,
+            total: r.totalAmount,
+          }));
+          setTransactions(backendTransactions);
+          // 同步到 localStorage（用于 AILab 等离线功能）
+          await apiService.updateTransactions(backendTransactions);
+        } else {
+          // 没有交易记录时清空
+          setTransactions([]);
+          await apiService.updateTransactions([]);
         }
       } catch (e) {
         console.error('获取用户数据失败', e);
@@ -333,21 +232,15 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
         rate: dashboardData.cumulativeProfitLossRate
       };
     }
-
-    // 否则使用本地计算
-    const stockVal = holdings.reduce((acc, h) => acc + (h.quantity * (stocks.find(s => s.symbol === h.symbol)?.price || 0)), 0);
-    const buyTotal = transactions.filter(t => t.type === TransactionType.BUY).reduce((acc, t) => acc + t.total, 0);
-    const sellTotal = transactions.filter(t => t.type === TransactionType.SELL).reduce((acc, t) => acc + t.total, 0);
-    const cash = totalPrincipal - buyTotal + sellTotal;
-    const total = stockVal + cash;
+    // 默认值
     return {
-      stockVal,
-      cash,
-      total,
-      profit: total - totalPrincipal,
-      rate: totalPrincipal > 0 ? ((total - totalPrincipal) / totalPrincipal) * 100 : 0
+      stockVal: 0,
+      cash: 0,
+      total: 0,
+      profit: 0,
+      rate: 0
     };
-  }, [holdings, stocks, transactions, totalPrincipal, dashboardData]);
+  }, [dashboardData]);
 
   // 刷新Dashboard数据
   const refreshDashboardData = async () => {
@@ -459,70 +352,27 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
     }
   };
 
-  const handleTradeAction = async () => {
-    if (!selectedStock || !tradePrice) return;
+  // 交易成功后的处理
+  const handleTradeSuccess = async (newTx: Transaction) => {
+    await apiService.saveTransaction(newTx);
+    setTransactions(prev => [newTx, ...prev]);
 
-    const total = tradePrice * tradeQuantity;
-    const feeAmount = tradeFee?.totalFee || 0;
-    const totalWithFee = total + feeAmount;
+    // 刷新Dashboard数据
+    await refreshDashboardData();
 
-    if (totalWithFee > assets.cash) {
-      toast.showError(t.insufficient_cash);
-      return;
-    }
-
-    setIsTradeExecuting(true);
-    try {
-      // 调用后端买入接口
-      await tradeApi.buyStock({
-        stockCode: selectedStock.symbol,
-        quantity: tradeQuantity,
-        price: tradePrice,
-        currency: 'HKD',
-      });
-
-      // 创建本地交易记录（用于前端展示）
-      const newTx: Transaction = {
-        id: Date.now().toString(),
-        date: new Date(tradeTime).toISOString(),
-        symbol: selectedStock.symbol,
-        type: TransactionType.BUY,
-        price: tradePrice,
-        quantity: tradeQuantity,
-        total: total,
-        fee: feeAmount,
-        tradeTime: tradeTime
-      };
-
-      await apiService.saveTransaction(newTx);
-      setTransactions(prev => [newTx, ...prev]);
-      setTradeModalOpen(false);
-
-      // 重置表单
-      setTradeQuantity(100);
-      setTradeTime(new Date().toISOString().slice(0, 16));
-
-      // 刷新Dashboard数据
-      await refreshDashboardData();
-
-      // 获取 AI 评分
-      getTradeScore(newTx, `Price ${tradePrice}`, lang).then(async score => {
+    // 获取 AI 评分（仅针对买入）
+    if (newTx.type === TransactionType.BUY) {
+      getTradeScore(newTx, `Price ${newTx.price}`, lang).then(async score => {
         const updatedTxs = transactions.map(tx => tx.id === newTx.id ? { ...tx, aiScore: score.score, aiAdvice: score.rationale } : tx);
         setTransactions(updatedTxs);
         await apiService.updateTransactions(updatedTxs);
       });
-      toast.showSuccess('买入成功');
-    } catch (e: any) {
-      toast.showError(e?.message || '买入失败');
-    } finally {
-      setIsTradeExecuting(false);
     }
   };
 
   // 从持仓页面点击买入
   const handleBuyFromHoldings = (symbol: string) => {
     console.log('买入按钮点击，股票代码:', symbol);
-    // 优先从 stocks 中查找
     let stock = stocks.find(s => s.symbol === symbol);
 
     // 如果找不到，尝试从后端持仓数据中查找
@@ -546,15 +396,12 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
     }
 
     console.log('最终找到的股票:', stock);
-    console.log('当前 stocks 数量:', stocks.length);
 
     if (stock) {
       setSelectedStock(stock);
       setTradeModalOpen(true);
-      console.log('交易弹窗已打开');
     } else {
       console.error('未找到股票:', symbol);
-      // 如果还是找不到，创建最小可用的股票对象
       const minimalStock: StockPrice = {
         symbol,
         name: symbol,
@@ -575,7 +422,6 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   // 从持仓页面点击卖出
   const handleSellFromHoldings = async (symbol: string, quantity: number) => {
     console.log('卖出按钮点击，股票代码:', symbol, '数量:', quantity);
-    // 优先从 stocks 中查找
     let stock = stocks.find(s => s.symbol === symbol);
 
     // 如果找不到，尝试从后端持仓数据中查找
@@ -598,12 +444,9 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       }
     }
 
-    console.log('最终找到的股票:', stock);
-
     if (!stock) {
       console.error('未找到股票:', symbol);
-      // 如果还是找不到，创建最小可用的股票对象
-      const minimalStock: StockPrice = {
+      stock = {
         symbol,
         name: symbol,
         price: 0,
@@ -615,62 +458,11 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
         volume: 0,
         history: []
       };
-      stock = minimalStock;
     }
 
     setSellStock(stock);
-    setSellQuantity(quantity);
-    setSellPrice(stock.price);
+    setSellMaxQuantity(quantity);
     setSellModalOpen(true);
-    console.log('卖出弹窗已打开');
-  };
-
-  // 执行卖出
-  const handleExecuteSell = async () => {
-    if (!sellStock || !sellPrice) return;
-
-    setIsTradeExecuting(true);
-    try {
-      // 调用后端卖出接口
-      await tradeApi.sellStock({
-        stockCode: sellStock.symbol,
-        quantity: sellQuantity,
-        price: sellPrice,
-        currency: 'HKD',
-      });
-
-      // 创建本地交易记录
-      const total = sellPrice * sellQuantity;
-      const newTx: Transaction = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        symbol: sellStock.symbol,
-        type: TransactionType.SELL,
-        price: sellPrice,
-        quantity: sellQuantity,
-        total: total,
-        fee: sellFee?.totalFee || 0,
-      };
-
-      await apiService.saveTransaction(newTx);
-      setTransactions(prev => [newTx, ...prev]);
-      setSellModalOpen(false);
-
-      // 重置表单
-      setSellStock(null);
-      setSellQuantity(0);
-      setSellPrice(0);
-      setSellFee(null);
-
-      // 刷新Dashboard数据
-      await refreshDashboardData();
-
-      toast.showSuccess('卖出成功');
-    } catch (e: any) {
-      toast.showError(e?.message || '卖出失败');
-    } finally {
-      setIsTradeExecuting(false);
-    }
   };
 
   // 清仓（卖出全部持仓）
@@ -694,7 +486,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       return;
     }
 
-    setIsTradeExecuting(true);
+    setIsClearingPosition(true);
     try {
       // 调用后端卖出接口
       await tradeApi.sellStock({
@@ -726,7 +518,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
     } catch (e: any) {
       toast.showError(e?.message || '清仓失败');
     } finally {
-      setIsTradeExecuting(false);
+      setIsClearingPosition(false);
     }
   };
 
@@ -745,6 +537,9 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   };
 
   const handleLoginSuccess = () => {
+    // 登录成功后清除本地的模拟数据，使用后端真实数据
+    localStorage.removeItem('stock_transactions');
+    localStorage.removeItem('stock_capital');
     localStorage.setItem('pulse_auth', 'true');
     setIsLoggedIn(true);
   };
@@ -770,8 +565,8 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
         <Sidebar 
           activeTab={activeTab} 
           setActiveTab={(tab) => { setActiveTab(tab); setIsSidebarOpen(false); }} 
-          totalAssets={assets.total} 
-          assetRate={assets.rate}
+          totalAssets={assets.total || 0} 
+          assetRate={assets.rate || 0}
           user={user || undefined}
         />
       </div>
@@ -803,7 +598,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
           </header>
 
           {activeTab === 'dashboard' && <Dashboard assets={assets} totalPrincipal={totalPrincipal} holdingsCount={holdings.length} stocks={stocks} holdings={holdings} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} onNavigateToAI={() => setActiveTab('ai')} aiOutlook={aiOutlook} positionsDashboard={positionsDashboardData} isRefreshing={isRefreshingDashboard} lastRefreshTime={lastRefreshTime} refreshProgress={refreshProgress} onManualRefresh={refreshDashboardData} />}
-          {activeTab === 'market' && <MarketSearch stocks={stocks} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} />}
+          {activeTab === 'market' && <MarketSearch onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} />}
           {activeTab === 'holdings' && (
             <Holdings
               holdings={holdings}
@@ -861,246 +656,33 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
           </div>
         </Modal>
 
-        <Modal isOpen={tradeModalOpen} onClose={() => setTradeModalOpen(false)} title={`${t.buyStock} ${selectedStock?.symbol}`}>
-          <div className="space-y-5">
-            {/* 股票信息 */}
-            {tradeStockInfo && (
-              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-black text-slate-800">{tradeStockInfo.companyNameCn || tradeStockInfo.companyName}</h4>
-                  <span className="text-[10px] font-black bg-indigo-100 text-indigo-600 px-2 py-1 rounded-lg">
-                    {tradeStockInfo.stockType}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[10px]">
-                  <div className="text-slate-600">行业: <span className="font-black text-slate-800">{tradeStockInfo.industry || '-'}</span></div>
-                  <div className="text-slate-600">市值: <span className="font-black text-slate-800">{tradeStockInfo.marketCap || '-'}</span></div>
-                </div>
-              </div>
-            )}
+        <TradeModal
+          isOpen={tradeModalOpen}
+          onClose={() => setTradeModalOpen(false)}
+          stock={selectedStock}
+          mode="BUY"
+          assets={assets}
+          onSuccess={handleTradeSuccess}
+          toast={toast}
+          translations={{
+            buyStock: t.buyStock,
+            execute: t.execute,
+            insufficient_cash: t.insufficient_cash,
+          }}
+        />
 
-            {/* 实时价格 */}
-            <div className="bg-indigo-50 rounded-2xl p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-indigo-600 uppercase tracking-wider">实时价格</span>
-                {isLoadingPrice ? (
-                  <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <span className="text-2xl font-black text-indigo-600">¥{tradePrice.toFixed(2)}</span>
-                )}
-              </div>
-            </div>
-
-            {/* 数量输入 */}
-            <div>
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                买入数量
-              </label>
-              <input
-                type="number"
-                value={tradeQuantity}
-                onChange={(e) => setTradeQuantity(Number(e.target.value))}
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-5 text-center text-xl font-black outline-none focus:border-indigo-500 transition-all"
-              />
-            </div>
-
-            {/* 交易金额 */}
-            <div className="bg-slate-50 rounded-2xl p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-wider">交易金额</span>
-                <span className="text-lg font-black text-slate-900">¥{(tradePrice * tradeQuantity).toFixed(2)}</span>
-              </div>
-            </div>
-
-            {/* 手续费明细 */}
-            {tradeFee && (
-              <div className="bg-amber-50 rounded-2xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-amber-600 uppercase tracking-wider">手续费明细</span>
-                  <span className="text-sm font-black text-amber-600">¥{tradeFee.totalFee.toFixed(2)}</span>
-                </div>
-                <div className="space-y-1 text-[10px] text-amber-500/70">
-                  <div className="flex justify-between">
-                    <span>平台费</span>
-                    <span>¥{tradeFee.platformFee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>印花税</span>
-                    <span>¥{tradeFee.stampDuty.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>证监会征费</span>
-                    <span>¥{tradeFee.sfcLevy.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>交易所交易费</span>
-                    <span>¥{tradeFee.exchangeTradingFee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>结算费</span>
-                    <span>¥{tradeFee.settlementFee.toFixed(2)}</span>
-                  </div>
-                  {tradeFee.frcLevy > 0 && (
-                    <div className="flex justify-between">
-                      <span>会财局征费</span>
-                      <span>¥{tradeFee.frcLevy.toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 金额汇总 */}
-            <div className="bg-slate-900 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-white/70 uppercase tracking-wider">交易金额</span>
-                <span className="text-lg font-black text-white/90">¥{(tradePrice * tradeQuantity).toFixed(2)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-amber-400 uppercase tracking-wider">手续费</span>
-                <span className="text-lg font-black text-amber-400">¥{(tradeFee?.totalFee || 0).toFixed(2)}</span>
-              </div>
-              <div className="border-t border-white/20 pt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-white uppercase tracking-wider">总金额</span>
-                  <span className="text-2xl font-black text-white">
-                    ¥{((tradePrice * tradeQuantity) + (tradeFee?.totalFee || 0)).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* 买入时间 */}
-            <div>
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                买入时间
-              </label>
-              <input
-                type="datetime-local"
-                value={tradeTime}
-                onChange={(e) => setTradeTime(e.target.value)}
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 text-sm font-black outline-none focus:border-indigo-500 transition-all"
-              />
-            </div>
-
-            {/* 执行按钮 */}
-            <button
-              onClick={handleTradeAction}
-              disabled={!tradePrice || isLoadingFee || isTradeExecuting}
-              className="w-full bg-slate-950 text-white py-6 rounded-3xl font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-all"
-            >
-              {isTradeExecuting ? '执行中...' : (isLoadingFee ? '计算中...' : t.execute)}
-            </button>
-          </div>
-        </Modal>
-
-        {/* 卖出弹窗 */}
-        <Modal isOpen={sellModalOpen} onClose={() => setSellModalOpen(false)} title={`${t.sellStock ? t.sellStock : '卖出'} ${sellStock?.symbol}`}>
-          <div className="space-y-5">
-            {/* 股票信息 */}
-            {sellStockInfo && (
-              <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-2xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-black text-slate-800">{sellStockInfo.companyNameCn || sellStockInfo.companyName}</h4>
-                  <span className="text-[10px] font-black bg-rose-100 text-rose-600 px-2 py-1 rounded-lg">
-                    {sellStockInfo.stockType}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[10px]">
-                  <div className="text-slate-600">行业: <span className="font-black text-slate-800">{sellStockInfo.industry || '-'}</span></div>
-                  <div className="text-slate-600">市值: <span className="font-black text-slate-800">{sellStockInfo.marketCap || '-'}</span></div>
-                </div>
-              </div>
-            )}
-
-            {/* 实时价格 */}
-            <div className="bg-rose-50 rounded-2xl p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-rose-600 uppercase tracking-wider">当前价格</span>
-                <span className="text-2xl font-black text-rose-600">¥{sellPrice.toFixed(2)}</span>
-              </div>
-            </div>
-
-            {/* 卖出数量 */}
-            <div>
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                卖出数量
-              </label>
-              <input
-                type="number"
-                value={sellQuantity}
-                onChange={(e) => setSellQuantity(Number(e.target.value))}
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-5 text-center text-xl font-black outline-none focus:border-rose-500 transition-all"
-              />
-              <p className="text-[10px] text-slate-400 font-bold mt-2 text-center">当前持仓: {sellQuantity} 股</p>
-            </div>
-
-            {/* 预计收入 */}
-            <div className="bg-slate-50 rounded-2xl p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-wider">交易金额</span>
-                <span className="text-lg font-black text-slate-900">¥{(sellPrice * sellQuantity).toFixed(2)}</span>
-              </div>
-            </div>
-
-            {/* 手续费明细 */}
-            {sellFee && (
-              <div className="bg-amber-50 rounded-2xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-amber-600 uppercase tracking-wider">手续费明细</span>
-                  <span className="text-sm font-black text-amber-600">¥{sellFee.totalFee.toFixed(2)}</span>
-                </div>
-                <div className="space-y-1 text-[10px] text-amber-500/70">
-                  <div className="flex justify-between">
-                    <span>平台费</span>
-                    <span>¥{sellFee.platformFee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>印花税</span>
-                    <span>¥{sellFee.stampDuty.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>证监会征费</span>
-                    <span>¥{sellFee.sfcLevy.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>交易所交易费</span>
-                    <span>¥{sellFee.exchangeTradingFee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>结算费</span>
-                    <span>¥{sellFee.settlementFee.toFixed(2)}</span>
-                  </div>
-                  {sellFee.frcLevy > 0 && (
-                    <div className="flex justify-between">
-                      <span>会财局征费</span>
-                      <span>¥{sellFee.frcLevy.toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 实际到账金额 */}
-            <div className="bg-emerald-50 rounded-2xl p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-emerald-600 uppercase tracking-wider">预计到账</span>
-                <span className="text-2xl font-black text-emerald-600">
-                  ¥{((sellPrice * sellQuantity) - (sellFee?.totalFee || 0)).toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            {/* 执行卖出按钮 */}
-            <button
-              onClick={handleExecuteSell}
-              disabled={!sellPrice || isTradeExecuting}
-              className="w-full bg-rose-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-700 transition-all"
-            >
-              {isTradeExecuting ? '执行中...' : '确认卖出'}
-            </button>
-          </div>
-        </Modal>
+        <TradeModal
+          isOpen={sellModalOpen}
+          onClose={() => setSellModalOpen(false)}
+          stock={sellStock}
+          mode="SELL"
+          maxQuantity={sellMaxQuantity}
+          onSuccess={handleTradeSuccess}
+          toast={toast}
+          translations={{
+            sellStock: t.sellStock,
+          }}
+        />
       </main>
     </div>
   );

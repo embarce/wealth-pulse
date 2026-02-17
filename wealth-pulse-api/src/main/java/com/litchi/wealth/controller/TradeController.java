@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.Date;
 
 /**
  * 用户管理控制器
@@ -163,7 +164,7 @@ public class TradeController {
     @PostMapping("/settle")
     public Result settleTransactions() {
         String userId = SecurityUtils.getUserId();
-        int settledCount = stockTransactionLogService.settleTransactions(userId);
+        int settledCount = stockTransactionLogService.settleTransactions(userId,new Date());
         return Result.success("已结算 " + settledCount + " 笔交易");
     }
 

@@ -8,6 +8,8 @@ import com.litchi.wealth.qo.TradePageQo;
 import com.litchi.wealth.vo.TradeRecordVo;
 import com.litchi.wealth.vo.TradeStatisticsVo;
 
+import java.util.Date;
+
 /**
 * @description 股票交易流水表（记录买入和卖出操作） 服务类
 * @author Embrace
@@ -46,9 +48,10 @@ public interface StockTransactionLogService extends IService<StockTransactionLog
      * 结算后购买力重置为可用现金
      *
      * @param userId 用户ID
+     * @param date 结算日期
      * @return 结算的交易数量
      */
-    int settleTransactions(String userId);
+    int settleTransactions(String userId, Date date);
 
     /**
      * 获取近一个月的交易统计数据

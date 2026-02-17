@@ -50,6 +50,7 @@ export interface StockInfo {
   website: string;
   description: string;
   logo: string;
+  lotSize?: number; // 交易单位（每手股数），如100、200、500等
 }
 
 /** 热门股票 */
@@ -158,6 +159,26 @@ export const stockApi = {
     );
     if (res?.code !== 200 || !res?.data) {
       throw new Error((res as any)?.msg || '获取热门股票失败');
+    }
+    return res.data;
+  },
+
+  /**
+   * 搜索股票
+   * GET /api/stock/search?key=00700
+   * @param key 搜索关键词（股票代码或公司名称）
+   * @returns 搜索结果列表
+   */
+  searchStocks: async (key: string): Promise<HotStock[]> => {
+    if (!key || key.trim().length === 0) {
+      return [];
+    }
+    const res = await httpClient.get<ApiResult<HotStock[]>>(
+      `${API_BASE}/stock/search?key=${encodeURIComponent(key)}`,
+      defaultRequestOptions
+    );
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '搜索股票失败');
     }
     return res.data;
   },

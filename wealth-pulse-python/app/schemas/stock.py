@@ -83,6 +83,29 @@ class StockMarketHistoryResponse(StockMarketHistoryBase):
         from_attributes = True
 
 
+class StockMarketHistoryEnhancedBase(BaseModel):
+    """港股增强型历史数据（来自 AkShare stock_hk_hist 接口）"""
+    stock_code: str = Field(..., description="股票代码")
+    period: str = Field(default='daily', description="周期类型: daily=日线, weekly=周线, monthly=月线")
+    trade_date: date = Field(..., description="交易日期")
+    open_price: Optional[float] = Field(None, description="开盘价(港元)")
+    close_price: Optional[float] = Field(None, description="收盘价(港元)")
+    high_price: Optional[float] = Field(None, description="最高价(港元)")
+    low_price: Optional[float] = Field(None, description="最低价(港元)")
+    volume: Optional[int] = Field(None, description="成交量(股)")
+    turnover: Optional[float] = Field(None, description="成交额(港元)")
+    amplitude: Optional[float] = Field(None, description="振幅(%)")
+    change_rate: Optional[float] = Field(None, description="涨跌幅(%)")
+    change_number: Optional[float] = Field(None, description="涨跌额(港元)")
+    turnover_rate: Optional[float] = Field(None, description="换手率(%)")
+
+
+class StockMarketHistoryEnhancedResponse(StockMarketHistoryEnhancedBase):
+    """港股增强型日线历史数据响应模型"""
+    class Config:
+        from_attributes = True
+
+
 class StockSecurityProfileBase(BaseModel):
     """港股证券资料（来自 AkShare stock_hk_security_profile_em 接口）"""
     stock_code: str = Field(..., description="证券代码")
@@ -161,6 +184,38 @@ class StockFinancialIndicatorBase(BaseModel):
 
 class StockFinancialIndicatorResponse(StockFinancialIndicatorBase):
     """港股财务指标响应模型"""
+    class Config:
+        from_attributes = True
+
+
+class StockMinuteHistoryBase(BaseModel):
+    """港股分钟级历史数据"""
+    trade_time: datetime = Field(..., description="交易时间")
+    stock_code: str = Field(..., description="股票代码")
+    period: str = Field(..., description="周期: 1=1分钟, 5=5分钟, 15=15分钟, 30=30分钟, 60=60分钟")
+
+    # 基础字段
+    open_price: Optional[float] = Field(None, description="开盘价(港元)")
+    close_price: Optional[float] = Field(None, description="收盘价(港元)")
+    high_price: Optional[float] = Field(None, description="最高价(港元)")
+    low_price: Optional[float] = Field(None, description="最低价(港元)")
+
+    # 1分钟数据字段
+    latest_price: Optional[float] = Field(None, description="最新价(港元)")
+
+    # 其他周期字段
+    change_rate: Optional[float] = Field(None, description="涨跌幅(%)")
+    change_number: Optional[float] = Field(None, description="涨跌额(港元)")
+    amplitude: Optional[float] = Field(None, description="振幅(%)")
+    turnover_rate: Optional[float] = Field(None, description="换手率(%)")
+
+    # 通用字段
+    volume: Optional[float] = Field(None, description="成交量(股)")
+    turnover: Optional[float] = Field(None, description="成交额(港元)")
+
+
+class StockMinuteHistoryResponse(StockMinuteHistoryBase):
+    """港股分钟级历史数据响应模型"""
     class Config:
         from_attributes = True
 

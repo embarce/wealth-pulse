@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { Toast, ToastType } from '../components/Toast';
 
-interface ToastContextType {
+export interface ToastContextType {
   showToast: (message: string, type?: ToastType, duration?: number) => void;
   showSuccess: (message: string, duration?: number) => void;
   showError: (message: string, duration?: number) => void;
@@ -80,7 +80,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
 // Export a simple container to be used in App.tsx
 export const ToastContainerWrapper: React.FC<{ toasts: Toast[]; onRemove: (id: string) => void }> = ({ toasts, onRemove }) => {
   return (
-    <div className="fixed top-4 right-4 left-4 sm:left-auto z-[100] flex flex-col space-y-3 max-w-md w-full sm:w-auto pointer-events-none">
+    <div className="fixed top-4 right-4 left-4 sm:left-auto z-[10000] flex flex-col space-y-3 max-w-md w-full sm:w-auto pointer-events-none">
       {toasts.map((toast) => {
         const styles = {
           success: {

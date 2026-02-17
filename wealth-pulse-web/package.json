@@ -9,12 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "^1.38.0",
+    "html-to-image": "^1.11.11",
+    "klinecharts": "10.0.0-beta1",
+    "qrcode": "^1.5.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "@google/genai": "^1.38.0",
-    "recharts": "^3.7.0",
-    "html-to-image": "^1.11.11",
-    "qrcode": "^1.5.3"
+    "recharts": "^3.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

@@ -349,24 +349,26 @@ const Holdings: React.FC<HoldingsProps> = ({
 
               return (
                 <>
-                  <div className="mt-5 grid grid-cols-3 gap-3">
-                    <div className={`rounded-2xl p-3 text-center ${totalProfit >= 0 ? 'bg-emerald-50' : 'bg-rose-50'}`}>
-                      <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: totalProfit >= 0 ? '#10b981' : '#f43f5e' }}>
+                  <div className="mt-5 flex flex-col sm:flex-row gap-3">
+                    <div className={`flex-1 rounded-2xl p-3 ${totalProfit >= 0 ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+                      <p className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: totalProfit >= 0 ? '#10b981' : '#f43f5e' }}>
                         收益率
                       </p>
-                      <p className={`text-lg font-black tracking-tight ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {(totalMarketValue - totalProfit || 1) !== 0
-                          ? ((totalProfit / (totalMarketValue - totalProfit || 1)) * 100).toFixed(2)
-                          : '0.00'}
-                        %
-                      </p>
+                      <div className="flex items-baseline justify-center gap-1 overflow-hidden">
+                        <p className={`text-base sm:text-lg font-black tracking-tight truncate ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {(totalMarketValue - totalProfit || 1) !== 0
+                            ? ((totalProfit / (totalMarketValue - totalProfit || 1)) * 100).toFixed(2)
+                            : '0.00'}
+                        </p>
+                        <span className={`text-sm font-bold ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>%</span>
+                      </div>
                     </div>
-                    <div className="bg-emerald-50 rounded-2xl p-3 text-center">
-                      <p className="text-[9px] text-emerald-500 font-bold uppercase tracking-wider">盈利仓位</p>
+                    <div className="flex-1 bg-emerald-50 rounded-2xl p-3">
+                      <p className="text-[9px] text-emerald-500 font-bold uppercase tracking-wider mb-1">盈利仓位</p>
                       <p className="text-lg font-black text-emerald-600 tracking-tight">{profitPositions.length}</p>
                     </div>
-                    <div className="bg-rose-50 rounded-2xl p-3 text-center">
-                      <p className="text-[9px] text-rose-500 font-bold uppercase tracking-wider">亏损仓位</p>
+                    <div className="flex-1 bg-rose-50 rounded-2xl p-3">
+                      <p className="text-[9px] text-rose-500 font-bold uppercase tracking-wider mb-1">亏损仓位</p>
                       <p className="text-lg font-black text-rose-600 tracking-tight">{lossPositions}</p>
                     </div>
                   </div>

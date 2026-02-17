@@ -14,6 +14,9 @@ importers:
       html-to-image:
         specifier: ^1.11.11
         version: 1.11.13
+      klinecharts:
+        specifier: 10.0.0-beta1
+        version: 10.0.0-beta1
       qrcode:
         specifier: ^1.5.3
         version: 1.5.4
@@ -838,6 +841,9 @@ packages:
 
   jws@4.0.1:
     resolution: {integrity: sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA==}
+
+  klinecharts@10.0.0-beta1:
+    resolution: {integrity: sha512-5ZxFGjJeZqt9+q45lZDhApC3kdgrk51i27uSpIELgXJLNgfSc0anlb8XkU+52LVrBYnTv9dFr8/Q7lG81vIV1w==}
 
   locate-path@5.0.0:
     resolution: {integrity: sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g==}
@@ -1853,6 +1859,8 @@ snapshots:
     dependencies:
       jwa: 2.0.1
       safe-buffer: 5.2.1
+
+  klinecharts@10.0.0-beta1: {}
 
   locate-path@5.0.0:
     dependencies:

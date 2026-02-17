@@ -6,18 +6,20 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 /**
+ * 股票搜索结果VO
+ *
  * @author Embrace
- * @version 1.0
- * @description: 股票基本信息VO
- * @date 2026/2/12
+ * @date 2026-02-17
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(name = "StockInfoVo", description = "股票基本信息")
-public class StockInfoVo {
+@Schema(name = "StockSearchResultVo", description = "股票搜索结果（包含基本信息和实时价格）")
+public class StockSearchResultVo {
 
     @Schema(name = "stockCode", description = "股票代码")
     private String stockCode;
@@ -43,12 +45,28 @@ public class StockInfoVo {
     @Schema(name = "industry", description = "行业分类")
     private String industry;
 
-    @Schema(name = "marketCap", description = "市值")
-    private String marketCap;
-
-    @Schema(name = "stockStatus", description = "状态: 1-正常交易 2-停牌 0-退市")
-    private Integer stockStatus;
-
     @Schema(name = "lotSize", description = "每手股数")
     private Integer lotSize;
+
+    // 实时行情数据
+    @Schema(name = "lastPrice", description = "最新价")
+    private BigDecimal lastPrice;
+
+    @Schema(name = "changeNumber", description = "涨跌额")
+    private BigDecimal changeNumber;
+
+    @Schema(name = "changeRate", description = "涨跌幅(%)")
+    private BigDecimal changeRate;
+
+    @Schema(name = "marketCap", description = "总市值")
+    private BigDecimal marketCap;
+
+    @Schema(name = "quoteTime", description = "行情时间")
+    private String quoteTime;
+
+    @Schema(name = "marketDate", description = "交易日")
+    private String marketDate;
+
+    @Schema(name = "hasMarketData", description = "是否有实时行情数据")
+    private Boolean hasMarketData;
 }
