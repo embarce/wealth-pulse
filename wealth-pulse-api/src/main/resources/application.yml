@@ -69,3 +69,7 @@ cloudflare:
     key: image
     bucket: image
     url: https://static.girls-rating.com/
+
+itick:
+  token: ${ITICK_TOKEN:}
+  url: https://api.itick.org/symbol/v2/holidays?code=HK

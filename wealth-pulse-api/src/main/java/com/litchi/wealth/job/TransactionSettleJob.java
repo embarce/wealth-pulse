@@ -11,6 +11,7 @@ import com.litchi.wealth.entity.StockTransactionLog;
 import com.litchi.wealth.service.StockTransactionLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -31,11 +32,11 @@ public class TransactionSettleJob {
     @Autowired
     private StockTransactionLogService stockTransactionLogService;
 
-    //itick key
-    private String key="28500ce7b8dd49aeb44b8508027e91ac7f8dac25dfd74be1b93473fcbc3e512f";
+    @Value("${itick.token}")
+    private String token;
 
-    //url
-    private String url = "https://api.itick.org/symbol/v2/holidays?code=HK";
+    @Value("${itick.url}")
+    private String url;
 
     /**
      * 每日凌晨1点执行交易结算
@@ -50,10 +51,10 @@ public class TransactionSettleJob {
             String today = DateUtil.today();
             //确定是否为公共假期
             boolean isHoliday = false;
-            String result = HttpRequest.get("https://api.itick.org/symbol/v2/holidays?code=HK")
+            String result = HttpRequest.get(url)
                     .header(Header.USER_AGENT, "PostmanRuntime/7.49.1")
                     .header(Header.ACCEPT, "application/json")
-                    .header("Token", "28500ce7b8dd49aeb44b8508027e91ac7f8dac25dfd74be1b93473fcbc3e512f")
+                    .header("Token", token)
                     .timeout(20000)//超时，毫秒
                     .execute().body();
             log.info("获取假期数据：{}", result);
