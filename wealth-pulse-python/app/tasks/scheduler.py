@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -30,6 +31,10 @@ class MarketDataScheduler:
     - Supports 'yfinance' (default) and 'akshare'
     """
 
+    # Trading hours: Monday to Friday, 9:00 AM to 7:00 PM
+    TRADING_START_HOUR = 9
+    TRADING_END_HOUR = 19
+
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
         self.redis_client = None
@@ -52,6 +57,30 @@ class MarketDataScheduler:
         StockDataProviderFactory.reset_cache()
         self._data_provider = get_stock_data_provider()
         logger.info(f"Data provider refreshed: {settings.STOCK_DATA_PROVIDER}")
+
+    @staticmethod
+    def is_trading_hours(now: datetime = None) -> bool:
+        """
+        Check if current time is within trading hours.
+
+        Trading hours: Monday to Friday, 9:00 AM to 7:00 PM (exclusive)
+
+        Args:
+            now: Current datetime (defaults to current time)
+
+        Returns:
+            True if within trading hours, False otherwise
+        """
+        if now is None:
+            now = datetime.now()
+
+        # Check if weekday (Monday=0, Friday=4)
+        if now.weekday() > 4:  # Saturday (5) or Sunday (6)
+            return False
+
+        # Check if within trading hours (9:00 - 19:00)
+        # We use 18:55 as the cutoff to ensure the last update runs before 19:00
+        return MarketDataScheduler.TRADING_START_HOUR <= now.hour < MarketDataScheduler.TRADING_END_HOUR
 
     def _get_active_stock_symbols(self, db: Session) -> list[str]:
         """
@@ -92,7 +121,19 @@ class MarketDataScheduler:
 
         This job ONLY updates market_data (prices, volumes, etc.)
         It does NOT update stock_info (company names, industries, etc.)
+
+        Trading hours: Monday to Friday, 9:00 AM to 7:00 PM
         """
+        # Check if within trading hours
+        if not self.is_trading_hours():
+            current_time = datetime.now()
+            logger.info(
+                f"Skipping market data update - outside trading hours. "
+                f"Current: {current_time.strftime('%Y-%m-%d %H:%M:%S (%A)')}, "
+                f"Trading: Mon-Fri {self.TRADING_START_HOUR}:00-{self.TRADING_END_HOUR}:00"
+            )
+            return
+
         # Use distributed lock to prevent concurrent updates
         lock_name = "market_data_refresh"
         lock_timeout = 600  # 10 minutes (should be longer than the actual task)
@@ -333,8 +374,9 @@ class MarketDataScheduler:
             logger.info("Configuration:")
             logger.info(f"  - Data Provider: {provider_type}")
             logger.info(f"  - Update Interval: {settings.MARKET_DATA_UPDATE_INTERVAL}s")
+            logger.info(f"  - Trading Hours: Mon-Fri {self.TRADING_START_HOUR}:00-{self.TRADING_END_HOUR}:00")
             logger.info("Scheduled jobs:")
-            logger.info("  - Market Data Update: Every 5 minutes")
+            logger.info(f"  - Market Data Update: Every {settings.MARKET_DATA_UPDATE_INTERVAL}s (trading hours only)")
             logger.info("  - Stock Info Update: Daily at 8:00 AM")
             logger.info("  - Historical Data Update: Daily at 6:00 AM")
 
