@@ -68,7 +68,7 @@ springdoc:
 token:
   header: Authorization
   secret: ${JWT_SECRET:}
-  accessExpireTime: 1440
+  accessExpireTime: 604800
 
 google:
   auth:
