@@ -96,3 +96,8 @@ cloudflare:
 itick:
   token: ${ITICK_TOKEN:}
   url: https://api.itick.org/symbol/v2/holidays?code=HK
+rpc:
+  python:
+    url: ${PYTHON_API_HOST:}
+    clientId: ${PYTHON_CLIENT_ID:}
+    clientSecret: ${PYTHON_SECRET:}

@@ -206,4 +206,11 @@ public class Constants {
      * 资产处理任务锁
      */
     public static final String USER_ASSET_JOB_LOCK_KEY = "asset_job_lock::%s";
+
+
+
+    /**
+     * python rpc token
+     */
+    public static final String PYTHON_RPC_TOKEN = "python_rpc_token";
 }
