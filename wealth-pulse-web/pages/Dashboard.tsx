@@ -1,10 +1,18 @@
 
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { StockPrice, Holding } from '../types';
-import { PositionsDashboardData } from '../services/userApi';
+import { PositionsDashboardData, PositionSnapshotData, TimeRangeModel, userApi } from '../services/userApi';
 import LiveMarketWatch from '../components/LiveMarketWatch';
 import { I18nContext } from '../App';
+
+// 时间范围配置映射
+const TIME_RANGES: { key: string; label: string; model: TimeRangeModel }[] = [
+  { key: '5D', label: '5D', model: 0 },   // 5天
+  { key: '1W', label: '1W', model: 1 },   // 7天
+  { key: '15D', label: '15D', model: 2 },   // 15天
+  { key: '1M', label: '1M', model: 3 }, // 30天
+];
 
 interface DashboardProps {
   assets: any;
@@ -41,9 +49,46 @@ const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const { t } = useContext(I18nContext);
 
+  // 图表数据状态
+  const [chartData, setChartData] = useState<PositionSnapshotData[]>([]);
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeModel>(1); // 默认7天
+  const [chartLoading, setChartLoading] = useState(false);
+
+  // 加载图表数据
+  useEffect(() => {
+    const loadChartData = async () => {
+      setChartLoading(true);
+      try {
+        const data = await userApi.getPositionSnapshotChart(selectedTimeRange);
+        setChartData(data);
+      } catch (error) {
+        console.error('Failed to load chart data:', error);
+        setChartData([]);
+      } finally {
+        setChartLoading(false);
+      }
+    };
+
+    loadChartData();
+  }, [selectedTimeRange]);
+
   const formatTime = (time?: Date | null) => {
     if (!time) return '--';
     return time.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
+  // 格式化日期显示
+  const formatChartDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  };
+
+  // 格式化市值显示
+  const formatMarketValue = (value: number) => {
+    if (value >= 10000) {
+      return `${(value / 10000).toFixed(1)}万`;
+    }
+    return value.toLocaleString();
   };
 
   return (
@@ -173,27 +218,79 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Real-time Performance Trace</p>
               </div>
               <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200/50 w-full sm:w-auto">
-                {['1D', '1W', '1M', 'YTD'].map(time => (
-                  <button key={time} className={`flex-grow sm:flex-none px-4 lg:px-6 py-2 rounded-xl text-[10px] font-black transition-all ${time === '1M' ? 'bg-white text-indigo-600 shadow-md shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}>{time}</button>
+                {TIME_RANGES.map(range => (
+                  <button
+                    key={range.key}
+                    onClick={() => setSelectedTimeRange(range.model)}
+                    disabled={chartLoading}
+                    className={`flex-grow sm:flex-none px-4 lg:px-6 py-2 rounded-xl text-[10px] font-black transition-all ${
+                      selectedTimeRange === range.model
+                        ? 'bg-white text-indigo-600 shadow-md shadow-indigo-100'
+                        : 'text-slate-400 hover:text-slate-600'
+                    } ${chartLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+                  >
+                    {range.label}
+                  </button>
                 ))}
               </div>
             </div>
             <div className="h-[260px] lg:h-[360px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stocks[0]?.history}>
-                  <defs>
-                    <linearGradient id="colorAsset" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)', fontWeight: 'black', padding: '16px 24px' }} 
-                  />
-                  <Area type="monotone" dataKey="price" stroke="#6366f1" strokeWidth={5} fill="url(#colorAsset)" animationDuration={1500} />
-                </AreaChart>
-              </ResponsiveContainer>
+              {chartLoading ? (
+                <div className="h-full flex items-center justify-center text-slate-400">
+                  <i className="fas fa-spinner fa-spin mr-2"></i>
+                  加载中...
+                </div>
+              ) : chartData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-400">
+                  暂无数据
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorAsset" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis
+                      dataKey="snapshotDate"
+                      tickFormatter={formatChartDate}
+                      stroke="#94a3b8"
+                      strokeWidth={2}
+                      tick={{ fontSize: 11, fontWeight: 'black' }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={formatMarketValue}
+                      stroke="#94a3b8"
+                      strokeWidth={2}
+                      tick={{ fontSize: 11, fontWeight: 'black' }}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: '24px',
+                        border: 'none',
+                        boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)',
+                        fontWeight: 'black',
+                        padding: '16px 24px'
+                      }}
+                      labelFormatter={(label) => `日期: ${label}`}
+                      formatter={(value: number) => [`¥${value.toLocaleString()}`, '市值']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="marketValue"
+                      stroke="#6366f1"
+                      strokeWidth={3}
+                      fill="url(#colorAsset)"
+                      animationDuration={1500}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 

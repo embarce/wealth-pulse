@@ -59,7 +59,7 @@ public class StockSearchResultVo {
     private BigDecimal changeRate;
 
     @Schema(name = "marketCap", description = "总市值")
-    private BigDecimal marketCap;
+    private String marketCap;
 
     @Schema(name = "quoteTime", description = "行情时间")
     private String quoteTime;

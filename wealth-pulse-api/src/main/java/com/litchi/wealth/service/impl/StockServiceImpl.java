@@ -19,6 +19,7 @@ import com.litchi.wealth.vo.StockMarketDataVo;
 import com.litchi.wealth.vo.StockSearchResultVo;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.text.SimpleDateFormat;
@@ -90,6 +91,7 @@ public class StockServiceImpl implements StockService {
     }
 
     @Override
+    @Cacheable(value = "getStockInfo", key = "#stockCode")
     public StockInfoVo getStockInfo(String stockCode) {
         // 查询股票基本信息
         LambdaQueryWrapper<StockInfo> queryWrapper = new LambdaQueryWrapper<>();
@@ -287,7 +289,7 @@ public class StockServiceImpl implements StockService {
                 .lastPrice(marketData != null ? marketData.getLastPrice() : null)
                 .changeNumber(marketData != null ? marketData.getChangeNumber() : null)
                 .changeRate(marketData != null ? marketData.getChangeRate() : null)
-                .marketCap(marketData != null ? marketData.getMarketCap() : null)
+                .marketCap(marketData != null ? stockInfo.getMarketCap() : null)
                 .quoteTime(marketData != null ? formatDate(marketData.getQuoteTime(), "HH:mm:ss") : null)
                 .marketDate(marketData != null ? formatDate(marketData.getMarketDate(), "yyyy-MM-dd") : null)
                 .hasMarketData(marketData != null)

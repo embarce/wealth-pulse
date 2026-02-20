@@ -1,17 +1,22 @@
 package com.litchi.wealth.service.impl;
 
+import cn.hutool.core.date.DateField;
+import cn.hutool.core.date.DateTime;
+import cn.hutool.core.date.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.litchi.wealth.entity.StockInfo;
 import com.litchi.wealth.entity.StockMarketData;
 import com.litchi.wealth.entity.UserPosition;
 import com.litchi.wealth.entity.UserPositionSnapshot;
+import com.litchi.wealth.mapper.UserPositionSnapshotMapper;
 import com.litchi.wealth.service.StockInfoService;
 import com.litchi.wealth.service.StockMarketDataService;
 import com.litchi.wealth.service.UserPositionService;
 import com.litchi.wealth.service.UserPositionSnapshotService;
-import com.litchi.wealth.mapper.UserPositionSnapshotMapper;
 import com.litchi.wealth.utils.PositionSnapshotConverter;
+import com.litchi.wealth.utils.SecurityUtils;
+import com.litchi.wealth.vo.PositionSnapshotChartVo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -20,8 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -129,7 +133,7 @@ public class UserPositionSnapshotServiceImpl extends ServiceImpl<UserPositionSna
 
     @Override
     public List<UserPositionSnapshot> getStockHistorySnapshots(String userId, String stockCode,
-                                                                LocalDate startDate, LocalDate endDate) {
+                                                               LocalDate startDate, LocalDate endDate) {
         LambdaQueryWrapper<UserPositionSnapshot> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserPositionSnapshot::getUserId, userId)
                 .eq(UserPositionSnapshot::getStockCode, stockCode)
@@ -239,8 +243,79 @@ public class UserPositionSnapshotServiceImpl extends ServiceImpl<UserPositionSna
 
     @Override
     public List<com.litchi.wealth.vo.PositionSnapshotVo> getStockHistorySnapshotVos(String userId, String stockCode,
-                                                                                     LocalDate startDate, LocalDate endDate) {
+                                                                                    LocalDate startDate, LocalDate endDate) {
         List<UserPositionSnapshot> snapshots = getStockHistorySnapshots(userId, stockCode, startDate, endDate);
         return PositionSnapshotConverter.toVoList(snapshots);
+    }
+
+    @Override
+    public List<PositionSnapshotChartVo> getMarketValueChart(String model) {
+        String userId = SecurityUtils.getUserId();
+
+        // 1. 根据 model 确定天数
+        int days = calculateDays(model);
+
+        // 2. 计算日期范围（从今天往前推）
+        Date endDate = DateUtil.endOfDay(new Date());
+        DateTime startDate = DateUtil.beginOfDay(DateUtil.offset(endDate, DateField.DAY_OF_YEAR, -days));
+
+        // 3. 查询日期范围内的快照数据
+        LambdaQueryWrapper<UserPositionSnapshot> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserPositionSnapshot::getUserId, userId)
+                .ge(UserPositionSnapshot::getSnapshotDate, startDate)
+                .le(UserPositionSnapshot::getSnapshotDate, endDate)
+                .orderByAsc(UserPositionSnapshot::getSnapshotDate);
+
+        List<UserPositionSnapshot> snapshots = list(wrapper);
+
+        // 4. 如果没有数据，返回空列表
+        if (snapshots.isEmpty()) {
+            return List.of();
+        }
+
+        // 5. 按日期分组汇总市值
+        Map<LocalDate, BigDecimal> dailyMarketValue = snapshots.stream()
+                .collect(Collectors.groupingBy(
+                        UserPositionSnapshot::getSnapshotDate,
+                        TreeMap::new,
+                        Collectors.reducing(
+                                BigDecimal.ZERO,
+                                UserPositionSnapshot::getMarketValue,
+                                BigDecimal::add
+                        )
+                ));
+
+        // 6. 转换为 VO
+        List<PositionSnapshotChartVo> result = dailyMarketValue.entrySet().stream()
+                .map(entry -> PositionSnapshotChartVo.builder()
+                        .snapshotDate(entry.getKey().toString())
+                        .marketValue(entry.getValue())
+                        .build())
+                .collect(Collectors.toList());
+
+        log.info("用户 {} 市值图表数据查询完成，model={}, 范围={}~{}, 数据点数={}",
+                userId, model, startDate, endDate, result.size());
+
+        return result;
+    }
+
+    /**
+     * 根据 model 参数计算天数
+     *
+     * @param model 范围: 0-5天, 1-7天, 2-15天, 3-30天
+     * @return 天数
+     */
+    private int calculateDays(String model) {
+        if (model == null) {
+            return 7; // 默认7天
+        }
+
+        return switch (model) {
+            case "0" -> 5;
+            case "1" -> 7;
+            case "2" -> 15;
+            case "3" -> 30;
+            default -> 7; // 默认7天
+        };
     }
 }

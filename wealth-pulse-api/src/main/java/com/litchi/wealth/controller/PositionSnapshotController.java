@@ -100,4 +100,14 @@ public class PositionSnapshotController {
         positionSnapshotJob.manualSnapshot(snapshotDate);
         return Result.success("快照任务已触发，日期: " + snapshotDate);
     }
+
+
+
+    @GetMapping("/chart")
+    @Operation(summary = "获取市值图表数据", description = "获取指定时间范围内的市值图表数据")
+    public Result getMarketValueChart(
+            @Parameter(description = "时间范围: 0-5天, 1-7天, 2-15天, 3-30天，默认为1(7天)")
+            @RequestParam(required = false) String model) {
+        return Result.success(userPositionSnapshotService.getMarketValueChart(model));
+    }
 }

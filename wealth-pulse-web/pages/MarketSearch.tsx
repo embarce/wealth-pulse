@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { StockPrice } from '../types';
-import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { stockApi, HotStock } from '../services/stockApi';
+import StockChart from '../components/StockChart';
 
 interface MarketSearchProps {
   onTrade: (s: StockPrice) => void;
@@ -249,33 +249,8 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
             </div>
 
             {/* 专业级深色图表终端 */}
-            <div className="h-[500px] w-full bg-[#0a0c12] rounded-[3rem] p-10 border border-slate-800 shadow-inner relative group">
-              <div className="absolute top-8 left-10 z-10 flex space-x-3">
-                 {['Depth', 'RSI', 'MACD', 'VOL'].map(tag => (
-                   <span key={tag} className="text-[9px] font-black text-slate-500 border border-slate-800 px-3 py-1 rounded bg-slate-900/50">{tag}</span>
-                 ))}
-              </div>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={selectedStock.history}>
-                  <defs>
-                    <linearGradient id="searchGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" opacity={0.2} />
-                  <XAxis dataKey="time" hide />
-                  <YAxis orientation="right" domain={['auto', 'auto']} axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#475569', fontWeight: 'bold'}} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#111827', borderRadius: '16px', border: '1px solid #374151', color: '#fff', fontWeight: 'black' }}
-                    cursor={{ stroke: '#6366f1', strokeWidth: 2 }}
-                  />
-                  <Area type="monotone" dataKey="price" stroke="#6366f1" strokeWidth={5} fill="url(#searchGrad)" animationDuration={1500} />
-                </AreaChart>
-              </ResponsiveContainer>
-              <div className="absolute bottom-6 right-10 text-[9px] font-black text-slate-700 uppercase tracking-[0.5em] italic pointer-events-none">
-                Pulse AI Alpha Analysis Engine
-              </div>
+            <div className="h-[500px] w-full">
+              <StockChart stockCode={selectedStock.symbol} />
             </div>
 
             {/* 交易操作浮动手写条 */}

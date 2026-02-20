@@ -72,6 +72,15 @@ export interface PositionsDashboardData {
   positions: PositionItem[];       // 持仓列表
 }
 
+/** 持仓快照图表数据点 */
+export interface PositionSnapshotData {
+  snapshotDate: string;      // 快照日期，例如 2026-02-17
+  marketValue: number;       // 当日市值
+}
+
+/** 时间范围类型 */
+export type TimeRangeModel = 0 | 1 | 2 | 3;  // 0-5天, 1-7天, 2-15天, 3-30天
+
 export const userApi = {
   /**
    * 获取用户 Dashboard 资产数据
@@ -99,6 +108,22 @@ export const userApi = {
     );
     if (res?.code !== 200 || !res?.data) {
       throw new Error((res as any)?.msg || '获取仓位数据失败');
+    }
+    return res.data;
+  },
+
+  /**
+   * 获取持仓快照图表数据
+   * GET /api/position-snapshot/chart
+   * @param model 时间范围: 0-5天, 1-7天, 2-15天, 3-30天
+   */
+  async getPositionSnapshotChart(model: TimeRangeModel = 1): Promise<PositionSnapshotData[]> {
+    const res = await httpClient.get<ApiResult<PositionSnapshotData[]>>(
+      `${API_BASE}/position-snapshot/chart?model=${model}`,
+      defaultRequestOptions
+    );
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取图表数据失败');
     }
     return res.data;
   },

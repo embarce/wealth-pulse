@@ -73,6 +73,31 @@ export interface HotStock {
   marketCap: string;
 }
 
+/** 分钟级历史数据点（分时图）- 后端实际返回格式 */
+export interface MinuteDataPoint {
+  tradeTime: string;      // 交易时间
+  stockCode: string;      // 股票代码
+  period: string;         // 周期
+  openPrice: number;      // 开盘价
+  closePrice: number;     // 收盘价
+  highPrice: number;      // 最高价
+  lowPrice: number;       // 最低价
+  volume: number;         // 成交量
+  turnover: number;       // 成交额
+  latestPrice: number;    // 最新价
+}
+
+/** 增强历史数据点（K线图） */
+export interface EnhancedDataPoint {
+  timestamp: string;    // 时间戳
+  open: number;         // 开盘价
+  high: number;         // 最高价
+  low: number;          // 最低价
+  close: number;        // 收盘价
+  volume: number;       // 成交量
+  turnover?: number;    // 成交额
+}
+
 export interface FeeCalculationRequest {
   instruction: 'BUY' | 'SELL';
   amount: number;
@@ -179,6 +204,40 @@ export const stockApi = {
     );
     if (res?.code !== 200 || !res?.data) {
       throw new Error((res as any)?.msg || '搜索股票失败');
+    }
+    return res.data;
+  },
+
+  /**
+   * 获取分钟级历史数据（分时图）
+   * GET /api/stock/minute-history/{stockCode}
+   * @param stockCode 股票代码
+   * @returns 分钟级历史数据数组
+   */
+  getMinuteHistory: async (stockCode: string): Promise<MinuteDataPoint[]> => {
+    const res = await httpClient.get<ApiResult<MinuteDataPoint[]>>(
+      `${API_BASE}/stock/minute-history/${stockCode}`,
+      defaultRequestOptions
+    );
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取分时数据失败');
+    }
+    return res.data;
+  },
+
+  /**
+   * 获取增强历史数据（K线图）
+   * GET /api/stock/enhanced-history/{stockCode}
+   * @param stockCode 股票代码
+   * @returns K线数据数组
+   */
+  getEnhancedHistory: async (stockCode: string): Promise<EnhancedDataPoint[]> => {
+    const res = await httpClient.get<ApiResult<EnhancedDataPoint[]>>(
+      `${API_BASE}/stock/enhanced-history/${stockCode}`,
+      defaultRequestOptions
+    );
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取K线数据失败');
     }
     return res.data;
   },

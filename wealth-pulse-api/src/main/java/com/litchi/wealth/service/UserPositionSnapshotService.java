@@ -2,6 +2,7 @@ package com.litchi.wealth.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.litchi.wealth.entity.UserPositionSnapshot;
+import com.litchi.wealth.vo.PositionSnapshotChartVo;
 import com.litchi.wealth.vo.PositionSnapshotVo;
 
 import java.time.LocalDate;
@@ -81,4 +82,13 @@ public interface UserPositionSnapshotService extends IService<UserPositionSnapsh
      */
     List<PositionSnapshotVo> getStockHistorySnapshotVos(String userId, String stockCode,
                                                         LocalDate startDate, LocalDate endDate);
+
+
+    /**
+     * 获取市值图表数据
+     *
+     * @param model 范围 0-5天 1-7天 2-15天 3-30天
+     * @return 市值图表数据
+     */
+    List<PositionSnapshotChartVo> getMarketValueChart(String model);
 }

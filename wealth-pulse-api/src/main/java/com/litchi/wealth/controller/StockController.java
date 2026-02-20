@@ -2,12 +2,18 @@ package com.litchi.wealth.controller;
 
 import com.litchi.wealth.constant.Result;
 import com.litchi.wealth.dto.trade.FeeCalculationRequest;
+import com.litchi.wealth.rpc.PythonStockRpc;
 import com.litchi.wealth.service.StockService;
 import com.litchi.wealth.vo.FeeCalculationVo;
 import com.litchi.wealth.vo.StockHistoryVo;
 import com.litchi.wealth.vo.StockInfoVo;
 import com.litchi.wealth.vo.StockMarketDataVo;
 import com.litchi.wealth.vo.StockSearchResultVo;
+import com.litchi.wealth.vo.rpc.HkStockCompanyProfileVo;
+import com.litchi.wealth.vo.rpc.HkStockEnhancedHistoryVo;
+import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorVo;
+import com.litchi.wealth.vo.rpc.HkStockMinuteHistoryVo;
+import com.litchi.wealth.vo.rpc.HkStockSecurityProfileVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -22,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
@@ -41,6 +48,9 @@ public class StockController {
 
     @Resource
     private StockService stockService;
+
+    @Resource
+    private PythonStockRpc pythonStockRpc;
 
     @Operation(
             summary = "获取热榜股票",
@@ -200,6 +210,84 @@ public class StockController {
     @PostMapping("/calculate-fee")
     public Result calculateFee(@Valid @RequestBody FeeCalculationRequest request) {
         FeeCalculationVo result = stockService.calculateFee(request);
+        return Result.success(result);
+    }
+
+    // ==================== Python RPC API ====================
+
+    @GetMapping("/security-profile/{stockCode}")
+    @Operation(summary = "获取港股证券资料", description = "从Python服务获取港股证券资料（上市日期、发行价、每手股数等）")
+    public Result getSecurityProfile(
+            @Parameter(description = "股票代码", example = "03900.HK", required = true)
+            @PathVariable String stockCode) {
+
+        HkStockSecurityProfileVo result = pythonStockRpc.getSecurityProfile(stockCode);
+        return Result.success(result);
+    }
+
+    @GetMapping("/company-profile/{stockCode}")
+    @Operation(summary = "获取港股公司资料", description = "从Python服务获取港股公司资料（公司信息、管理团队、联系方式等）")
+    public Result getCompanyProfile(
+            @Parameter(description = "股票代码", example = "03900.HK", required = true)
+            @PathVariable String stockCode) {
+
+        HkStockCompanyProfileVo result = pythonStockRpc.getCompanyProfile(stockCode);
+        return Result.success(result);
+    }
+
+    @GetMapping("/financial-indicator/{stockCode}")
+    @Operation(summary = "获取港股财务指标", description = "从Python服务获取港股财务指标（市盈率、市净率、ROE等）")
+    public Result getFinancialIndicator(
+            @Parameter(description = "股票代码", example = "03900.HK", required = true)
+            @PathVariable String stockCode) {
+
+        HkStockFinancialIndicatorVo result = pythonStockRpc.getFinancialIndicator(stockCode);
+        return Result.success(result);
+    }
+
+    @GetMapping("/enhanced-history/{stockCode}")
+    @Operation(summary = "获取港股增强历史数据（K线图）", description = "从Python服务获取K线图数据，支持日/周/月周期和复权类型")
+    public Result getEnhancedHistory(
+            @Parameter(description = "股票代码", example = "03900.HK", required = true)
+            @PathVariable String stockCode,
+
+            @Parameter(description = "周期: daily=日K, weekly=周K, monthly=月K", example = "daily")
+            @RequestParam(defaultValue = "daily") String period,
+
+            @Parameter(description = "复权: 空=不复权, qfq=前复权, hfq=后复权", example = "")
+            @RequestParam(defaultValue = "") String adjust,
+
+            @Parameter(description = "开始日期 (yyyy-MM-dd)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+
+            @Parameter(description = "结束日期 (yyyy-MM-dd)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        List<HkStockEnhancedHistoryVo> result = pythonStockRpc.getEnhancedHistory(
+                stockCode, period, adjust, startDate, endDate);
+        return Result.success(result);
+    }
+
+    @GetMapping("/minute-history/{stockCode}")
+    @Operation(summary = "获取港股分钟级历史数据（分时图）", description = "从Python服务获取分时图数据，支持1/5/15/30/60分钟周期")
+    public Result getMinuteHistory(
+            @Parameter(description = "股票代码", example = "03900.HK", required = true)
+            @PathVariable String stockCode,
+
+            @Parameter(description = "周期: 1=1分钟, 5=5分钟, 15=15分钟, 30=30分钟, 60=60分钟", example = "1")
+            @RequestParam(defaultValue = "1") String period,
+
+            @Parameter(description = "复权: 空=不复权, hfq=后复权", example = "")
+            @RequestParam(defaultValue = "") String adjust,
+
+            @Parameter(description = "开始日期时间 (yyyy-MM-dd HH:mm:ss)")
+            @RequestParam(required = false) String startDate,
+
+            @Parameter(description = "结束日期时间 (yyyy-MM-dd HH:mm:ss)")
+            @RequestParam(required = false) String endDate) {
+
+        List<HkStockMinuteHistoryVo> result = pythonStockRpc.getMinuteHistory(
+                stockCode, period, adjust, startDate, endDate);
         return Result.success(result);
     }
 }
