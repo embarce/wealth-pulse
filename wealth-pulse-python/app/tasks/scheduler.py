@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 
@@ -146,8 +147,8 @@ class MarketDataScheduler:
                 try:
                     import json
 
-                    # Get symbols from database
-                    symbols = self._get_active_stock_symbols(db)
+                    # Get symbols from database - run in thread pool
+                    symbols = await asyncio.to_thread(self._get_active_stock_symbols, db)
 
                     if not symbols:
                         logger.warning("No active stocks found in database")
@@ -206,15 +207,16 @@ class MarketDataScheduler:
             stock_codes.append(symbol)
 
         # Get market data in batch using the new provider interface with retry
+        # Use asyncio.to_thread to run blocking I/O in a separate thread
         logger.info(f"Fetching market data for {len(stock_codes)} stock_codes using {provider.__class__.__name__}")
-        results = provider.get_batch_market_data_with_retry(stock_codes)
+        results = await asyncio.to_thread(provider.get_batch_market_data_with_retry, stock_codes)
 
-        # Process results
+        # Process results - also run in thread pool to avoid blocking
         success_count = 0
         for result in results:
             try:
                 if result.success and result.data:
-                    stock_service.update_market_data(result.stock_code, result.data)
+                    await asyncio.to_thread(stock_service.update_market_data, result.stock_code, result.data)
                     logger.info(f"Updated market data: {result.stock_code}")
                     success_count += 1
                 else:
@@ -245,8 +247,8 @@ class MarketDataScheduler:
 
                     stock_service = StockService(db)
 
-                    # Get symbols from database
-                    symbols = self._get_active_stock_symbols(db)
+                    # Get symbols from database - run in thread pool
+                    symbols = await asyncio.to_thread(self._get_active_stock_symbols, db)
 
                     if not symbols:
                         logger.warning("No active stocks found in database")
@@ -268,7 +270,7 @@ class MarketDataScheduler:
                     # Filter out stocks that don't exist in database
                     valid_stock_codes = []
                     for stock_code in stock_codes:
-                        stock = stock_service.get_stock_by_code(stock_code)
+                        stock = await asyncio.to_thread(stock_service.get_stock_by_code, stock_code)
                         if stock:
                             valid_stock_codes.append(stock_code)
                         else:
@@ -279,7 +281,7 @@ class MarketDataScheduler:
                     financial_update_count = 0
                     for stock_code in valid_stock_codes:
                         if stock_code.endswith('.HK'):
-                            result = stock_service.update_financial_indicator(stock_code)
+                            result = await asyncio.to_thread(stock_service.update_financial_indicator, stock_code)
                             if result:
                                 financial_update_count += 1
 
@@ -298,7 +300,9 @@ class MarketDataScheduler:
                         f"Fetching batch historical data for {len(valid_stock_codes)} stocks from {start_date} to {end_date}")
 
                     # Use BATCH method for much better performance!
-                    batch_results = provider.get_batch_history_data(
+                    # Run in thread pool to avoid blocking event loop
+                    batch_results = await asyncio.to_thread(
+                        provider.get_batch_history_data,
                         valid_stock_codes,
                         start_date=start_date,
                         end_date=end_date
@@ -310,7 +314,7 @@ class MarketDataScheduler:
                     for stock_code, history_list in batch_results.items():
                         try:
                             if history_list:
-                                stock_service.update_history_data(stock_code, history_list)
+                                await asyncio.to_thread(stock_service.update_history_data, stock_code, history_list)
                                 logger.info(f"Updated historical data: {stock_code}, {len(history_list)} records")
                                 success_count += 1
                                 total_records += len(history_list)

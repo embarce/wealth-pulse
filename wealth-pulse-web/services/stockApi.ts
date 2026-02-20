@@ -87,15 +87,20 @@ export interface MinuteDataPoint {
   latestPrice: number;    // 最新价
 }
 
-/** 增强历史数据点（K线图） */
+/** 增强历史数据点（K线图） - 对应后端 HkStockEnhancedHistoryVo */
 export interface EnhancedDataPoint {
-  timestamp: string;    // 时间戳
-  open: number;         // 开盘价
-  high: number;         // 最高价
-  low: number;          // 最低价
-  close: number;        // 收盘价
-  volume: number;       // 成交量
-  turnover?: number;    // 成交额
+  stockCode: string;      // 股票代码
+  period: string;         // 周期类型: daily/weekly/monthly
+  tradeDate: string;      // 交易日期
+  openPrice: number;      // 开盘价(港元)
+  closePrice: number;     // 收盘价(港元)
+  highPrice: number;      // 最高价(港元)
+  lowPrice: number;       // 最低价(港元)
+  volume: number;         // 成交量(股)
+  turnover: number;       // 成交额(港元)
+  amplitude: number;      // 振幅(%)
+  changeRate: number;     // 涨跌幅(%)
+  changeNumber: number;   // 涨跌额(港元)
 }
 
 export interface FeeCalculationRequest {
@@ -209,14 +214,32 @@ export const stockApi = {
   },
 
   /**
-   * 获取分钟级历史数据（分时图）
+   * 获取分钟级历史数据（分时图/K线图）
    * GET /api/stock/minute-history/{stockCode}
    * @param stockCode 股票代码
+   * @param options 可选参数
    * @returns 分钟级历史数据数组
    */
-  getMinuteHistory: async (stockCode: string): Promise<MinuteDataPoint[]> => {
+  getMinuteHistory: async (
+    stockCode: string,
+    options?: {
+      period?: number;      // 周期: 1/5/15/30/60 (分钟)
+      adjust?: string;      // 复权类型: 空字符串=不复权, hfq=后复权
+      startDate?: string;   // 开始日期时间，格式: yyyy-MM-dd HH:mm:ss
+      endDate?: string;     // 结束日期时间，格式: yyyy-MM-dd HH:mm:ss
+    }
+  ): Promise<MinuteDataPoint[]> => {
+    const params = new URLSearchParams();
+    if (options?.period) params.append('period', options.period.toString());
+    if (options?.adjust !== undefined) params.append('adjust', options.adjust);
+    if (options?.startDate) params.append('startDate', options.startDate);
+    if (options?.endDate) params.append('endDate', options.endDate);
+
+    const queryString = params.toString();
+    const url = `${API_BASE}/stock/minute-history/${stockCode}${queryString ? `?${queryString}` : ''}`;
+
     const res = await httpClient.get<ApiResult<MinuteDataPoint[]>>(
-      `${API_BASE}/stock/minute-history/${stockCode}`,
+      url,
       defaultRequestOptions
     );
     if (res?.code !== 200 || !res?.data) {
@@ -229,11 +252,29 @@ export const stockApi = {
    * 获取增强历史数据（K线图）
    * GET /api/stock/enhanced-history/{stockCode}
    * @param stockCode 股票代码
+   * @param options 可选参数
    * @returns K线数据数组
    */
-  getEnhancedHistory: async (stockCode: string): Promise<EnhancedDataPoint[]> => {
+  getEnhancedHistory: async (
+    stockCode: string,
+    options?: {
+      period?: string;      // 周期: daily/weekly/monthly
+      adjust?: string;      // 复权类型: 空字符串=不复权, hfq=后复权
+      startDate?: string;   // 开始日期时间，格式: yyyy-MM-dd
+      endDate?: string;     // 结束日期时间，格式: yyyy-MM-dd
+    }
+  ): Promise<EnhancedDataPoint[]> => {
+    const params = new URLSearchParams();
+    if (options?.period) params.append('period', options.period);
+    if (options?.adjust !== undefined) params.append('adjust', options.adjust);
+    if (options?.startDate) params.append('startDate', options.startDate);
+    if (options?.endDate) params.append('endDate', options.endDate);
+
+    const queryString = params.toString();
+    const url = `${API_BASE}/stock/enhanced-history/${stockCode}${queryString ? `?${queryString}` : ''}`;
+
     const res = await httpClient.get<ApiResult<EnhancedDataPoint[]>>(
-      `${API_BASE}/stock/enhanced-history/${stockCode}`,
+      url,
       defaultRequestOptions
     );
     if (res?.code !== 200 || !res?.data) {

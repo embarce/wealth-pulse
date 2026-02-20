@@ -253,12 +253,12 @@ public class StockServiceImpl implements StockService {
                 .turnover(marketData.getTurnover())
                 .week52High(marketData.getWeek52High())
                 .week52Low(marketData.getWeek52Low())
-                .marketCap(marketData.getMarketCap())
                 .peRatio(marketData.getPeRatio())
                 .pbRatio(marketData.getPbRatio())
                 .quoteTime(formatDate(marketData.getQuoteTime(), "HH:mm:ss"))
                 .marketDate(formatDate(marketData.getMarketDate(), "yyyy-MM-dd"))
                 .currency(stockInfo != null ? stockInfo.getCurrency() : null)
+                .marketCap(stockInfo != null ? stockInfo.getMarketCap() : null)
                 .build();
     }
 

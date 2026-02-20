@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { StockPrice } from '../types';
 import { stockApi, HotStock } from '../services/stockApi';
 import StockChart from '../components/StockChart';
+import StockChartDay from '../components/StockChartDay';
 
 interface MarketSearchProps {
   onTrade: (s: StockPrice) => void;
@@ -15,6 +16,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
   const [hotStocks, setHotStocks] = useState<HotStock[]>([]);
   const [isLoadingHot, setIsLoadingHot] = useState(false);
   const [showAIAnalysis, setShowAIAnalysis] = useState(false); // 控制AI分析面板显示
+  const [chartType, setChartType] = useState<'minute' | 'day'>('minute'); // 图表类型：分钟图/日线图
 
   // 搜索状态
   const [searchResults, setSearchResults] = useState<HotStock[]>([]);
@@ -142,7 +144,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-black text-slate-900">¥{(s.lastPrice ?? 0).toFixed(2)}</p>
-                        <p className={`text-[10px] font-black ${s.changeRate >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        <p className={`text-[10px] font-black ${s.changeRate >= 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                           {s.changeRate >= 0 ? '↑' : '↓'} {Math.abs(s.changeRate ?? 0).toFixed(2)}%
                         </p>
                       </div>
@@ -197,7 +199,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
                       <p className="text-sm font-black text-slate-900 tracking-tight">{stock.companyNameCn || stock.companyName}</p>
-                      <span className={`text-[10px] font-black ${stock.changeRate >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      <span className={`text-[10px] font-black ${stock.changeRate >= 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                         {stock.changeRate >= 0 ? '↑' : '↓'} {Math.abs(stock.changeRate ?? 0).toFixed(2)}%
                       </span>
                     </div>
@@ -239,9 +241,9 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
               <div className="text-left md:text-right">
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Live Execution Price</p>
                 <h3 className="text-5xl lg:text-6xl font-black text-slate-900 tracking-tighter">¥{selectedStock.price.toFixed(2)}</h3>
-                <div className={`flex items-center md:justify-end mt-4 text-sm font-black ${selectedStock.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                <div className={`flex items-center md:justify-end mt-4 text-sm font-black ${selectedStock.change >= 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                    <span className="mr-3">{selectedStock.change >= 0 ? '+' : ''}{selectedStock.change.toFixed(2)}</span>
-                   <span className={`px-4 py-1.5 rounded-xl ${selectedStock.change >= 0 ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+                   <span className={`px-4 py-1.5 rounded-xl ${selectedStock.change >= 0 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
                       {selectedStock.changePercent >= 0 ? '↑' : '↓'} {Math.abs(selectedStock.changePercent).toFixed(2)}%
                    </span>
                 </div>
@@ -249,8 +251,47 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
             </div>
 
             {/* 专业级深色图表终端 */}
-            <div className="h-[500px] w-full">
-              <StockChart stockCode={selectedStock.symbol} />
+            <div className="h-[600px] w-full">
+              {/* 图表类型切换按钮 */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">图表类型</span>
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={() => setChartType('minute')}
+                      className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                        chartType === 'minute'
+                          ? 'bg-indigo-600 text-white shadow-lg'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      分时图
+                    </button>
+                    <button
+                      onClick={() => setChartType('day')}
+                      className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                        chartType === 'day'
+                          ? 'bg-indigo-600 text-white shadow-lg'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      日K图
+                    </button>
+                  </div>
+                </div>
+                {chartType === 'minute' && (
+                  <div className="text-xs text-gray-400 font-medium">
+                    实时分时数据 · 精确到分钟
+                  </div>
+                )}
+              </div>
+
+              {/* 图表组件 */}
+              {chartType === 'minute' ? (
+                <StockChart stockCode={selectedStock.symbol} height={500}/>
+              ) : (
+                <StockChartDay stockCode={selectedStock.symbol} height={400}/>
+              )}
             </div>
 
             {/* 交易操作浮动手写条 */}

@@ -64,7 +64,7 @@ public class StockMarketDataVo {
     private BigDecimal week52Low;
 
     @Schema(name = "marketCap", description = "总市值")
-    private BigDecimal marketCap;
+    private String marketCap;
 
     @Schema(name = "peRatio", description = "市盈率")
     private BigDecimal peRatio;

@@ -844,7 +844,7 @@ def get_enhanced_history(
     - `stock_code`: Stock code (e.g., 0700.HK, 01611.HK)
 
     **Query Parameters:**
-    - `period`: Time period ('daily', 'weekly', 'monthly')
+    - `period`: Time period ('daily', 'w')
     - `adjust`: Adjustment type (''=none, 'qfq'=pre-adjustment, 'hfq'=post-adjustment)
     - `start_date`: Start date (default: 1 year ago)
     - `end_date`: End date (default: today)

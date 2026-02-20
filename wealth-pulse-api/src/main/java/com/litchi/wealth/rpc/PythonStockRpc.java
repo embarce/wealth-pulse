@@ -8,11 +8,7 @@ import cn.hutool.json.JSONUtil;
 import com.litchi.wealth.dto.rpc.CreateAccessTokenDto;
 import com.litchi.wealth.exception.ServiceException;
 import com.litchi.wealth.utils.RedisCache;
-import com.litchi.wealth.vo.rpc.HkStockCompanyProfileVo;
-import com.litchi.wealth.vo.rpc.HkStockEnhancedHistoryVo;
-import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorVo;
-import com.litchi.wealth.vo.rpc.HkStockMinuteHistoryVo;
-import com.litchi.wealth.vo.rpc.HkStockSecurityProfileVo;
+import com.litchi.wealth.vo.rpc.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -191,13 +187,13 @@ public class PythonStockRpc {
      * 获取港股增强历史数据（K线图数据）
      *
      * @param stockCode 股票代码，如 03900.HK
-     * @param period 周期类型: daily/weekly/monthly
-     * @param adjust 复权类型: 空字符串=不复权, qfq=前复权, hfq=后复权
+     * @param period    周期类型: daily/weekly/monthly
+     * @param adjust    复权类型: 空字符串=不复权, qfq=前复权, hfq=后复权
      * @param startDate 开始日期，可为null
-     * @param endDate 结束日期，可为null
+     * @param endDate   结束日期，可为null
      * @return K线图数据列表
      */
-    @Cacheable(value = "getEnhancedHistory", key = "#stockCode + #period + #adjust + #startDate + #endDate")
+    @Cacheable(value = "getEnhancedHistory", key = "#stockCode +'-' + #period +'-'+ #adjust + '-'+#startDate +'-'+ #endDate")
     public List<HkStockEnhancedHistoryVo> getEnhancedHistory(String stockCode, String period,
                                                              String adjust, LocalDate startDate, LocalDate endDate) {
         String token = createAccessToken();
@@ -245,13 +241,13 @@ public class PythonStockRpc {
      * 获取港股分钟级历史数据（分时图数据）
      *
      * @param stockCode 股票代码，如 03900.HK
-     * @param period 周期: 1/5/15/30/60 (分钟)
-     * @param adjust 复权类型: 空字符串=不复权, hfq=后复权
+     * @param period    周期: 1/5/15/30/60 (分钟)
+     * @param adjust    复权类型: 空字符串=不复权, hfq=后复权
      * @param startDate 开始日期时间，可为null
-     * @param endDate 结束日期时间，可为null
+     * @param endDate   结束日期时间，可为null
      * @return 分时图数据列表
      */
-    @Cacheable(value = "getMinuteHistory", key = "#stockCode + #period + #adjust + #startDate + #endDate")
+    @Cacheable(value = "getMinuteHistory", key = "#stockCode +'-' + #period +'-'+ #adjust + '-'+#startDate +'-'+ #endDate")
     public List<HkStockMinuteHistoryVo> getMinuteHistory(String stockCode, String period,
                                                          String adjust, String startDate, String endDate) {
         String token = createAccessToken();

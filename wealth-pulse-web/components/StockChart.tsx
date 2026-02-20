@@ -49,7 +49,7 @@ export default function StockChart({ stockCode, symbol, height = 500 }: StockCha
     chart.setSymbol({
       ticker: symbol || stockCode,
     })
-    chart.setPeriod({ span: 1, type: 'day' })
+    chart.setPeriod({ span: 1, type: 'minute' })
 
     // 设置数据加载器
     chart.setDataLoader({
