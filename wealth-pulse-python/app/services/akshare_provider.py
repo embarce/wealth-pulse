@@ -20,12 +20,14 @@ class AkShareProvider(BaseStockDataProvider):
 
     专注于香港股票市场数据，使用新浪财经接口
     实时行情数据来源：新浪财经（15分钟延时）
-    历史数据来源：新浪财经
+    历史数据来源：东方财富网/新浪财经（容错切换）
     """
 
     def __init__(self, max_retries: int = 3, retry_delay: float = 1.0):
         super().__init__(max_retries, retry_delay)
         self.provider_name = "akshare"
+        # 历史数据源容错计数器
+        self._hist_source_failures = {}  # {stock_code: failure_count}
 
     def _normalize_stock_code(self, stock_code: str) -> str:
         """
@@ -397,6 +399,10 @@ class AkShareProvider(BaseStockDataProvider):
         """
         获取港股增强型历史数据（包含振幅、涨跌幅、换手率等）
 
+        支持数据源容错：
+        1. 优先使用东方财富网接口（ak.stock_hk_hist）
+        2. 失败两次后自动切换到新浪源（ak.stock_hk_daily）
+
         Args:
             stock_code: 股票代码（如: "00700", "0700.HK"）
             start_date: 开始日期
@@ -407,56 +413,198 @@ class AkShareProvider(BaseStockDataProvider):
         Returns:
             增强型历史数据列表，如果失败返回None
         """
+        norm_code = self._normalize_stock_code(stock_code)
+        failure_key = f"{stock_code}_{period}"
+
+        # 设置默认日期范围（最近1年）
+        if not start_date:
+            start_date = date.today() - timedelta(days=365)
+        if not end_date:
+            end_date = date.today()
+
+        # 检查失败次数，决定使用哪个数据源
+        failure_count = self._hist_source_failures.get(failure_key, 0)
+
+        # 尝试东方财富网接口（优先）
+        if failure_count < 2:
+            try:
+                return self._get_hist_from_eastmoney(
+                    stock_code, norm_code, start_date, end_date, period, adjust
+                )
+            except Exception as e:
+                # 增加失败计数
+                self._hist_source_failures[failure_key] = failure_count + 1
+                logger.warning(f"[akshare] 东方财富网接口失败 (第{failure_count + 1}次): {str(e)}")
+
+        # 尝试新浪源（备用）
         try:
-            norm_code = self._normalize_stock_code(stock_code)
-
-            # 设置默认日期范围（最近1年）
-            if not start_date:
-                start_date = date.today() - timedelta(days=365)
-            if not end_date:
-                end_date = date.today()
-
-            # 格式化日期参数（YYYYMMDD格式）
-            start_date_str = start_date.strftime('%Y%m%d')
-            end_date_str = end_date.strftime('%Y%m%d')
-
-            logger.info(f"[akshare] 获取 {stock_code} 增强型{period}数据: adjust={adjust}, "
-                       f"start={start_date_str}, end={end_date_str}")
-
-            # 调用 AkShare 接口
-            df = ak.stock_hk_hist(
-                symbol=norm_code,
-                period=period,
-                start_date=start_date_str,
-                end_date=end_date_str,
-                adjust=adjust
+            logger.info(f"[akshare] 切换到新浪源获取 {stock_code} 数据")
+            data = self._get_hist_from_sina(
+                stock_code, norm_code, start_date, end_date, adjust
             )
-
-            if df.empty:
-                logger.warning(f"[akshare] 港股 {stock_code} 没有增强型{period}数据")
-                return None
-
-            history_data = []
-            for _, row in df.iterrows():
-                history_data.append({
-                    'stock_code': stock_code,
-                    'period': period,
-                    'trade_date': pd.to_datetime(row['日期']).date(),
-                    'open_price': self._safe_float(row.get('开盘')),
-                    'close_price': self._safe_float(row.get('收盘')),
-                    'high_price': self._safe_float(row.get('最高')),
-                    'low_price': self._safe_float(row.get('最低')),
-                    'volume': self._safe_int(row.get('成交量')),
-                    'turnover': self._safe_float(row.get('成交额')),
-                    'amplitude': self._safe_float(row.get('振幅')),
-                    'change_rate': self._safe_float(row.get('涨跌幅')),
-                    'change_number': self._safe_float(row.get('涨跌额')),
-                    'turnover_rate': self._safe_float(row.get('换手率')),
-                })
-
-            logger.info(f"[akshare] 获取 {stock_code} 增强型{period}数据成功，共 {len(history_data)} 条记录")
-            return history_data
-
+            # 成功后重置失败计数
+            if failure_key in self._hist_source_failures:
+                del self._hist_source_failures[failure_key]
+            return data
         except Exception as e:
-            logger.error(f"[akshare] 获取 {stock_code} 增强型{period}数据失败: {str(e)}")
+            logger.error(f"[akshare] 新浪源接口也失败: {str(e)}")
+            # 增加失败计数
+            self._hist_source_failures[failure_key] = self._hist_source_failures.get(failure_key, 0) + 1
             raise
+
+    def _get_hist_from_eastmoney(
+        self,
+        stock_code: str,
+        norm_code: str,
+        start_date: date,
+        end_date: date,
+        period: str,
+        adjust: str
+    ) -> List[Dict[str, Any]]:
+        """
+        从东方财富网获取历史数据
+
+        Args:
+            stock_code: 原始股票代码
+            norm_code: 标准化后的股票代码
+            start_date: 开始日期
+            end_date: 结束日期
+            period: 周期类型
+            adjust: 复权类型
+
+        Returns:
+            历史数据列表
+        """
+        # 格式化日期参数（YYYYMMDD格式）
+        start_date_str = start_date.strftime('%Y%m%d')
+        end_date_str = end_date.strftime('%Y%m%d')
+
+        logger.info(f"[akshare-东方财富] 获取 {stock_code} 增强型{period}数据: adjust={adjust}, "
+                   f"start={start_date_str}, end={end_date_str}")
+
+        # 调用东方财富网接口
+        df = ak.stock_hk_hist(
+            symbol=norm_code,
+            period=period,
+            start_date=start_date_str,
+            end_date=end_date_str,
+            adjust=adjust
+        )
+
+        if df.empty:
+            logger.warning(f"[akshare-东方财富] 港股 {stock_code} 没有增强型{period}数据")
+            return None
+
+        history_data = []
+        for _, row in df.iterrows():
+            history_data.append({
+                'stock_code': stock_code,
+                'period': period,
+                'trade_date': pd.to_datetime(row['日期']).date(),
+                'open_price': self._safe_float(row.get('开盘')),
+                'close_price': self._safe_float(row.get('收盘')),
+                'high_price': self._safe_float(row.get('最高')),
+                'low_price': self._safe_float(row.get('最低')),
+                'volume': self._safe_int(row.get('成交量')),
+                'turnover': self._safe_float(row.get('成交额')),
+                'amplitude': self._safe_float(row.get('振幅')),
+                'change_rate': self._safe_float(row.get('涨跌幅')),
+                'change_number': self._safe_float(row.get('涨跌额')),
+                'turnover_rate': self._safe_float(row.get('换手率')),
+            })
+
+        logger.info(f"[akshare-东方财富] 获取 {stock_code} 增强型{period}数据成功，共 {len(history_data)} 条记录")
+        return history_data
+
+    def _get_hist_from_sina(
+        self,
+        stock_code: str,
+        norm_code: str,
+        start_date: date,
+        end_date: date,
+        adjust: str
+    ) -> List[Dict[str, Any]]:
+        """
+        从新浪财经获取历史数据（备用数据源）
+
+        Args:
+            stock_code: 原始股票代码
+            norm_code: 标准化后的股票代码
+            start_date: 开始日期
+            end_date: 结束日期
+            adjust: 复权类型
+
+        Returns:
+            历史数据列表
+        """
+        logger.info(f"[akshare-新浪] 获取 {stock_code} 增强型日K数据: adjust={adjust}, "
+                   f"start={start_date}, end={end_date}")
+
+        # 新浪接口的adjust参数映射：''=不复权, 'hfq'=后复权
+        # 注意：新浪接口不支持前复权，只支持后复权和不复权
+        sina_adjust = 'hfq' if adjust in ['hfq', 'qfq'] else ''
+
+        df = ak.stock_hk_daily(
+            symbol=norm_code,
+            adjust=sina_adjust
+        )
+
+        if df.empty:
+            logger.warning(f"[akshare-新浪] 港股 {stock_code} 没有历史数据")
+            return None
+
+        # 过滤日期范围
+        df['date'] = pd.to_datetime(df['date'])
+        df = df[(df['date'] >= pd.Timestamp(start_date)) &
+                (df['date'] <= pd.Timestamp(end_date))]
+
+        if df.empty:
+            logger.warning(f"[akshare-新浪] 港股 {stock_code} 在指定日期范围内没有数据")
+            return None
+
+        history_data = []
+        for _, row in df.iterrows():
+            # 计算涨跌幅和涨跌额（新浪数据不直接提供）
+            close = self._safe_float(row.get('close'))
+            open_price = self._safe_float(row.get('open'))
+            high = self._safe_float(row.get('high'))
+            low = self._safe_float(row.get('low'))
+
+            # 从前一行计算涨跌幅
+            change_rate = None
+            change_number = None
+            # 注意：这里无法准确计算，因为缺少昨收价，先设置为None
+            # 或者可以通过遍历前一条记录来计算
+
+            history_data.append({
+                'stock_code': stock_code,
+                'period': 'daily',
+                'trade_date': row['date'].date(),
+                'open_price': open_price,
+                'close_price': close,
+                'high_price': high,
+                'low_price': low,
+                'volume': self._safe_int(row.get('volume')),
+                'turnover': None,  # 新浪接口不提供成交额
+                'amplitude': None,  # 新浪接口不提供振幅
+                'change_rate': change_rate,
+                'change_number': change_number,
+                'turnover_rate': None,  # 新浪接口不提供换手率
+            })
+
+        # 补充计算涨跌幅和涨跌额（基于前一日收盘价）
+        for i in range(1, len(history_data)):
+            prev_close = history_data[i - 1]['close_price']
+            curr_close = history_data[i]['close_price']
+            if prev_close and curr_close and prev_close != 0:
+                history_data[i]['change_number'] = curr_close - prev_close
+                history_data[i]['change_rate'] = ((curr_close - prev_close) / prev_close) * 100
+
+            # 计算振幅
+            high = history_data[i]['high_price']
+            low = history_data[i]['low_price']
+            if prev_close and high and low and prev_close != 0:
+                history_data[i]['amplitude'] = ((high - low) / prev_close) * 100
+
+        logger.info(f"[akshare-新浪] 获取 {stock_code} 增强型日K数据成功，共 {len(history_data)} 条记录")
+        return history_data

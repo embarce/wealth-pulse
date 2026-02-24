@@ -44,7 +44,7 @@ class HttpClient {
     url: string,
     options: HttpRequestOptions = {}
   ): Promise<T> {
-    const { headers, body, autoHandleAuthError = true, ...rest } = options;
+    const { headers, body, autoHandleAuthError = true, signal, ...rest } = options;
     const token = this.getToken();
 
     const finalHeaders: HeadersInit = {
@@ -60,6 +60,7 @@ class HttpClient {
       method,
       headers: finalHeaders,
       body: body && typeof body !== 'string' ? JSON.stringify(body) : (body as any),
+      signal,
       ...rest,
     });
 

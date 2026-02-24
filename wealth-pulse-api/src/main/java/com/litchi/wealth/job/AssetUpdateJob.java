@@ -28,7 +28,7 @@ public class AssetUpdateJob {
      * 每10分钟执行一次资产更新
      * 基于最新股价重新计算所有用户的持仓市值和总资产
      */
-    @Scheduled(cron = "0 */10 * * * ?")
+    @Scheduled(cron = "0 */10 8-18 * * MON-FRI")
     public void updateAssetsRealtime() {
         log.info("开始执行资产实时更新任务");
         long startTime = System.currentTimeMillis();

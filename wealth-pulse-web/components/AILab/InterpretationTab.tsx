@@ -1,96 +1,230 @@
 
-import React, { useState, useMemo, useRef, useContext } from 'react';
+import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
+import type { KLineData } from 'klinecharts';
 import { StockPrice, ChartInterpretation } from '../../types';
-import { interpretChart, interpretKLineImage } from '../../services/gemini';
-import { AreaChart, Area, ResponsiveContainer, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { interpretChart } from '../../services/gemini';
+import { stockApi, HotStock, EnhancedDataPoint } from '../../services/stockApi';
+import StockChart from '../StockChart';
+import StockChartWithOverlay from '../StockChartWithOverlay';
+import { aiAnalysisApi, KeyLevel, AIAnalysisRequest, TechnicalPoint } from '../../services/aiAnalysis';
 import { I18nContext } from '../../App';
 
 interface InterpretationTabProps {
   stocks: StockPrice[];
 }
 
+// 将热门股票转换为 StockPrice 格式
+const convertToStockPrice = (hotStock: HotStock): StockPrice => {
+  return {
+    symbol: hotStock.stockCode,
+    name: hotStock.companyNameCn || hotStock.companyName,
+    price: hotStock.lastPrice,
+    change: hotStock.changeNumber,
+    changePercent: hotStock.changeRate,
+    high: hotStock.highPrice,
+    low: hotStock.lowPrice,
+    open: hotStock.openPrice || hotStock.lastPrice,
+    volume: hotStock.volume || 0,
+    history: [],
+    marketCap: hotStock.marketCap
+  };
+};
+
 const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
   const { t, lang } = useContext(I18nContext);
-  
+
   // 状态管理
-  const [chartMode, setChartMode] = useState<'data' | 'upload'>('data');
-  const [selectedStock, setSelectedStock] = useState<StockPrice | null>(stocks[0]);
+  const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
+  const [hotStocks, setHotStocks] = useState<StockPrice[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [interpretation, setInterpretation] = useState<ChartInterpretation | null>(null);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [isLoadingHotStocks, setIsLoadingHotStocks] = useState(false);
+  const [chartType, setChartType] = useState<'minute' | 'day'>('day'); // 图表类型：分钟图/日线图
+  const [keyLevels, setKeyLevels] = useState<KeyLevel[]>([]); // AI分析的关键点位
+  const [showAIOverlay, setShowAIOverlay] = useState(true); // 是否显示AI点位覆盖物
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // 保存当前图表数据
+  const [currentKlineData, setCurrentKlineData] = useState<KLineData[]>([]);
+  const [currentPeriod, setCurrentPeriod] = useState<'minute' | 'daily' | 'weekly' | 'monthly'>('daily');
 
-  // 搜索逻辑
+  // 用于取消请求的 AbortController
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // 初始化加载热门股票
+  useEffect(() => {
+    const fetchHotStocks = async () => {
+      setIsLoadingHotStocks(true);
+      try {
+        const data = await stockApi.getHotStocks(10);
+        const stockPrices = data.map(convertToStockPrice);
+        setHotStocks(stockPrices);
+      } catch (err) {
+        console.error('获取热门股票失败:', err);
+      } finally {
+        setIsLoadingHotStocks(false);
+      }
+    };
+
+    fetchHotStocks();
+  }, []);
+
+  // 搜索逻辑 - 优先显示热门股票，搜索时显示匹配结果
   const searchResults = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return stocks.slice(0, 4);
+    if (!q) {
+      // 无搜索时显示热门股票
+      return hotStocks.length > 0 ? hotStocks.slice(0, 6) : stocks.slice(0, 4);
+    }
+    // 搜索时从所有股票中过滤
     return stocks.filter(s => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)).slice(0, 5);
-  }, [searchQuery, stocks]);
+  }, [searchQuery, stocks, hotStocks]);
 
   // 分析逻辑
   const handleAnalyze = async () => {
+    if (!selectedStock) return;
+
+    // 检查是否有图表数据
+    if (currentKlineData.length === 0) {
+      alert('请等待图表数据加载完成后再进行分析');
+      return;
+    }
+
     setIsAnalyzing(true);
+    setKeyLevels([]); // 清空之前的点位
+
+    // 创建新的 AbortController
+    abortControllerRef.current = new AbortController();
+
     try {
-      if (chartMode === 'data' && selectedStock) {
+      // 将 KLineData 转换为后端需要的格式
+      const klineDataForAI = currentKlineData.map((item) => {
+        const date = new Date(item.timestamp);
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+
+        // 计算成交额（如果没有，可以用成交量 * 收盘价估算）
+        const amount = item.volume && item.close ? item.volume * item.close : 0;
+
+        return {
+          date: dateStr,
+          open: item.open,
+          high: item.high,
+          low: item.low,
+          close: item.close,
+          volume: item.volume || 0,
+          amount: amount,
+        };
+      });
+
+      // 构建请求参数 - 使用当前图表显示的数据
+      const analysisRequest: AIAnalysisRequest = {
+        stockCode: selectedStock.symbol,
+        period: chartType === 'minute' ? 'minute' : currentPeriod,
+        klineData: klineDataForAI,
+        forceRefresh: false,
+      };
+
+      // 调用 AI 分析 - 传入 signal 以支持取消
+      const aiResponse = await aiAnalysisApi.analyzeKline(analysisRequest, {
+        signal: abortControllerRef.current.signal,
+      });
+
+      // 将后端的 technicalPoints 转换为前端的 keyLevels 格式
+      const convertedKeyLevels: KeyLevel[] = aiResponse.technicalPoints.map((tp) => ({
+        type: tp.type === 'stop_loss' ? 'stopLoss' :
+              tp.type === 'take_profit' ? 'takeProfit' :
+              tp.type as 'support' | 'resistance',
+        price: tp.price,
+        label: tp.type === 'stop_loss' ? '风控止损' :
+                tp.type === 'take_profit' ? '止盈目标' :
+                tp.type === 'support' ? '关键支撑' : '趋势压力',
+        confidence: tp.strength / 5, // 将 1-5 转换为 0-1
+        reason: tp.description,
+      }));
+
+      // 更新关键点位
+      setKeyLevels(convertedKeyLevels);
+
+      // 更新解读结果
+      setInterpretation({
+        patterns: [], // 后端没有返回 patterns
+        support: convertedKeyLevels.find((k) => k.type === 'support')?.price,
+        resistance: convertedKeyLevels.find((k) => k.type === 'resistance')?.price,
+        takeProfit: convertedKeyLevels.find((k) => k.type === 'takeProfit')?.price,
+        stopLoss: convertedKeyLevels.find((k) => k.type === 'stopLoss')?.price,
+        advice: aiResponse.trendDescription,
+      });
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        console.log('AI分析已取消');
+        return; // 取消时不设置错误
+      }
+
+      console.error('AI分析失败:', e);
+
+      // Fallback: 使用原有逻辑
+      try {
         const data = await interpretChart(selectedStock.symbol, selectedStock.history, lang);
         setInterpretation(data);
-      } else if (chartMode === 'upload' && uploadedImage) {
-        const data = await interpretKLineImage(uploadedImage.split(',')[1], lang);
-        setInterpretation(data);
+      } catch (e2) {
+        // Mock Fallback
+        setInterpretation({
+          patterns: lang === 'zh' ? ["底部盘整", "量价背离"] : ["Bottom Consolidation", "Divergence"],
+          support: selectedStock.price * 0.92,
+          resistance: selectedStock.price * 1.08,
+          takeProfit: selectedStock.price * 1.15,
+          stopLoss: selectedStock.price * 0.88,
+          advice: lang === 'zh' ? "当前处于筑底阶段，建议轻仓分批入场。" : "Bottoming out. Suggest light position entry."
+        });
       }
-    } catch (e) {
-      // Mock Fallback
-      setInterpretation({
-        patterns: lang === 'zh' ? ["底部盘整", "量价背离"] : ["Bottom Consolidation", "Divergence"],
-        support: selectedStock ? selectedStock.price * 0.92 : 150,
-        resistance: selectedStock ? selectedStock.price * 1.08 : 180,
-        takeProfit: selectedStock ? selectedStock.price * 1.15 : 200,
-        stopLoss: selectedStock ? selectedStock.price * 0.88 : 140,
-        advice: lang === 'zh' ? "当前处于筑底阶段，建议轻仓分批入场。" : "Bottoming out. Suggest light position entry."
-      });
+    } finally {
+      setIsAnalyzing(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  // 取消分析
+  const handleCancelAnalyze = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
     setIsAnalyzing(false);
   };
 
-  const onFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setUploadedImage(reader.result as string);
-        setInterpretation(null);
-        setChartMode('upload');
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  // 当图表类型切换或股票变化时，清空之前的点位和数据
+  useEffect(() => {
+    setCurrentKlineData([]);
+    setKeyLevels([]);
+    setInterpretation(null);
+  }, [chartType, selectedStock?.symbol]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* 交互控制台 */}
       <div className="bg-white p-4 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/20">
         <div className="flex flex-col lg:flex-row items-center gap-4">
-          
+
           {/* 搜索/识别输入框 */}
           <div className="relative flex-grow w-full">
             <div className={`flex items-center bg-slate-50 border-2 rounded-2xl px-6 transition-all duration-300 ${
               isSearchFocused ? 'border-indigo-500 bg-white ring-4 ring-indigo-500/5' : 'border-slate-50'
             }`}>
               <i className="fas fa-magnifying-glass text-slate-300 mr-4"></i>
-              <input 
-                type="text" 
-                placeholder={chartMode === 'data' ? "锁定证券代码进行 AI 深度研判..." : "识图模式已开启，请上传K线截图..."}
-                disabled={chartMode === 'upload'}
+              <input
+                type="text"
+                placeholder="锁定证券代码进行 AI 深度研判..."
                 value={searchQuery}
                 onFocus={() => setIsSearchFocused(true)}
                 onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full py-4 bg-transparent text-sm font-black text-slate-800 outline-none placeholder:text-slate-300 disabled:opacity-50"
+                className="w-full py-4 bg-transparent text-sm font-black text-slate-800 outline-none placeholder:text-slate-300"
               />
-              {chartMode === 'data' && selectedStock && !searchQuery && (
+              {selectedStock && !searchQuery && (
                 <div className="hidden sm:flex items-center bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ml-4 shrink-0 shadow-lg shadow-indigo-100">
                   Target: {selectedStock.symbol}
                 </div>
@@ -98,60 +232,74 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
             </div>
 
             {/* 下拉搜索结果 */}
-            {isSearchFocused && chartMode === 'data' && (
+            {isSearchFocused && (
               <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-3xl border border-slate-100 shadow-2xl z-[100] overflow-hidden">
+                {!searchQuery.trim() && hotStocks.length > 0 && (
+                  <div className="px-6 pt-4 pb-2">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">热门股票</p>
+                  </div>
+                )}
                 <div className="p-2">
-                  {searchResults.map(s => (
-                    <button 
-                      key={s.symbol} 
-                      onClick={() => { setSelectedStock(s); setSearchQuery(''); setIsSearchFocused(false); setInterpretation(null); }} 
-                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl transition-all"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center text-[10px] font-black">{s.symbol.slice(0, 2)}</div>
-                        <div className="text-left">
-                          <p className="text-sm font-black text-slate-900">{s.symbol}</p>
-                          <p className="text-[9px] text-slate-400 font-bold uppercase">{s.name}</p>
+                  {isLoadingHotStocks ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    searchResults.map(s => (
+                      <button
+                        key={s.symbol}
+                        onClick={() => { setSelectedStock(s); setSearchQuery(''); setIsSearchFocused(false); setInterpretation(null); }}
+                        className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl transition-all"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center text-[10px] font-black">{s.symbol.slice(0, 2)}</div>
+                          <div className="text-left">
+                            <p className="text-sm font-black text-slate-900">{s.symbol}</p>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase">{s.name}</p>
+                          </div>
                         </div>
-                      </div>
-                      <i className="fas fa-chevron-right text-slate-200 text-xs"></i>
-                    </button>
-                  ))}
+                        <i className="fas fa-chevron-right text-slate-200 text-xs"></i>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                      <i className="fas fa-search text-2xl mb-2 opacity-30"></i>
+                      <p className="text-[10px] font-black uppercase tracking-widest opacity-50">未找到匹配股票</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* 模式切换与生成按钮 */}
-          <div className="flex items-center gap-3 shrink-0 w-full lg:w-auto">
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200/30">
-              <button 
-                onClick={() => setChartMode('data')}
-                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  chartMode === 'data' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                实时数据
-              </button>
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  chartMode === 'upload' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                K线识图
-              </button>
-            </div>
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onFileUpload} />
+          {/* 生成按钮 / 取消按钮 */}
+          <div className="flex items-center gap-3">
+            {/* 数据状态提示 */}
+            {currentKlineData.length > 0 && !isAnalyzing && (
+              <div className="hidden lg:flex items-center px-3 py-2 bg-slate-50 rounded-xl text-[10px] text-slate-500 font-medium">
+                <i className="fas fa-database mr-2"></i>
+                <span>已加载 {currentKlineData.length} 条{currentPeriod === 'minute' ? '分时' : currentPeriod === 'daily' ? '日K' : '周/月K'}数据</span>
+              </div>
+            )}
 
-            <button 
-              onClick={handleAnalyze}
-              disabled={isAnalyzing || (chartMode === 'upload' && !uploadedImage)}
-              className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center justify-center min-w-[160px] hover:scale-[1.02] active:scale-95 transition-all"
-            >
-              {isAnalyzing ? <i className="fas fa-circle-notch animate-spin mr-2"></i> : <i className="fas fa-atom mr-2"></i>}
-              生成 AI 研报
-            </button>
+            {isAnalyzing ? (
+              <button
+                onClick={handleCancelAnalyze}
+                className="bg-rose-600 text-white px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-rose-100 flex items-center justify-center min-w-[160px] hover:scale-[1.02] active:scale-95 transition-all"
+              >
+                <i className="fas fa-times mr-2"></i>
+                取消分析
+              </button>
+            ) : (
+              <button
+                onClick={handleAnalyze}
+                disabled={!selectedStock}
+                className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center justify-center min-w-[160px] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              >
+                <i className="fas fa-atom mr-2"></i>
+                生成 AI 研报
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -160,31 +308,157 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
         {/* 左侧：图表终端 */}
         <div className="lg:col-span-3 space-y-6">
-          <div className="aspect-[16/9] bg-[#0b0e14] rounded-[3.5rem] border border-slate-800 shadow-2xl relative overflow-hidden">
-            {isAnalyzing && (
-              <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-md z-30 flex flex-col items-center justify-center text-white space-y-4">
-                 <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                 <p className="text-[10px] font-black uppercase tracking-[0.4em]">Decoding Signal Matrix...</p>
-              </div>
-            )}
-            
-            {chartMode === 'data' && selectedStock ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={selectedStock.history}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" opacity={0.1} />
-                  <Area type="monotone" dataKey="price" stroke="#6366f1" strokeWidth={5} fill="rgba(99, 102, 241, 0.15)" animationDuration={1000} />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : uploadedImage ? (
-              <img src={uploadedImage} className="w-full h-full object-contain p-8" alt="K-Line Upload" />
+          {/* K线图容器 */}
+          <div className="bg-white p-6 rounded-[3.5rem] border border-slate-100 shadow-2xl relative overflow-hidden">
+            {selectedStock ? (
+              <>
+                {/* 股票信息头部 */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-700 text-white rounded-2xl flex items-center justify-center text-xl font-black shadow-lg">
+                      {selectedStock.symbol.slice(0, 2)}
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-900">{selectedStock.name}</h3>
+                      <span className="bg-slate-900 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">{selectedStock.symbol}</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-black text-slate-900">¥{selectedStock.price.toFixed(2)}</p>
+                    <div className={`flex items-center justify-end text-sm font-black ${selectedStock.change >= 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                      <span className="mr-2">{selectedStock.change >= 0 ? '+' : ''}{selectedStock.change.toFixed(2)}</span>
+                      <span className={`px-3 py-1 rounded-lg ${selectedStock.change >= 0 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
+                        {selectedStock.changePercent >= 0 ? '↑' : '↓'} {Math.abs(selectedStock.changePercent).toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 图表类型切换和标题 */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">图表类型</span>
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => setChartType('minute')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                          chartType === 'minute'
+                            ? 'bg-indigo-600 text-white shadow-lg'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        分时图
+                      </button>
+                      <button
+                        onClick={() => setChartType('day')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                          chartType === 'day'
+                            ? 'bg-indigo-600 text-white shadow-lg'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        日K图
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="text-xs text-gray-400 font-medium">
+                      {chartType === 'minute' ? '实时分时数据 · 精确到分钟' : '专业K线分析 · 支持多周期切换'}
+                    </div>
+                    {/* AI点位显示开关 */}
+                    {keyLevels.length > 0 && (
+                      <button
+                        onClick={() => setShowAIOverlay(!showAIOverlay)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center space-x-2 ${
+                          showAIOverlay
+                            ? 'bg-indigo-100 text-indigo-700 border-2 border-indigo-300'
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        }`}
+                      >
+                        <i className="fas fa-chart-line"></i>
+                        <span>AI点位</span>
+                        {showAIOverlay && <i className="fas fa-check-circle ml-1"></i>}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* K线图表 */}
+                {chartType === 'minute' ? (
+                  <StockChart
+                    stockCode={selectedStock.symbol}
+                    height={500}
+                    onDataLoad={(data, period) => {
+                      setCurrentKlineData(data);
+                      setCurrentPeriod(period);
+                    }}
+                  />
+                ) : (
+                  <StockChartWithOverlay
+                    stockCode={selectedStock.symbol}
+                    height={500}
+                    keyLevels={keyLevels}
+                    showOverlays={showAIOverlay && keyLevels.length > 0}
+                    onDataLoad={(data, period) => {
+                      setCurrentKlineData(data);
+                      setCurrentPeriod(period);
+                    }}
+                  />
+                )}
+              </>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-700">
-                <i className="fas fa-chart-line text-6xl opacity-10 mb-4"></i>
-                <p className="text-[10px] font-black uppercase tracking-widest opacity-30">等待载入行情数据</p>
+              <div className="h-[500px] flex flex-col items-center justify-center text-slate-400">
+                <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                  <i className="fas fa-chart-line text-4xl text-slate-300"></i>
+                </div>
+                <p className="text-sm font-black text-slate-900 mb-2">请从热门股票中选择或搜索股票代码</p>
+                <p className="text-xs text-slate-400">支持分时图和日K线专业分析</p>
               </div>
             )}
-            <div className="absolute bottom-6 right-10 text-[8px] font-black text-slate-800 uppercase tracking-[0.6em] italic opacity-40">ALPHA ANALYSIS TERMINAL</div>
           </div>
+
+          {/* AI点位说明卡片 */}
+          {keyLevels.length > 0 && (
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-[2.5rem] border border-indigo-100 shadow-lg">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-black text-slate-900 flex items-center space-x-2">
+                  <i className="fas fa-robot text-indigo-600"></i>
+                  <span>AI 识别的关键点位</span>
+                </h4>
+                <span className="text-xs text-slate-500 font-medium">基于K线数据智能分析</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {keyLevels.map((level) => {
+                  const colors = {
+                    support: 'border-emerald-300 bg-emerald-50',
+                    resistance: 'border-rose-300 bg-rose-50',
+                    stopLoss: 'border-amber-300 bg-amber-50',
+                    takeProfit: 'border-indigo-300 bg-indigo-50',
+                  }
+                  const textColors = {
+                    support: 'text-emerald-700',
+                    resistance: 'text-rose-700',
+                    stopLoss: 'text-amber-700',
+                    takeProfit: 'text-indigo-700',
+                  }
+                  return (
+                    <div key={level.label} className={`p-4 rounded-2xl border-2 ${colors[level.type]} transition-all hover:shadow-md`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-xs font-black uppercase tracking-wider ${textColors[level.type]}`}>{level.label}</span>
+                        {level.confidence && (
+                          <span className="text-[10px] text-slate-500 font-medium">{Math.round(level.confidence * 100)}%</span>
+                        )}
+                      </div>
+                      <p className={`text-lg font-black ${textColors[level.type]}`}>¥{level.price.toFixed(2)}</p>
+                      {level.reason && (
+                        <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">{level.reason}</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 指标卡片组 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -214,7 +488,7 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
           <div className="flex justify-between items-center mb-10">
             <h4 className="text-lg font-black italic flex items-center space-x-3">
               <span className={`w-2 h-2 ${isAnalyzing ? 'bg-indigo-400 animate-ping' : 'bg-indigo-500'} rounded-full`}></span>
-              <span>Gemini 策略节点</span>
+              <span>AI 模型策略节点</span>
             </h4>
             <button className="text-slate-600 hover:text-white transition-colors"><i className="fas fa-arrow-up-right-from-square text-xs"></i></button>
           </div>

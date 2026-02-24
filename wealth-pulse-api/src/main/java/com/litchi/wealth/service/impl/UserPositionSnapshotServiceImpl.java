@@ -310,12 +310,17 @@ public class UserPositionSnapshotServiceImpl extends ServiceImpl<UserPositionSna
             return 7; // 默认7天
         }
 
-        return switch (model) {
-            case "0" -> 5;
-            case "1" -> 7;
-            case "2" -> 15;
-            case "3" -> 30;
-            default -> 7; // 默认7天
-        };
+        switch (model) {
+            case "0":
+                return 5;
+            case "1":
+                return 7;
+            case "2":
+                return 15;
+            case "3":
+                return 30;
+            default:
+                return 7; // 默认7天
+        }
     }
 }

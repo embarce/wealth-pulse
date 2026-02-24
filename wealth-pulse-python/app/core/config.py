@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
 
     # API
-    API_HOST: str = "0.0.0.0"
-    API_PORT: int = 9010
+    API_HOST: str = "127.0.0.1"
+    API_PORT: int = 9001
     API_RELOAD: bool = False
     API_SECRET_KEY: str = "your-secret-key-change-this-in-production"
     API_CLIENT_ID: str = "wealth-pulse-java"

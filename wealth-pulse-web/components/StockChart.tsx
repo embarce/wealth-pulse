@@ -7,9 +7,10 @@ interface StockChartProps {
   stockCode: string
   symbol?: string
   height?: number
+  onDataLoad?: (data: KLineData[], period: 'minute') => void // 数据加载完成回调
 }
 
-export default function StockChart({ stockCode, symbol, height = 500 }: StockChartProps) {
+export default function StockChart({ stockCode, symbol, height = 500, onDataLoad }: StockChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartInstanceRef = useRef<ReturnType<typeof init> | null>(null)
   const [loading, setLoading] = useState(true)
@@ -59,6 +60,8 @@ export default function StockChart({ stockCode, symbol, height = 500 }: StockCha
           const klineData = transformToKLineData(data)
           console.log('加载K线数据成功:', stockCode, klineData)
           setLoading(false)
+          // 通知父组件数据已加载
+          onDataLoad?.(klineData, 'minute')
           callback(klineData)
         } catch (err) {
           console.error('加载K线数据失败:', err)
