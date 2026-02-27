@@ -21,7 +21,33 @@ class AkShareProvider(BaseStockDataProvider):
     专注于香港股票市场数据，使用新浪财经接口
     实时行情数据来源：新浪财经（15分钟延时）
     历史数据来源：东方财富网/新浪财经（容错切换）
+    财务指标数据来源：东方财富网
     """
+
+    # 财务指标字段映射：中文字段名 -> 英文字段名
+    FINANCIAL_FIELD_MAPPING = {
+        '基本每股收益(元)': 'eps_basic',
+        '每股净资产(元)': 'net_assets_per_share',
+        '法定股本(股)': 'authorized_capital',
+        '每手股': 'lot_size',
+        '每股股息TTM(港元)': 'dividend_per_share_ttm',
+        '派息比率(%)': 'payout_ratio',
+        '已发行股本(股)': 'issued_shares',
+        '已发行股本-H股(股)': 'issued_shares_h_share',
+        '每股经营现金流(元)': 'operating_cash_flow_per_share',
+        '股息率TTM(%)': 'dividend_yield_ttm',
+        '总市值(港元)': 'market_cap_total',
+        '港股市值(港元)': 'market_cap_hk',
+        '营业总收入': 'total_revenue',
+        '营业总收入滚动环比增长(%)': 'revenue_growth_qoq',
+        '销售净利率(%)': 'net_profit_margin',
+        '净利润': 'net_profit',
+        '净利润滚动环比增长(%)': 'net_profit_growth_qoq',
+        '股东权益回报率(%)': 'roe',
+        '市盈率': 'pe_ratio',
+        '市净率': 'pb_ratio',
+        '总资产回报率(%)': 'roa'
+    }
 
     def __init__(self, max_retries: int = 3, retry_delay: float = 1.0):
         super().__init__(max_retries, retry_delay)
@@ -608,3 +634,145 @@ class AkShareProvider(BaseStockDataProvider):
 
         logger.info(f"[akshare-新浪] 获取 {stock_code} 增强型日K数据成功，共 {len(history_data)} 条记录")
         return history_data
+
+    # ==================== 财务指标相关方法 ====================
+
+    def _parse_financial_number(self, value) -> Optional[float]:
+        """
+        解析财务数字值
+
+        Args:
+            value: 原始值（可能是字符串、数字等）
+
+        Returns:
+            解析后的浮点数，如果解析失败返回None
+        """
+        if value is None or pd.isna(value) or value == '':
+            return None
+
+        try:
+            # 如果已经是数字类型
+            if isinstance(value, (int, float)):
+                return float(value)
+
+            # 如果是字符串，尝试转换
+            if isinstance(value, str):
+                # 移除常见的非数字字符
+                cleaned = value.replace(',', '').replace('%', '').strip()
+                return float(cleaned)
+
+        except (ValueError, TypeError):
+            pass
+
+        return None
+
+    def get_stock_financial_indicator(self, stock_code: str) -> Dict[str, Optional[str]]:
+        """
+        获取港股财务指标数据
+
+        Args:
+            stock_code: 股票代码 (如: 0700.HK, 09868.HK)
+
+        Returns:
+            财务指标字典，包含所有可用字段
+
+        Raises:
+            Exception: 获取失败时抛出异常
+        """
+        try:
+            # 标准化股票代码
+            norm_code = self._normalize_stock_code(stock_code)
+
+            logger.info(f"[akshare] Fetching financial indicators for {stock_code} (code: {norm_code})")
+
+            # 调用AkShare接口
+            df = ak.stock_hk_financial_indicator_em(symbol=norm_code)
+
+            if df is None or df.empty:
+                logger.warning(f"[akshare] No financial indicator data found for {stock_code}")
+                return {}
+
+            # 获取第一行数据（通常返回一行）
+            if len(df) > 0:
+                row = df.iloc[0]
+
+                # 构建返回数据
+                result = {
+                    'stock_code': stock_code,
+                    'datasource': 'AkShare(东方财富)',
+                    'data_type': '数据已经完成复权处理'
+                }
+
+                # 遍历所有字段并进行映射和转换
+                for chinese_field, value in row.items():
+                    # 获取英文字段名
+                    english_field = self.FINANCIAL_FIELD_MAPPING.get(chinese_field)
+
+                    if english_field:
+                        # 根据字段类型进行解析
+                        if english_field in ['roe', 'net_profit_margin', 'payout_ratio',
+                                            'dividend_yield_ttm', 'revenue_growth_qoq',
+                                            'net_profit_growth_qoq', 'roa']:
+                            # 百分比字段
+                            result[english_field] = self._parse_financial_number(value)
+                        else:
+                            # 数值字段
+                            result[english_field] = self._parse_financial_number(value)
+
+                        # 如果解析失败，保留原始字符串值
+                        if result[english_field] is None and value is not None:
+                            result[english_field] = str(value)
+
+                # 添加原始中文字段（用于参考）
+                result['_raw_fields'] = {}
+                for chinese_field, value in row.items():
+                    if pd.notna(value):
+                        result['_raw_fields'][chinese_field] = str(value)
+
+                logger.info(f"[akshare] Successfully fetched {len(result) - 3} financial indicators for {stock_code}")
+
+                return result
+            else:
+                logger.warning(f"[akshare] Empty financial indicator data for {stock_code}")
+                return {}
+
+        except Exception as e:
+            logger.error(f"[akshare] Error fetching financial indicators for {stock_code}: {str(e)}")
+            raise Exception(f"获取AkShare财务指标失败: {str(e)}")
+
+    def get_stock_financial_indicator_sync(self, stock_code: str) -> Dict[str, Optional[str]]:
+        """
+        同步方式获取财务指标（方法名保持一致）
+
+        Args:
+            stock_code: 股票代码 (如: 0700.HK, 09868.HK)
+
+        Returns:
+            财务指标字典
+        """
+        return self.get_stock_financial_indicator(stock_code)
+
+    def get_batch_financial_indicators(
+        self,
+        stock_codes: List[str]
+    ) -> Dict[str, Optional[Dict[str, Any]]]:
+        """
+        批量获取港股的财务指标数据
+
+        Args:
+            stock_codes: 股票代码列表
+
+        Returns:
+            字典，key为stock_code，value为对应的财务指标数据
+        """
+        result = {}
+
+        for stock_code in stock_codes:
+            try:
+                data = self.get_stock_financial_indicator(stock_code)
+                result[stock_code] = data
+            except Exception as e:
+                logger.error(f"[akshare] 批量获取 {stock_code} 财务指标失败: {str(e)}")
+                result[stock_code] = None
+
+        return result

@@ -220,3 +220,110 @@ class StockMinuteHistoryResponse(StockMinuteHistoryBase):
         from_attributes = True
 
 
+class StockNewsItemBase(BaseModel):
+    """个股新闻条目"""
+    title: str = Field(..., description="新闻标题")
+    url: str = Field(..., description="新闻链接")
+    datasource: str = Field(default="新浪财经", description="数据来源")
+    publish_time: Optional[str] = Field(None, description="发布时间")
+
+
+class StockNewsItemResponse(StockNewsItemBase):
+    """个股新闻条目响应模型"""
+    class Config:
+        from_attributes = True
+
+
+class StockCompanyInfoBase(BaseModel):
+    """港股公司资料（新浪财经）"""
+    stock_code: str = Field(..., description="股票代码")
+    security_code: Optional[str] = Field(None, description="证券代码")
+    company_name_cn: Optional[str] = Field(None, description="公司名称(中文)")
+    company_name_en: Optional[str] = Field(None, description="公司名称(英文)")
+    business_description: Optional[str] = Field(None, description="公司业务")
+    industry: Optional[str] = Field(None, description="所属行业")
+    total_shares: Optional[str] = Field(None, description="港股股份数目")
+    chairman: Optional[str] = Field(None, description="主席")
+    major_shareholders: Optional[str] = Field(None, description="主要持股人")
+    directors: Optional[str] = Field(None, description="董事")
+    company_secretary: Optional[str] = Field(None, description="公司秘书")
+    registered_office: Optional[str] = Field(None, description="注册办事处")
+    headquarters: Optional[str] = Field(None, description="公司总部")
+    share_registrar: Optional[str] = Field(None, description="股份过户登记处")
+    auditor: Optional[str] = Field(None, description="核数师")
+    main_bank: Optional[str] = Field(None, description="主要往来银行")
+    legal_advisor: Optional[str] = Field(None, description="法律顾问")
+    website: Optional[str] = Field(None, description="公司网址")
+    email: Optional[str] = Field(None, description="电邮地址")
+    phone: Optional[str] = Field(None, description="电话号码")
+    fax: Optional[str] = Field(None, description="传真号码")
+    datasource: Optional[str] = Field(default="新浪财经", description="数据来源")
+
+
+class StockCompanyInfoResponse(StockCompanyInfoBase):
+    """港股公司资料响应模型"""
+    class Config:
+        from_attributes = True
+
+
+class StockFinancialIndicatorsBase(BaseModel):
+    """港股财务指标（新浪财经）"""
+    stock_code: str = Field(..., description="股票代码")
+    datasource: Optional[str] = Field(default="新浪财经", description="数据来源")
+    latest_period: Optional[Dict] = Field(None, description="最新报告期信息")
+    profitability: Optional[Dict] = Field(None, description="盈利能力指标")
+    financial_health: Optional[Dict] = Field(None, description="财务健康指标")
+    historical_data: Optional[List[Dict]] = Field(None, description="历史数据列表")
+
+
+class StockFinancialIndicatorsResponse(StockFinancialIndicatorsBase):
+    """港股财务指标响应模型"""
+    class Config:
+        from_attributes = True
+
+
+
+
+class StockFinancialIndicatorEmBase(BaseModel):
+    """港股财务指标（AkShare东方财富）"""
+    stock_code: str = Field(..., description="股票代码")
+    datasource: Optional[str] = Field(default="AkShare(东方财富)", description="数据来源")
+
+    # 盈利能力指标
+    eps_basic: Optional[float] = Field(None, description="基本每股收益(元)")
+    net_assets_per_share: Optional[float] = Field(None, description="每股净资产(元)")
+    net_profit: Optional[float] = Field(None, description="净利润")
+    net_profit_margin: Optional[float] = Field(None, description="销售净利率(%)")
+    roe: Optional[float] = Field(None, description="股东权益回报率(ROE, %)")
+    roa: Optional[float] = Field(None, description="总资产回报率(%)")
+    operating_cash_flow_per_share: Optional[float] = Field(None, description="每股经营现金流(元)")
+
+    # 估值指标
+    pe_ratio: Optional[float] = Field(None, description="市盈率(PE)")
+    pb_ratio: Optional[float] = Field(None, description="市净率(PB)")
+
+    # 股息相关
+    dividend_per_share_ttm: Optional[float] = Field(None, description="每股股息TTM(港元)")
+    dividend_yield_ttm: Optional[float] = Field(None, description="股息率TTM(%)")
+    payout_ratio: Optional[float] = Field(None, description="派息比率(%)")
+
+    # 营收相关
+    total_revenue: Optional[float] = Field(None, description="营业总收入")
+    revenue_growth_qoq: Optional[float] = Field(None, description="营业总收入滚动环比增长(%)")
+    net_profit_growth_qoq: Optional[float] = Field(None, description="净利润滚动环比增长(%)")
+
+    # 市值相关
+    market_cap_total: Optional[float] = Field(None, description="总市值(港元)")
+    market_cap_hk: Optional[float] = Field(None, description="港股市值(港元)")
+
+    # 股本相关
+    authorized_capital: Optional[float] = Field(None, description="法定股本(股)")
+    issued_shares: Optional[float] = Field(None, description="已发行股本(股)")
+    issued_shares_h_share: Optional[float] = Field(None, description="已发行股本-H股(股)")
+    lot_size: Optional[float] = Field(None, description="每手股数")
+
+
+class StockFinancialIndicatorEmResponse(StockFinancialIndicatorEmBase):
+    """港股财务指标响应模型（AkShare东方财富）"""
+    class Config:
+        from_attributes = True

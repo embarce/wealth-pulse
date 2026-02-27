@@ -4,6 +4,7 @@ import { StockPrice } from '../types';
 import { stockApi, HotStock } from '../services/stockApi';
 import StockChart from '../components/StockChart';
 import StockChartDay from '../components/StockChartDay';
+import StockInfoPanel from '../components/StockInfoPanel';
 
 interface MarketSearchProps {
   onTrade: (s: StockPrice) => void;
@@ -15,7 +16,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [hotStocks, setHotStocks] = useState<HotStock[]>([]);
   const [isLoadingHot, setIsLoadingHot] = useState(false);
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false); // 控制AI分析面板显示
+  const [showInfoPanel, setShowInfoPanel] = useState(false); // 控制信息聚合面板显示
   const [chartType, setChartType] = useState<'minute' | 'day'>('minute'); // 图表类型：分钟图/日线图
 
   // 搜索状态
@@ -303,15 +304,11 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
                 <i className="fas fa-plus-circle mr-3 group-hover:rotate-90 transition-transform"></i> 立即执行申购
               </button>
               <button
-                onClick={() => setShowAIAnalysis(!showAIAnalysis)}
-                className={`px-10 py-6 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center shadow-xl ${
-                  showAIAnalysis
-                    ? 'bg-slate-800 text-white border-2 border-slate-600'
-                    : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-purple-600/30'
-                }`}
+                onClick={() => setShowInfoPanel(true)}
+                className="px-10 py-6 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center shadow-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700 shadow-orange-600/30"
               >
-                <i className={`fas ${showAIAnalysis ? 'fa-times' : 'fa-brain'} mr-3 ${showAIAnalysis ? 'text-slate-300' : 'text-amber-300'}`}></i>
-                {showAIAnalysis ? '收起分析' : 'AI分析'}
+                <i className="fas fa-newspaper mr-3 text-white"></i>
+                资讯财报
               </button>
             </div>
           </div>
@@ -336,74 +333,14 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
             ))}
           </div>
 
-          {/* AI 分析面板 - 预留功能 */}
-          {showAIAnalysis && (
-            <div className="mt-10 bg-gradient-to-br from-purple-50 via-indigo-50 to-blue-50 rounded-[3rem] border-2 border-purple-200 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-700">
-              {/* 头部 */}
-              <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-10 py-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-                      <i className="fas fa-brain text-white text-2xl"></i>
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-black text-white">AI 智能分析</h3>
-                      <p className="text-purple-100 text-sm font-medium mt-1">
-                        {selectedStock.symbol} - {selectedStock.name}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="hidden sm:flex items-center space-x-2">
-                    <span className="px-4 py-2 bg-white/20 rounded-full text-white text-xs font-black">
-                      Gemini 3 驱动
-                    </span>
-                    <span className="px-4 py-2 bg-white/20 rounded-full text-white text-xs font-black">
-                      实时数据分析
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 内容区域 - 预留 */}
-              <div className="p-10">
-                {/* 功能占位提示 */}
-                <div className="text-center py-16">
-                  <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <i className="fas fa-chart-line text-purple-400 text-4xl"></i>
-                  </div>
-                  <h4 className="text-xl font-black text-slate-800 mb-3">AI 分析功能开发中</h4>
-                  <p className="text-slate-500 text-base max-w-md mx-auto leading-relaxed">
-                    即将推出 K 线图形态识别、技术指标分析、AI 预测等功能。
-                    <br />敬请期待！
-                  </p>
-                  <div className="mt-8 flex items-center justify-center space-x-4 text-sm text-slate-400">
-                    <div className="flex items-center space-x-2">
-                      <i className="fas fa-check-circle text-emerald-400"></i>
-                      <span>K线解读</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <i className="fas fa-check-circle text-emerald-400"></i>
-                      <span>趋势预测</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <i className="fas fa-check-circle text-emerald-400"></i>
-                      <span>智能建议</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 预留的图表区域 */}
-                <div className="mt-8 border-2 border-dashed border-purple-300 rounded-2xl p-8 bg-white/50">
-                  <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
-                      <i className="fas fa-chart-area text-purple-300 text-5xl mb-4 opacity-50"></i>
-                      <p className="text-purple-400 text-sm font-black">图表区域预留</p>
-                      <p className="text-purple-300 text-xs mt-2">K线图 / 技术指标 / AI 分析结果</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {/* 信息聚合面板 - 作为侧边抽屉 */}
+          {selectedStock && (
+            <StockInfoPanel
+              isOpen={showInfoPanel}
+              onClose={() => setShowInfoPanel(false)}
+              stockCode={selectedStock.symbol}
+              stockName={selectedStock.name}
+            />
           )}
         </div>
       ) : (

@@ -4,7 +4,9 @@
       "Bash(tree:*)",
       "Bash(python:*)",
       "Bash(pip install:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ3ZWFsdGgtcHVsc2UtamF2YSIsInR5cGUiOiJjbGllbnRfY3JlZGVudGlhbHMiLCJleHAiOjE3NzIyMDY0OTd9.xBCC3ZdFGiqouWTMJ9S3SHo_tN2G-6VEYph2H_3Gtes\" curl:*)"
     ],
     "deny": [],
     "ask": []

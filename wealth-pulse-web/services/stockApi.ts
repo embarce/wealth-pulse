@@ -123,6 +123,53 @@ export interface FeeCalculationResponse {
   feeBreakdown: string;
 }
 
+/** 公司资料 */
+export interface CompanyProfile {
+  stockCode: string;
+  companyName: string;
+  companyNameEn: string;
+  registrationPlace: string;
+  establishmentDate: string;
+  industry: string;
+  chairman: string;
+  companySecretary: string;
+  employeeCount: number;
+  officeAddress: string;
+  website: string;
+  email: string;
+  yearEndDate: string;
+  phone: string;
+  auditor: string;
+  fax: string;
+  companyIntroduction: string;
+}
+
+/** 财务指标 */
+export interface FinancialIndicator {
+  stockCode: string;
+  basicEps: string;
+  netAssetsPerShare: string;
+  legalCapital: string;
+  lotSize: string;
+  dividendPerShareTtm: string;
+  payoutRatio: string;
+  issuedCapital: string;
+  issuedCapitalHShares: number;
+  operatingCashFlowPerShare: string;
+  dividendYieldTtm: string;
+  totalMarketCapHkd: string;
+  hkMarketCapHkd: string;
+  totalOperatingRevenue: string;
+  operatingRevenueGrowthYoy: string;
+  netProfitMargin: string;
+  netProfit: string;
+  netProfitGrowthYoy: string;
+  roe: string;
+  peRatio: string;
+  pbRatio: string;
+  roa: string;
+}
+
 const API_BASE = '/api';
 
 export const stockApi = {
@@ -279,6 +326,40 @@ export const stockApi = {
     );
     if (res?.code !== 200 || !res?.data) {
       throw new Error((res as any)?.msg || '获取K线数据失败');
+    }
+    return res.data;
+  },
+
+  /**
+   * 获取公司资料
+   * GET /api/stock/company-profile/{stockCode}
+   * @param stockCode 股票代码
+   * @returns 公司资料
+   */
+  getCompanyProfile: async (stockCode: string): Promise<CompanyProfile> => {
+    const res = await httpClient.get<ApiResult<CompanyProfile>>(
+      `${API_BASE}/stock/company-profile/${stockCode}`,
+      defaultRequestOptions
+    );
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取公司资料失败');
+    }
+    return res.data;
+  },
+
+  /**
+   * 获取财务指标
+   * GET /api/stock/financial-indicator/{stockCode}
+   * @param stockCode 股票代码
+   * @returns 财务指标
+   */
+  getFinancialIndicator: async (stockCode: string): Promise<FinancialIndicator> => {
+    const res = await httpClient.get<ApiResult<FinancialIndicator>>(
+      `${API_BASE}/stock/financial-indicator/${stockCode}`,
+      defaultRequestOptions
+    );
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取财务指标失败');
     }
     return res.data;
   },

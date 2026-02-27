@@ -925,3 +925,374 @@ def get_enhanced_history(
             msg=f"Failed to retrieve enhanced history: {str(e)}",
             code=ResponseCode.INTERNAL_ERROR
         )
+
+
+@router.get("/{stock_code}/news", summary="Get HK stock news from Sina Finance")
+def get_stock_news(
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 09868.HK)", example="0700.HK"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock news from Sina Finance (requires authentication)
+
+    This endpoint crawls stock news from Sina Finance website.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 0700.HK, 09868.HK)
+
+    **Data Source:**
+    - Sina Finance (stock.finance.sina.com.cn)
+
+    **Returned Fields:**
+    - title: 新闻标题
+    - url: 新闻链接
+    - datasource: 数据来源(固定为"新浪财经")
+    - publish_time: 发布时间
+
+    **Note:**
+    - 股票代码会自动标准化为新浪格式(如 0700.HK → 00700)
+    - 只返回当前页的新闻列表(通常约30条)
+    """
+    try:
+        from app.services.sina_news_crawler import sina_news_crawler
+
+        logger.info(f"[StockNews] Fetching news for {stock_code}")
+
+        # 使用爬虫获取新闻
+        news_items = sina_news_crawler.fetch_stock_news_sync(stock_code)
+
+        if not news_items:
+            return success_response(
+                data=[],
+                msg=f"No news found for stock {stock_code}"
+            )
+
+        logger.info(f"[StockNews] Successfully fetched {len(news_items)} news for {stock_code}")
+
+        return success_response(
+            data=news_items,
+            msg=f"Stock news retrieved successfully: {len(news_items)} items"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching news for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve stock news: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/company-info-sina", summary="Get HK stock company info from Sina Finance")
+def get_company_info_sina(
+        stock_code: str = Path(..., description="Stock code (e.g., 01810.HK, 09868.HK)", example="01810.HK"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock company information from Sina Finance (requires authentication)
+
+    This endpoint crawls company information from Sina Finance website.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 01810.HK, 09868.HK)
+
+    **Data Source:**
+    - Sina Finance (stock.finance.sina.com.cn)
+
+    **Returned Fields:**
+    - security_code: 证券代码
+    - company_name_cn: 公司名称(中文)
+    - company_name_en: 公司名称(英文)
+    - business_description: 公司业务
+    - industry: 所属行业
+    - total_shares: 港股股份数目
+    - chairman: 主席
+    - major_shareholders: 主要持股人
+    - directors: 董事
+    - company_secretary: 公司秘书
+    - registered_office: 注册办事处
+    - headquarters: 公司总部
+    - share_registrar: 股份过户登记处
+    - auditor: 核数师
+    - main_bank: 主要往来银行
+    - legal_advisor: 法律顾问
+    - website: 公司网址
+    - email: 电邮地址
+    - phone: 电话号码
+    - fax: 传真号码
+    - datasource: 数据来源(固定为"新浪财经")
+
+    **Note:**
+    - 股票代码会自动标准化为新浪格式(如 01810.HK → 01810)
+    - 数据来源于新浪财经公司资料页面
+    """
+    try:
+        from app.services.sina_company_info_crawler import sina_company_info_crawler
+
+        logger.info(f"[CompanyInfoSina] Fetching company info for {stock_code}")
+
+        # 使用爬虫获取公司信息
+        company_info = sina_company_info_crawler.fetch_company_info_sync(stock_code)
+
+        if not company_info:
+            return success_response(
+                data={},
+                msg=f"No company info found for stock {stock_code}"
+            )
+
+        logger.info(f"[CompanyInfoSina] Successfully fetched company info for {stock_code} with {len(company_info)} fields")
+
+        return success_response(
+            data=company_info,
+            msg="Company info retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching company info for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve company info: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/financial-indicators-sina", summary="Get HK stock financial indicators from Sina Finance")
+def get_financial_indicators_sina(
+        stock_code: str = Path(..., description="Stock code (e.g., 01810.HK, 09868.HK)", example="01810.HK"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock financial indicators from Sina Finance (requires authentication)
+
+    This endpoint crawls and calculates financial indicators from Sina Finance.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 01810.HK, 09868.HK)
+
+    **Data Source:**
+    - Sina Finance (stock.finance.sina.com.cn)
+
+    **Returned Fields:**
+
+    **Latest Period:**
+    - end_date: 截止日期
+    - report_type: 报表类型（年报/中报/季报）
+    - announcement_date: 公告日期
+
+    **Profitability (盈利能力):**
+    - revenue: 营业收入（百万元）
+    - net_profit: 净利润（百万元）
+    - gross_profit_margin: 毛利率（%）
+    - net_profit_margin: 净利率（%）
+    - eps_basic: 基本每股盈利（仙）
+    - operating_profit: 经营盈利（百万元）
+
+    **Financial Health (财务健康):**
+    - current_ratio: 流动比率
+    - debt_ratio: 负债率（%）
+    - operating_cash_flow: 经营现金流（百万元）
+    - current_assets: 流动资产（百万元）
+    - current_liabilities: 流动负债（百万元）
+    - total_equity: 股东权益（百万元）
+
+    **Historical Data:**
+    - 最近8个报告期的历史数据
+
+    **Note:**
+    - PE、PB、ROE等指标在新浪财务页面不直接提供，需要从其他数据源获取
+    - 毛利率和净利率根据原始财务数据计算得出
+    - 流动比率和负债率同样通过计算得出
+
+    **Data Limitations:**
+    - 新浪财经主要提供原始财务数据
+    - 部分指标需要手动计算或从其他数据源补充
+    - 建议结合AkShare等其他数据源获取更完整的财务比率数据
+    """
+    try:
+        from app.services.sina_finance_crawler import sina_finance_crawler
+
+        logger.info(f"[FinancialIndicatorsSina] Fetching financial indicators for {stock_code}")
+
+        # 使用爬虫获取财务指标
+        financial_data = sina_finance_crawler.fetch_financial_indicators_sync(stock_code)
+
+        if not financial_data:
+            return success_response(
+                data={},
+                msg=f"No financial indicators found for stock {stock_code}"
+            )
+
+        logger.info(f"[FinancialIndicatorsSina] Successfully fetched financial indicators for {stock_code}")
+
+        return success_response(
+            data=financial_data,
+            msg="Financial indicators retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching financial indicators for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve financial indicators: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/company-notices", summary="Get HK stock company notices from Sina Finance")
+def get_company_notices(
+        stock_code: str = Path(..., description="Stock code (e.g., 01810.HK, 09868.HK)", example="09868.HK"),
+        max_pages: int = Query(1, ge=1, le=10, description="Maximum number of pages to fetch (1-10, default: 1)"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock company notices from Sina Finance (requires authentication)
+
+    This endpoint crawls company notices from Sina Finance website.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 01810.HK, 09868.HK)
+
+    **Query Parameters:**
+    - `max_pages`: Maximum number of pages to fetch (1-10, default: 1)
+
+    **Data Source:**
+    - Sina Finance (stock.finance.sina.com.cn)
+
+    **Returned Fields:**
+    - title: 公告标题
+    - url: 公告链接
+    - datasource: 数据来源(固定为"新浪财经")
+    - publish_time: 发布时间
+    """
+    try:
+        from app.services.sina_company_notice_crawler import sina_company_notice_crawler
+
+        logger.info(f"[CompanyNotices] Fetching notices for {stock_code}, max_pages: {max_pages}")
+
+        # 使用爬虫获取公告
+        notices = sina_company_notice_crawler.fetch_company_notices_sync(stock_code, max_pages)
+
+        if not notices:
+            return success_response(
+                data=[],
+                msg=f"No notices found for stock {stock_code}"
+            )
+
+        logger.info(f"[CompanyNotices] Successfully fetched {len(notices)} notices for {stock_code}")
+
+        return success_response(
+            data=notices,
+            msg=f"Company notices retrieved successfully: {len(notices)} items"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching notices for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve company notices: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/financial-indicator-em", summary="Get HK stock financial indicators from AkShare")
+def get_financial_indicator_em(
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 09868.HK)", example="0700.HK"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock financial indicators from AkShare (East Money) (requires authentication)
+
+    This endpoint fetches comprehensive financial indicators including PE, PB, ROE, etc.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 0700.HK, 09868.HK)
+
+    **Data Source:**
+    - AkShare (East Money)
+
+    **Key Indicators:**
+
+    **Valuation (估值指标):**
+    - `pe_ratio`: 市盈率
+    - `pb_ratio`: 市净率
+
+    **Profitability (盈利能力):**
+    - `eps_basic`: 基本每股收益(元)
+    - `net_assets_per_share`: 每股净资产(元)
+    - `net_profit`: 净利润
+    - `net_profit_margin`: 销售净利率(%)
+    - `roe`: 股东权益回报率(ROE, %)
+    - `roa`: 总资产回报率(%)
+    - `operating_cash_flow_per_share`: 每股经营现金流(元)
+
+    **Dividend (股息相关):**
+    - `dividend_per_share_ttm`: 每股股息TTM(港元)
+    - `dividend_yield_ttm`: 股息率TTM(%)
+    - `payout_ratio`: 派息比率(%)
+
+    **Growth (增长指标):**
+    - `total_revenue`: 营业总收入
+    - `revenue_growth_qoq`: 营业总收入滚动环比增长(%)
+    - `net_profit_growth_qoq`: 净利润滚动环比增长(%)
+
+    **Market Cap (市值相关):**
+    - `market_cap_total`: 总市值(港元)
+    - `market_cap_hk`: 港股市值(港元)
+
+    **Share Capital (股本相关):**
+    - `authorized_capital`: 法定股本(股)
+    - `issued_shares`: 已发行股本(股)
+    - `issued_shares_h_share`: 已发行股本-H股(股)
+    - `lot_size`: 每手股数
+
+    **Note:**
+    - 数据来源：东方财富（通过AkShare接口）
+    - 数据已经完成复权处理
+    - 包含完整的PE、PB、ROE等关键财务比率
+    - 建议结合新浪财务爬虫一起使用，获取更全面的财务数据
+
+    **Comparison with Sina Finance:**
+    - Sina: 提供原始财务数据和多期历史数据
+    - AkShare: 提供计算好的财务比率（PE/PB/ROE）
+    - Recommendation: Use both for comprehensive analysis
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[FinancialIndicatorEm] Fetching financial indicators for {stock_code}")
+
+        # 使用AkShareProvider获取财务指标
+        provider = AkShareProvider()
+        financial_data = provider.get_stock_financial_indicator_sync(stock_code)
+
+        if not financial_data:
+            return success_response(
+                data={},
+                msg=f"No financial indicators found for stock {stock_code}"
+            )
+
+        logger.info(f"[FinancialIndicatorEm] Successfully fetched financial indicators for {stock_code}")
+
+        return success_response(
+            data=financial_data,
+            msg="Financial indicators retrieved successfully from AkShare"
+        )
+
+    except ImportError:
+        logger.error("AkShare module not installed")
+        raise ApiException(
+            msg="AkShare module not available. Please install akshare package: pip install akshare",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching financial indicators for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve financial indicators from AkShare: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
