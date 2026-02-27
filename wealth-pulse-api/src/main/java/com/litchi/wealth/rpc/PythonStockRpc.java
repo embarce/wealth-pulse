@@ -291,4 +291,100 @@ public class PythonStockRpc {
         }
     }
 
+    /**
+     * 获取港股新闻（新浪财经）
+     *
+     * @param stockCode 股票代码，如 0700.HK
+     * @return 新闻列表
+     */
+    @Cacheable(value = "getStockNews", key = "#stockCode")
+    public List<HkStockNewsVo> getStockNews(String stockCode) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/stocks/" + stockCode + "/news";
+        log.info("调用Python API获取股票新闻: stockCode={}, url={}", stockCode, url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API返回: {}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONArray dataArray = result.getJSONArray("data");
+            return JSONUtil.toList(dataArray, HkStockNewsVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取股票新闻失败: code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取股票新闻失败");
+        }
+    }
+
+    /**
+     * 获取港股公司信息（新浪财经）
+     *
+     * @param stockCode 股票代码，如 01810.HK
+     * @return 公司信息
+     */
+    @Cacheable(value = "getCompanyInfoSina", key = "#stockCode")
+    public HkStockCompanyInfoSinaVo getCompanyInfoSina(String stockCode) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/stocks/" + stockCode + "/company-info-sina";
+        log.info("调用Python API获取公司信息(新浪): stockCode={}, url={}", stockCode, url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API返回: {}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, HkStockCompanyInfoSinaVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取公司信息失败: code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取公司信息失败");
+        }
+    }
+
+    /**
+     * 获取港股财务指标（新浪财经）
+     *
+     * @param stockCode 股票代码，如 01810.HK
+     * @return 财务指标
+     */
+    @Cacheable(value = "getFinancialIndicatorsSina", key = "#stockCode")
+    public HkStockFinancialIndicatorsSinaVo getFinancialIndicatorsSina(String stockCode) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/stocks/" + stockCode + "/financial-indicators-sina";
+        log.info("调用Python API获取财务指标(新浪): stockCode={}, url={}", stockCode, url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API返回: {}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, HkStockFinancialIndicatorsSinaVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取财务指标失败: code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取财务指标失败");
+        }
+    }
+
 }

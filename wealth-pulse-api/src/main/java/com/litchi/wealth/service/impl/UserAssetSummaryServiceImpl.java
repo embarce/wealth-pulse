@@ -92,17 +92,23 @@ public class UserAssetSummaryServiceImpl extends ServiceImpl<UserAssetSummaryMap
 
     /**
      * 获取股票最新价格
+     * <p>按市场日期降序排序，取第一条最新的价格数据
      *
      * @param stockCode 股票代码
      * @return 最新价格，如果没有则返回 null
      */
     private BigDecimal getCurrentPrice(String stockCode) {
-        LocalDate today = LocalDate.now();
         LambdaQueryWrapper<StockMarketData> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StockMarketData::getStockCode, stockCode)
-                .eq(StockMarketData::getMarketDate, today)
+                .orderByDesc(StockMarketData::getMarketDate)
                 .last("LIMIT 1");
         StockMarketData marketData = stockMarketDataService.getOne(wrapper);
+        if (marketData != null) {
+            log.debug("获取股票 {} 最新价格: {}, 日期: {}",
+                    stockCode, marketData.getLastPrice(), marketData.getMarketDate());
+        } else {
+            log.warn("股票 {} 没有找到任何历史价格数据", stockCode);
+        }
         return marketData != null ? marketData.getLastPrice() : null;
     }
 }

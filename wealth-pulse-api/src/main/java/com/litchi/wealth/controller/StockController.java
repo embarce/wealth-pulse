@@ -9,10 +9,13 @@ import com.litchi.wealth.vo.StockHistoryVo;
 import com.litchi.wealth.vo.StockInfoVo;
 import com.litchi.wealth.vo.StockMarketDataVo;
 import com.litchi.wealth.vo.StockSearchResultVo;
+import com.litchi.wealth.vo.rpc.HkStockCompanyInfoSinaVo;
 import com.litchi.wealth.vo.rpc.HkStockCompanyProfileVo;
 import com.litchi.wealth.vo.rpc.HkStockEnhancedHistoryVo;
 import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorVo;
+import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorsSinaVo;
 import com.litchi.wealth.vo.rpc.HkStockMinuteHistoryVo;
+import com.litchi.wealth.vo.rpc.HkStockNewsVo;
 import com.litchi.wealth.vo.rpc.HkStockSecurityProfileVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -288,6 +291,38 @@ public class StockController {
 
         List<HkStockMinuteHistoryVo> result = pythonStockRpc.getMinuteHistory(
                 stockCode, period, adjust, startDate, endDate);
+        return Result.success(result);
+    }
+
+    // ==================== 新浪财经爬虫接口 ====================
+
+    @GetMapping("/news/{stockCode}")
+    @Operation(summary = "获取港股新闻（新浪财经）", description = "从Python服务获取港股新闻（通过新浪财经爬虫）")
+    public Result getStockNews(
+            @Parameter(description = "股票代码", example = "0700.HK", required = true)
+            @PathVariable String stockCode) {
+
+        List<HkStockNewsVo> result = pythonStockRpc.getStockNews(stockCode);
+        return Result.success(result);
+    }
+
+    @GetMapping("/company-info-sina/{stockCode}")
+    @Operation(summary = "获取港股公司信息（新浪财经）", description = "从Python服务获取港股公司信息（通过新浪财经爬虫）")
+    public Result getCompanyInfoSina(
+            @Parameter(description = "股票代码", example = "01810.HK", required = true)
+            @PathVariable String stockCode) {
+
+        HkStockCompanyInfoSinaVo result = pythonStockRpc.getCompanyInfoSina(stockCode);
+        return Result.success(result);
+    }
+
+    @GetMapping("/financial-indicators-sina/{stockCode}")
+    @Operation(summary = "获取港股财务指标（新浪财经）", description = "从Python服务获取港股财务指标（通过新浪财经爬虫）")
+    public Result getFinancialIndicatorsSina(
+            @Parameter(description = "股票代码", example = "01810.HK", required = true)
+            @PathVariable String stockCode) {
+
+        HkStockFinancialIndicatorsSinaVo result = pythonStockRpc.getFinancialIndicatorsSina(stockCode);
         return Result.success(result);
     }
 }
