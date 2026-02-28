@@ -21,17 +21,17 @@ from app.services.yfinance_provider import YFinanceProvider
 from app.services.akshare_provider import AkShareProvider
 
 __all__ = [
-    # Factory functions (recommended for all operations)
+    # Stock data factory functions (recommended for all operations)
     'get_stock_data_provider',
     'StockDataProviderFactory',
 
-    # Base class
+    # Stock data base class
     'BaseStockDataProvider',
 
-    # Unified service
+    # Unified stock service
     'StockService',
 
-    # Provider implementations
+    # Stock provider implementations
     'YFinanceProvider',
     'AkShareProvider',
 ]

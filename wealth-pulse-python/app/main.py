@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import stocks, health, auth
+from app.api import stocks, health, auth, ai
 from app.core.config import settings
 from app.core.exceptions import (
     ApiException,
@@ -125,6 +125,7 @@ app.add_exception_handler(Exception, general_exception_handler)
 # Include routers
 app.include_router(auth.router)
 app.include_router(stocks.router)
+app.include_router(ai.router)
 app.include_router(health.router)
 
 
