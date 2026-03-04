@@ -1,8 +1,8 @@
 """
 OpenAI LLM 提供者
 
-使用官方 openai SDK
-支持 OpenAI API 格式的兼容服务
+使用 openai-python SDK
+文档：https://platform.openai.com/docs
 """
 from typing import List, Dict, Any, Optional
 
@@ -14,9 +14,16 @@ from app.llm.base import BaseLLMProvider, ChatResponse
 class OpenAIProvider(BaseLLMProvider):
     """
     OpenAI LLM 提供者
-
-    使用官方 openai SDK，支持 OpenAI API 格式的兼容服务
+    使用 OpenAI SDK
     """
+
+    # OpenAI 支持的模型列表
+    MODELS = [
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4-turbo",
+        "gpt-3.5-turbo",
+    ]
 
     def __init__(
         self,
@@ -33,7 +40,7 @@ class OpenAIProvider(BaseLLMProvider):
         Args:
             api_key: API 密钥
             model: 模型名称
-            base_url: API 基础 URL
+            base_url: API 端点 URL
             max_retries: 最大重试次数
             retry_delay: 重试延迟（秒）
             timeout: 请求超时时间（秒）
@@ -41,15 +48,16 @@ class OpenAIProvider(BaseLLMProvider):
         super().__init__(
             api_key=api_key,
             model=model,
-            base_url=base_url or "https://api.openai.com/v1",
+            base_url=base_url,
             max_retries=max_retries,
             retry_delay=retry_delay,
             timeout=timeout
         )
+
         # 初始化 OpenAI 客户端
         self._client = AsyncOpenAI(
             api_key=api_key,
-            base_url=self.base_url,
+            base_url=base_url or "https://api.openai.com/v1",
             timeout=timeout,
             max_retries=max_retries
         )
@@ -58,7 +66,7 @@ class OpenAIProvider(BaseLLMProvider):
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: int = 2000,
+        max_tokens: int = 5000,
         **kwargs
     ) -> ChatResponse:
         """
@@ -80,14 +88,6 @@ class OpenAIProvider(BaseLLMProvider):
                 "temperature": temperature,
                 "max_tokens": max_tokens
             }
-            
-            # 添加可选参数
-            if "top_p" in kwargs:
-                request_params["top_p"] = kwargs["top_p"]
-            if "presence_penalty" in kwargs:
-                request_params["presence_penalty"] = kwargs["presence_penalty"]
-            if "frequency_penalty" in kwargs:
-                request_params["frequency_penalty"] = kwargs["frequency_penalty"]
 
             # 调用 API
             response = await self._client.chat.completions.create(**request_params)
@@ -112,8 +112,12 @@ class OpenAIProvider(BaseLLMProvider):
             )
 
         except Exception as e:
-            self.logger.error(f"[OpenAI] 调用失败: {str(e)}")
-            raise RuntimeError(f"[OpenAI] 调用失败: {str(e)}")
+            self.logger.error(f"[OpenAI] 调用失败：{str(e)}")
+            raise RuntimeError(f"[OpenAI] 调用失败：{str(e)}")
+
+    def get_available_models(self) -> List[str]:
+        """获取支持的模型列表"""
+        return self.MODELS
 
     async def close(self):
         """关闭客户端连接"""

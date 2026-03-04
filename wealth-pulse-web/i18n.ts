@@ -86,6 +86,34 @@ export const translations = {
     settings_save_btn: '保存并应用当前配置',
     settings_success: '配置已同步至本地加密存储。',
 
+    // Settings - AI Configuration
+    settings_ai_config: 'AI 模型配置',
+    settings_ai_config_desc: 'LLM 供应商和模型选择',
+    settings_llm_provider: '模型供应商',
+    settings_llm_provider_placeholder: '选择 LLM 供应商',
+    settings_llm_model: '模型名称',
+    settings_llm_model_placeholder: '选择模型',
+    settings_llm_available: '已配置 API Key',
+    settings_llm_unavailable: '未配置 API Key',
+
+    // Kline Analysis - New Fields
+    kline_trend: '趋势判断',
+    kline_uptrend: '上涨趋势',
+    kline_downtrend: '下跌趋势',
+    kline_sideways: '横盘整理',
+    kline_recommendation: '操作建议',
+    kline_strong_buy: '强烈买入',
+    kline_buy: '买入',
+    kline_hold: '持有',
+    kline_sell: '卖出',
+    kline_strong_sell: '强烈卖出',
+    kline_risk_level: '风险等级',
+    kline_risk_low: '低风险',
+    kline_risk_medium: '中等风险',
+    kline_risk_high: '高风险',
+    kline_target_price: '目标价格区间',
+    kline_technical_points: '技术点位',
+
     // Shared
     shareReport: '分享战报',
     saveImage: '保存高清海报',
@@ -192,6 +220,34 @@ export const translations = {
     settings_ai_listeners: 'AI Behavior Listeners',
     settings_save_btn: 'Save & Apply Config',
     settings_success: 'Configurations synced to local encrypted storage.',
+
+    // Settings - AI Configuration
+    settings_ai_config: 'AI Model Configuration',
+    settings_ai_config_desc: 'LLM Provider and Model Selection',
+    settings_llm_provider: 'LLM Provider',
+    settings_llm_provider_placeholder: 'Select LLM Provider',
+    settings_llm_model: 'Model',
+    settings_llm_model_placeholder: 'Select Model',
+    settings_llm_available: 'API Key Configured',
+    settings_llm_unavailable: 'API Key Not Configured',
+
+    // Kline Analysis - New Fields
+    kline_trend: 'Trend',
+    kline_uptrend: 'Uptrend',
+    kline_downtrend: 'Downtrend',
+    kline_sideways: 'Sideways',
+    kline_recommendation: 'Recommendation',
+    kline_strong_buy: 'Strong Buy',
+    kline_buy: 'Buy',
+    kline_hold: 'Hold',
+    kline_sell: 'Sell',
+    kline_strong_sell: 'Strong Sell',
+    kline_risk_level: 'Risk Level',
+    kline_risk_low: 'Low Risk',
+    kline_risk_medium: 'Medium Risk',
+    kline_risk_high: 'High Risk',
+    kline_target_price: 'Target Price Range',
+    kline_technical_points: 'Technical Points',
 
     // Shared
     shareReport: 'Share Report',

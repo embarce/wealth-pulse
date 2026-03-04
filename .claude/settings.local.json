@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install google-genai)",
+      "Bash(pip install anthropic)",
+      "Bash(python -c \"from app.llm.factory import LLMFactory; from app.llm.providers.gemini import GeminiProvider; print\\(''Import successful''\\); providers = LLMFactory.list_providers\\(\\); print\\(f''Providers: {list\\(providers.keys\\(\\)\\)}''\\)\")",
+      "Bash(pip install volcengine-python-sdk dashscope)",
+      "Bash(python -c \"from app.llm.factory import LLMFactory; providers = LLMFactory.list_providers\\(\\); print\\(f''Providers: {list\\(providers.keys\\(\\)\\)}''\\); print\\(''Models per provider:''\\); [print\\(f''  {name}: {info.models}''\\) for name, info in providers.items\\(\\)]\")"
+    ]
+  }
+}

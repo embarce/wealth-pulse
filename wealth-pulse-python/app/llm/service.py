@@ -35,7 +35,7 @@ class LLMService:
         provider: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 2000,
+        max_tokens: int = 5000,  # 增加默认值，确保能输出完整的 JSON
         **kwargs
     ) -> ChatResponse:
         """

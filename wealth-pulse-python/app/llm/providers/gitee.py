@@ -2,9 +2,9 @@
 Gitee AI LLM 提供者
 
 使用 OpenAI SDK 兼容接口
-文档: https://ai.gitee.com/docs
+文档：https://ai.gitee.com/docs
 """
-from typing import Optional
+from typing import List, Dict, Any, Optional
 
 from openai import AsyncOpenAI
 
@@ -16,6 +16,13 @@ class GiteeProvider(BaseLLMProvider):
     Gitee AI LLM 提供者
     使用 OpenAI SDK 兼容接口
     """
+
+    # Gitee AI 支持的模型列表
+    MODELS = [
+        "Qwen2.5-72B-Instruct",
+        "Qwen3-235B-A22B",
+        "deepseek-coder-33B-instruct",
+    ]
 
     # Gitee AI 默认端点
     DEFAULT_BASE_URL = "https://ai.gitee.com/v1"
@@ -48,7 +55,7 @@ class GiteeProvider(BaseLLMProvider):
             retry_delay=retry_delay,
             timeout=timeout
         )
-        
+
         # 初始化 OpenAI 兼容客户端
         self._client = AsyncOpenAI(
             api_key=api_key,
@@ -61,7 +68,7 @@ class GiteeProvider(BaseLLMProvider):
         self,
         messages: list,
         temperature: float = 0.7,
-        max_tokens: int = 2000,
+        max_tokens: int = 5000,
         **kwargs
     ) -> ChatResponse:
         """
@@ -83,7 +90,7 @@ class GiteeProvider(BaseLLMProvider):
                 "temperature": temperature,
                 "max_tokens": max_tokens
             }
-            
+
             # 添加可选参数
             if "top_p" in kwargs:
                 request_params["top_p"] = kwargs["top_p"]
@@ -117,8 +124,12 @@ class GiteeProvider(BaseLLMProvider):
             )
 
         except Exception as e:
-            self.logger.error(f"[Gitee] 调用失败: {str(e)}")
-            raise RuntimeError(f"[Gitee] 调用失败: {str(e)}")
+            self.logger.error(f"[Gitee] 调用失败：{str(e)}")
+            raise RuntimeError(f"[Gitee] 调用失败：{str(e)}")
+
+    def get_available_models(self) -> List[str]:
+        """获取支持的模型列表"""
+        return self.MODELS
 
     async def close(self):
         """关闭客户端连接"""

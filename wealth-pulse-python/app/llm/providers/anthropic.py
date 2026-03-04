@@ -1,28 +1,29 @@
 """
-阿里云通义千问 LLM 提供者
+Anthropic LLM 提供者
 
-使用阿里云 dashscope SDK
-文档：https://help.aliyun.com/zh/dashscope
+使用 anthropic SDK
+文档：https://docs.anthropic.com/claude/reference
 """
 from typing import List, Dict, Any, Optional
 
-from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
 
 from app.llm.base import BaseLLMProvider, ChatResponse
 
 
-class QwenProvider(BaseLLMProvider):
+class AnthropicProvider(BaseLLMProvider):
     """
-    阿里云通义千问 LLM 提供者
-    使用 OpenAI SDK 兼容接口
+    Anthropic LLM 提供者
+    使用 Anthropic SDK
     """
 
-    # 通义千问支持的模型列表
+    # Anthropic 支持的模型列表
     MODELS = [
-        "qwen-turbo",
-        "qwen-plus",
-        "qwen-max",
-        "qwen-long",
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307",
     ]
 
     def __init__(
@@ -32,11 +33,10 @@ class QwenProvider(BaseLLMProvider):
         base_url: Optional[str] = None,
         max_retries: int = 3,
         retry_delay: float = 1.0,
-        timeout: float = 60.0,
-        top_p: float = 0.8
+        timeout: float = 60.0
     ):
         """
-        初始化通义千问提供者
+        初始化 Anthropic 提供者
 
         Args:
             api_key: API 密钥
@@ -45,22 +45,20 @@ class QwenProvider(BaseLLMProvider):
             max_retries: 最大重试次数
             retry_delay: 重试延迟（秒）
             timeout: 请求超时时间（秒）
-            top_p: top_p 采样参数
         """
         super().__init__(
             api_key=api_key,
             model=model,
-            base_url=base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            base_url=base_url,
             max_retries=max_retries,
             retry_delay=retry_delay,
             timeout=timeout
         )
-        self.top_p = top_p
 
-        # 初始化 OpenAI 兼容客户端
-        self._client = AsyncOpenAI(
+        # 初始化 Anthropic 客户端
+        self._client = AsyncAnthropic(
             api_key=api_key,
-            base_url=self.base_url,
+            base_url=base_url or "https://api.anthropic.com",
             timeout=timeout,
             max_retries=max_retries
         )
@@ -73,7 +71,7 @@ class QwenProvider(BaseLLMProvider):
         **kwargs
     ) -> ChatResponse:
         """
-        调用通义千问聊天接口
+        调用 Anthropic 聊天接口
 
         Args:
             messages: 消息列表
@@ -84,27 +82,34 @@ class QwenProvider(BaseLLMProvider):
             ChatResponse 对象
         """
         try:
-            # 构建请求参数
-            request_params = {
-                "model": self.model,
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "top_p": kwargs.get("top_p", self.top_p)
-            }
+            # Anthropic 使用 system + messages 格式
+            system_prompt = ""
+            user_messages = []
+
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_prompt = msg["content"]
+                else:
+                    user_messages.append(msg)
 
             # 调用 API
-            response = await self._client.chat.completions.create(**request_params)
+            response = await self._client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                system=system_prompt if system_prompt else None,
+                messages=user_messages,
+                temperature=temperature
+            )
 
-            content = response.choices[0].message.content
+            content = response.content[0].text
             usage = {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
+                "prompt_tokens": response.usage.input_tokens,
+                "completion_tokens": response.usage.output_tokens,
+                "total_tokens": response.usage.input_tokens + response.usage.output_tokens
             }
 
             self.logger.info(
-                f"[Qwen] 调用成功，返回 {len(content)} 字符，"
+                f"[Anthropic] 调用成功，返回 {len(content)} 字符，"
                 f"tokens: {usage.get('total_tokens', 'N/A')}"
             )
 
@@ -116,8 +121,8 @@ class QwenProvider(BaseLLMProvider):
             )
 
         except Exception as e:
-            self.logger.error(f"[Qwen] 调用失败：{str(e)}")
-            raise RuntimeError(f"[Qwen] 调用失败：{str(e)}")
+            self.logger.error(f"[Anthropic] 调用失败：{str(e)}")
+            raise RuntimeError(f"[Anthropic] 调用失败：{str(e)}")
 
     def get_available_models(self) -> List[str]:
         """获取支持的模型列表"""

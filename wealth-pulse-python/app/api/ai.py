@@ -5,16 +5,18 @@ AI 分析 API
 import logging
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ApiException
 from app.core.security import get_current_user
 from app.db.session import get_db
+from app.llm import llm_service
 from app.schemas.common import success_response, ResponseCode
+from app.schemas.kline_analysis import KlineAnalysisRequest, KlineAnalysisVo
 from app.services.stock_analysis_service import StockAnalysisService
-from app.llm import llm_service, LLMFactory
+from app.services.stock_kline_analysis_service import StockKlineAnalysisService
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +28,11 @@ router = APIRouter(prefix="/api/ai", tags=["ai-analysis"])
 class StockAnalysisRequest(BaseModel):
     """股票分析请求"""
     stock_code: str = Field(..., description="股票代码", example="0700.HK")
-    period: str = Field(default="daily", description="周期: daily/weekly/monthly", pattern="^(daily|weekly|monthly)$")
+    period: str = Field(default="daily", description="周期：daily/weekly/monthly", pattern="^(daily|weekly|monthly)$")
     days: int = Field(default=60, description="获取多少天的历史数据", ge=10, le=365)
     force_refresh: bool = Field(default=False, description="是否强制刷新（跳过缓存）")
-    provider: Optional[str] = Field(default=None, description="LLM 供应商: doubao/openai")
-    model: Optional[str] = Field(default=None, description="模型名称，如: gpt-4o-mini, ep-xxx")
+    provider: Optional[str] = Field(default=None, description="LLM 供应商：doubao/openai")
+    model: Optional[str] = Field(default=None, description="模型名称，如：gpt-4o-mini, ep-xxx")
 
 
 class PositionItem(BaseModel):
@@ -38,14 +40,14 @@ class PositionItem(BaseModel):
     stock_code: str = Field(..., description="股票代码", example="0700.HK")
     buy_price: float = Field(..., description="买入价格", ge=0)
     quantity: int = Field(..., description="持仓数量（股）", ge=1)
-    buy_date: Optional[str] = Field(default=None, description="买入日期，格式: YYYY-MM-DD")
+    buy_date: Optional[str] = Field(default=None, description="买入日期，格式：YYYY-MM-DD")
 
 
 class PositionAnalysisRequest(BaseModel):
     """持仓分析请求"""
     positions: List[PositionItem] = Field(..., description="持仓列表", min_length=1, max_length=20)
-    analysis_depth: str = Field(default="standard", description="分析深度: quick(快速)/standard(标准)/deep(深度)")
-    provider: Optional[str] = Field(default=None, description="LLM 供应商: doubao/openai")
+    analysis_depth: str = Field(default="standard", description="分析深度：quick(快速)/standard(标准)/deep(深度)")
+    provider: Optional[str] = Field(default=None, description="LLM 供应商：doubao/openai")
     model: Optional[str] = Field(default=None, description="模型名称")
 
 
@@ -53,6 +55,7 @@ class LLMProviderInfo(BaseModel):
     """LLM 供应商信息"""
     name: str = Field(..., description="供应商名称")
     model: str = Field(..., description="默认模型")
+    models: list = Field(default_factory=list, description="支持的模型列表")
     available: bool = Field(..., description="是否可用")
     base_url: Optional[str] = Field(None, description="API 地址")
 
@@ -61,18 +64,19 @@ class LLMProviderInfo(BaseModel):
 
 @router.get("/providers", summary="获取 LLM 供应商列表")
 async def list_providers(
-    current_user: dict = Depends(get_current_user)
+        current_user: dict = Depends(get_current_user)
 ):
     """
     获取所有支持的 LLM 供应商列表
 
-    返回每个供应商的名称、默认模型和可用状态
+    返回每个供应商的名称、默认模型、支持的模型列表和可用状态
     """
     providers = llm_service.list_providers()
     provider_list = [
         LLMProviderInfo(
             name=name,
             model=info.model,
+            models=info.models,
             available=info.available,
             base_url=info.base_url
         )
@@ -86,7 +90,7 @@ async def list_providers(
 
 @router.get("/available-providers", summary="获取可用的 LLM 供应商")
 async def list_available_providers(
-    current_user: dict = Depends(get_current_user)
+        current_user: dict = Depends(get_current_user)
 ):
     """
     获取所有可用的 LLM 供应商（已配置 API Key）
@@ -104,9 +108,9 @@ async def list_available_providers(
 
 @router.post("/analyze-stock", summary="AI 分析股票")
 async def analyze_stock(
-    request: StockAnalysisRequest,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+        request: StockAnalysisRequest,
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     AI 分析股票（需要认证）
@@ -122,9 +126,9 @@ async def analyze_stock(
 
     **请求参数：**
     - `stock_code`: 股票代码（如：0700.HK, 09868.HK）
-    - `period`: 周期类型（daily=日线, weekly=周线, monthly=月线）
-    - `days`: 获取多少天的历史数据（默认60天）
-    - `force_refresh`: 是否强制刷新（默认false）
+    - `period`: 周期类型（daily=日线，weekly=周线，monthly=月线）
+    - `days`: 获取多少天的历史数据（默认 60 天）
+    - `force_refresh`: 是否强制刷新（默认 false）
     - `provider`: LLM 供应商（可选：doubao, openai）
     - `model`: 模型名称（可选，不指定则使用供应商默认模型）
 
@@ -140,7 +144,7 @@ async def analyze_stock(
     ```
     """
     try:
-        logger.info(f"[AI] 收到股票分析请求: {request.stock_code}, provider={request.provider}, model={request.model}")
+        logger.info(f"[AI] 收到股票分析请求：{request.stock_code}, provider={request.provider}, model={request.model}")
 
         # 创建分析服务
         analysis_service = StockAnalysisService(db)
@@ -161,7 +165,7 @@ async def analyze_stock(
         )
 
     except ValueError as e:
-        logger.error(f"[AI] 分析请求参数错误: {str(e)}")
+        logger.error(f"[AI] 分析请求参数错误：{str(e)}")
         raise ApiException(
             msg=str(e),
             code=ResponseCode.BAD_REQUEST
@@ -169,9 +173,9 @@ async def analyze_stock(
     except ApiException:
         raise
     except Exception as e:
-        logger.error(f"[AI] 分析股票失败: {str(e)}")
+        logger.error(f"[AI] 分析股票失败：{str(e)}")
         raise ApiException(
-            msg=f"分析失败: {str(e)}",
+            msg=f"分析失败：{str(e)}",
             code=ResponseCode.INTERNAL_ERROR
         )
 
@@ -180,15 +184,15 @@ async def analyze_stock(
 
 @router.post("/analyze-position", summary="AI 分析持仓")
 async def analyze_position(
-    request: PositionAnalysisRequest,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+        request: PositionAnalysisRequest,
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     AI 分析持仓（需要认证）
 
     此接口会对用户的持仓进行综合分析，给出评分和建议：
-    1. 组合整体评分（0-100分）
+    1. 组合整体评分（0-100 分）
     2. 每只股票的单独评分（A/B/C/D/E 等级）
     3. 持仓建议（持有/加仓/减仓/清仓）
     4. 风险评估和提示
@@ -199,7 +203,7 @@ async def analyze_position(
       - `buy_price`: 买入价格
       - `quantity`: 持仓数量（股）
       - `buy_date`: 买入日期（可选，格式：YYYY-MM-DD）
-    - `analysis_depth`: 分析深度（quick=快速, standard=标准, deep=深度）
+    - `analysis_depth`: 分析深度（quick=快速，standard=标准，deep=深度）
     - `provider`: LLM 供应商（可选：doubao, openai）
     - `model`: 模型名称（可选）
 
@@ -259,7 +263,7 @@ async def analyze_position(
     ```
     """
     try:
-        logger.info(f"[AI] 收到持仓分析请求: {len(request.positions)} 只股票, depth={request.analysis_depth}")
+        logger.info(f"[AI] 收到持仓分析请求：{len(request.positions)} 只股票，depth={request.analysis_depth}")
 
         # 创建分析服务
         analysis_service = StockAnalysisService(db)
@@ -281,7 +285,7 @@ async def analyze_position(
         )
 
     except ValueError as e:
-        logger.error(f"[AI] 持仓分析请求参数错误: {str(e)}")
+        logger.error(f"[AI] 持仓分析请求参数错误：{str(e)}")
         raise ApiException(
             msg=str(e),
             code=ResponseCode.BAD_REQUEST
@@ -289,8 +293,150 @@ async def analyze_position(
     except ApiException:
         raise
     except Exception as e:
-        logger.error(f"[AI] 持仓分析失败: {str(e)}")
+        logger.error(f"[AI] 持仓分析失败：{str(e)}")
         raise ApiException(
-            msg=f"分析失败: {str(e)}",
+            msg=f"分析失败：{str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+# ==================== K 线分析接口（通用，无需认证） ====================
+
+@router.post("/analyze-kline", summary="AI 分析 K 线（无需认证）")
+async def analyze_kline(request: KlineAnalysisRequest):
+    """
+    AI 分析 K 线（**无需认证**，通用接口）
+
+    此接口基于用户提供的 K 线数据进行技术分析：
+    1. 趋势判断（上涨/下跌/横盘）
+    2. 技术点位（支撑位、压力位、止损位、止盈位）
+    3. 买卖建议（强烈买入/买入/持有/卖出/强烈卖出）
+    4. 风险评估（低/中/高）
+    5. 目标价格区间
+
+    **特点：**
+    - 无需数据库，所有数据由调用方提供
+    - 无需认证，方便 Java 等服务调用
+    - 支持 LLM 供应商和模型切换
+
+    **请求参数：**
+    - `stock_code`: 股票代码（如：0700.HK, 09868.HK）
+    - `stock_info`: 股票基本信息（可选，包含公司名称、行业等）
+    - `current_price`: 当前价格（可选，不传则使用 K 线数据最新收盘价）
+    - `kline_data`: K 线数据列表，每项包含：
+      - `date`: 日期（格式：YYYY-MM-DD）
+      - `open`: 开盘价
+      - `high`: 最高价
+      - `low`: 最低价
+      - `close`: 收盘价
+      - `volume`: 成交量
+      - `amount`: 成交额（可选）
+    - `period`: 周期类型（daily=日线，weekly=周线，monthly=月线）
+    - `provider`: LLM 供应商（可选：doubao, openai, qwen 等）
+    - `model`: 模型名称（可选，不指定则使用供应商默认模型）
+
+    **示例请求：**
+    ```json
+    {
+      "stock_code": "0700.HK",
+      "stock_info": {
+        "stock_code": "0700.HK",
+        "company_name": "腾讯控股有限公司",
+        "industry": "互联网"
+      },
+      "current_price": 446.0,
+      "kline_data": [
+        {
+          "date": "2026-02-20",
+          "open": 420.5,
+          "high": 428.0,
+          "low": 418.0,
+          "close": 425.6,
+          "volume": 15000000,
+          "amount": 6350000000
+        },
+        {
+          "date": "2026-02-21",
+          "open": 426.0,
+          "high": 432.5,
+          "low": 424.0,
+          "close": 430.2,
+          "volume": 18000000,
+          "amount": 7720000000
+        }
+      ],
+      "period": "daily",
+      "provider": "doubao",
+      "model": "ep-20250226185244-dxp9w"
+    }
+    ```
+
+    **返回结果示例：**
+    ```json
+    {
+      "stock_code": "0700.HK",
+      "current_price": "446.0",
+      "trend": "uptrend",
+      "trend_description": "近期连续突破多个压力位，呈现明显上涨趋势",
+      "technical_points": [
+        {
+          "type": "support",
+          "price": "438.0",
+          "strength": 4,
+          "description": "前期高点形成的支撑位"
+        },
+        {
+          "type": "resistance",
+          "price": "455.0",
+          "strength": 3,
+          "description": "前期高点形成的压力位"
+        }
+      ],
+      "recommendation": "buy",
+      "recommendation_reason": "技术面突破，成交量配合，建议买入",
+      "risk_level": "medium",
+      "target_price_range": "455-465",
+      "analysis_note": "以上分析基于技术指标，仅供参考"
+    }
+    ```
+    """
+    try:
+        logger.info(f"[Kline] 收到 K 线分析请求：{request.stock_code}, 数据条数={len(request.kline_data)}, provider={request.provider}, model={request.model}")
+
+        # 验证 K 线数据
+        if not request.kline_data or len(request.kline_data) < 5:
+            raise ValueError("K 线数据不足，请提供至少 5 条 K 线数据")
+
+        # 创建分析服务（无需数据库）
+        kline_analysis_service = StockKlineAnalysisService()
+
+        # 执行 K 线分析
+        result = await kline_analysis_service.analyze_kline(
+            stock_code=request.stock_code,
+            kline_data=request.kline_data,
+            stock_info=request.stock_info,
+            current_price=request.current_price,
+            period=request.period,
+            provider=request.provider,
+            model=request.model
+        )
+
+        return success_response(
+            data=result,
+            msg=f"股票 {request.stock_code} K 线分析完成"
+        )
+
+    except ValueError as e:
+        logger.error(f"[Kline] 分析请求参数错误：{str(e)}")
+        raise ApiException(
+            msg=str(e),
+            code=ResponseCode.BAD_REQUEST
+        )
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"[Kline] 分析 K 线失败：{str(e)}")
+        raise ApiException(
+            msg=f"分析失败：{str(e)}",
             code=ResponseCode.INTERNAL_ERROR
         )

@@ -23,7 +23,7 @@ class LLMConfig:
     """
 
     # 支持的供应商列表
-    PROVIDERS = ["doubao", "openai", "qwen", "gemini", "gitee", "anthropic", "deepseek"]
+    PROVIDERS = ["doubao", "openai", "qwen", "gemini", "gitee", "anthropic", "deepseek", "zhipu"]
 
     @classmethod
     def get_provider_config(cls, provider: str) -> ProviderConfig:
@@ -101,6 +101,14 @@ class LLMConfig:
                 api_key=os.getenv("DEEPSEEK_API_KEY"),
                 model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
                 base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+                extra={}
+            )
+
+        elif provider == "zhipu":
+            return ProviderConfig(
+                api_key=os.getenv("ZHIPU_API_KEY"),
+                model=os.getenv("ZHIPU_MODEL", "glm-4"),
+                base_url=os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
                 extra={}
             )
 

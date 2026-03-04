@@ -31,7 +31,9 @@ lxml==5.3.0  # HTML parser for BeautifulSoup
 openai>=2.24.0
 dashscope>=1.25.0  # Qwen (阿里云通义千问)
 volcengine-python-sdk>=5.0.0  # Doubao (火山引擎豆包)
-google-generativeai>=0.8.0  # Gemini (Google)
+google-genai>=2.0.0  # Gemini (Google 新版 SDK)
+anthropic>=0.39.0  # Anthropic (Claude)
+zai-sdk>=0.2.2 # 智谱
 
 # Authentication
 python-jose[cryptography]==3.3.0

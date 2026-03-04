@@ -2,7 +2,7 @@
 火山引擎豆包 LLM 提供者
 
 使用火山引擎 volcengine-python-sdk
-文档: https://www.volcengine.com/docs/82379
+文档：https://www.volcengine.com/docs/82379
 """
 from typing import List, Dict, Any, Optional
 
@@ -16,6 +16,12 @@ class DoubaoProvider(BaseLLMProvider):
     火山引擎豆包 LLM 提供者
     使用 volcengine-python-sdk (Ark Runtime)
     """
+
+    # 豆包支持的模型列表
+    MODELS = [
+        "doubao-1-5-pro",
+        "doubao-1-5-lite",
+    ]
 
     def __init__(
         self,
@@ -48,7 +54,7 @@ class DoubaoProvider(BaseLLMProvider):
             timeout=timeout
         )
         self.top_p = top_p
-        
+
         # 初始化 Ark 客户端
         self._client = AsyncArk(
             api_key=api_key,
@@ -60,7 +66,7 @@ class DoubaoProvider(BaseLLMProvider):
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: int = 2000,
+        max_tokens: int = 5000,
         **kwargs
     ) -> ChatResponse:
         """
@@ -104,8 +110,12 @@ class DoubaoProvider(BaseLLMProvider):
             )
 
         except Exception as e:
-            self.logger.error(f"[Doubao] 调用失败: {str(e)}")
-            raise RuntimeError(f"[Doubao] 调用失败: {str(e)}")
+            self.logger.error(f"[Doubao] 调用失败：{str(e)}")
+            raise RuntimeError(f"[Doubao] 调用失败：{str(e)}")
+
+    def get_available_models(self) -> List[str]:
+        """获取支持的模型列表"""
+        return self.MODELS
 
     async def close(self):
         """关闭客户端连接"""

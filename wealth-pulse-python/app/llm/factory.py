@@ -12,6 +12,9 @@ from app.llm.providers.openai import OpenAIProvider
 from app.llm.providers.qwen import QwenProvider
 from app.llm.providers.gemini import GeminiProvider
 from app.llm.providers.gitee import GiteeProvider
+from app.llm.providers.anthropic import AnthropicProvider
+from app.llm.providers.deepseek import DeepSeekProvider
+from app.llm.providers.zhipu import ZhipuProvider
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,9 @@ class LLMFactory:
         "qwen": QwenProvider,
         "gemini": GeminiProvider,
         "gitee": GiteeProvider,
+        "anthropic": AnthropicProvider,
+        "deepseek": DeepSeekProvider,
+        "zhipu": ZhipuProvider,
     }
 
     # 缓存的提供者实例（按 provider+model 组合缓存）
@@ -119,9 +125,17 @@ class LLMFactory:
         provider_name = (provider or LLMConfig.get_default_provider()).lower()
         config = LLMConfig.get_provider_config(provider_name)
 
+        # 从提供者类获取模型列表
+        provider_class = cls._providers.get(provider_name)
+        if provider_class and hasattr(provider_class, "MODELS"):
+            models = provider_class.MODELS
+        else:
+            models = []
+
         return ProviderInfo(
             name=provider_name,
             model=config.model,
+            models=models,
             available=bool(config.api_key),
             base_url=config.base_url
         )

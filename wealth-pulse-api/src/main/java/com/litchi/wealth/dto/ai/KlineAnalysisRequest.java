@@ -9,23 +9,23 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * K线分析请求DTO
+ * K 线分析请求 DTO
  *
  * @author Embrace
  * @version 1.0
- * @description: AI K线分析请求参数
+ * @description: AI K 线分析请求参数
  * @date 2026/2/24
  */
 @Data
-@Schema(description = "K线分析请求")
+@Schema(description = "K 线分析请求")
 public class KlineAnalysisRequest {
 
     @NotBlank(message = "股票代码不能为空")
     @Schema(description = "股票代码", example = "03900.HK", required = true)
     private String stockCode;
 
-    @NotNull(message = "K线数据不能为空")
-    @Schema(description = "K线数据列表", required = true)
+    @NotNull(message = "K 线数据不能为空")
+    @Schema(description = "K 线数据列表", required = true)
     private List<KlineData> klineData;
 
     @Schema(description = "分析周期", example = "daily")
@@ -34,11 +34,17 @@ public class KlineAnalysisRequest {
     @Schema(description = "是否强制刷新（跳过缓存）", example = "false")
     private Boolean forceRefresh = false;
 
+    @Schema(description = "LLM 供应商：doubao/openai/qwen 等", example = "doubao")
+    private String provider;
+
+    @Schema(description = "模型名称", example = "ep-xxx")
+    private String model;
+
     /**
-     * K线数据
+     * K 线数据
      */
     @Data
-    @Schema(description = "K线数据")
+    @Schema(description = "K 线数据")
     public static class KlineData {
 
         @Schema(description = "日期", example = "2026-02-24")

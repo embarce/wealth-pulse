@@ -26,6 +26,7 @@ class ProviderInfo:
     """提供者信息"""
     name: str
     model: str
+    models: list  # 支持的模型列表
     available: bool
     base_url: Optional[str] = None
 
@@ -70,7 +71,7 @@ class BaseLLMProvider(ABC):
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: int = 2000,
+        max_tokens: int = 5000,  # 增加默认值，确保能输出完整的 JSON
         **kwargs
     ) -> ChatResponse:
         """
@@ -84,6 +85,16 @@ class BaseLLMProvider(ABC):
 
         Returns:
             ChatResponse 对象
+        """
+        pass
+
+    @abstractmethod
+    def get_available_models(self) -> List[str]:
+        """
+        获取该供应商支持的模型列表
+
+        Returns:
+            模型列表
         """
         pass
 
@@ -106,6 +117,7 @@ class BaseLLMProvider(ABC):
         return ProviderInfo(
             name=self.provider_name,
             model=self.model,
+            models=self.get_available_models(),
             available=self.is_available(),
             base_url=self.base_url
         )

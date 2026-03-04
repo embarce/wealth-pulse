@@ -74,14 +74,17 @@ export interface AppConfig {
   notifyVisionReady: boolean;    // 视觉识图数据就绪
   notifyMarketAlert: boolean;    // 异动行情监控提醒
   notifyPortfolioRisk: boolean;  // 仓位健康动态警报
+  // AI 模型配置
+  llmProvider?: string;  // LLM 供应商：doubao/openai/qwen 等
+  llmModel?: string;     // 模型名称
 }
 
 export interface ChartInterpretation {
   patterns: string[];
-  support: number;
-  resistance: number;
-  takeProfit: number;
-  stopLoss: number;
+  support: number | string;
+  resistance: number | string;
+  takeProfit: number | string;
+  stopLoss: number | string;
   advice: string;
 }
 
