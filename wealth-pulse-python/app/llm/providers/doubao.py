@@ -19,8 +19,12 @@ class DoubaoProvider(BaseLLMProvider):
 
     # 豆包支持的模型列表
     MODELS = [
-        "doubao-1-5-pro",
-        "doubao-1-5-lite",
+        "doubao-seed-2-0-pro-260215",
+        "doubao-seed-2-0-lite-260215",
+        "doubao-seed-2-0-mini-260215",
+        "doubao-seed-2-0-code-preview-260215",
+        "glm-4-7-251222",
+        "deepseek-v3-2-251201",
     ]
 
     def __init__(

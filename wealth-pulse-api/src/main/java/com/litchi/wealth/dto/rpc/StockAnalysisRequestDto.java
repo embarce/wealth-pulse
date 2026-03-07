@@ -1,5 +1,6 @@
 package com.litchi.wealth.dto.rpc;
 
+import cn.hutool.core.annotation.Alias;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +23,7 @@ public class StockAnalysisRequestDto {
     /**
      * 股票代码
      */
+    @Alias("stock_code")
     private String stockCode;
 
     /**

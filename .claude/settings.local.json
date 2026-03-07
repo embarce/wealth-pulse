@@ -5,7 +5,14 @@
       "Bash(pip install anthropic)",
       "Bash(python -c \"from app.llm.factory import LLMFactory; from app.llm.providers.gemini import GeminiProvider; print\\(''Import successful''\\); providers = LLMFactory.list_providers\\(\\); print\\(f''Providers: {list\\(providers.keys\\(\\)\\)}''\\)\")",
       "Bash(pip install volcengine-python-sdk dashscope)",
-      "Bash(python -c \"from app.llm.factory import LLMFactory; providers = LLMFactory.list_providers\\(\\); print\\(f''Providers: {list\\(providers.keys\\(\\)\\)}''\\); print\\(''Models per provider:''\\); [print\\(f''  {name}: {info.models}''\\) for name, info in providers.items\\(\\)]\")"
+      "Bash(python -c \"from app.llm.factory import LLMFactory; providers = LLMFactory.list_providers\\(\\); print\\(f''Providers: {list\\(providers.keys\\(\\)\\)}''\\); print\\(''Models per provider:''\\); [print\\(f''  {name}: {info.models}''\\) for name, info in providers.items\\(\\)]\")",
+      "Bash(npx tsc --no-emit components/StockInfoPanel.tsx)",
+      "Bash(curl -s \"http://localhost:9090/api/stock/financial-indicators-sina/00700.HK\")",
+      "Bash(curl -s \"http://localhost:9090/api/stock/financial-indicator-em/00700.HK\")",
+      "Bash(curl -s -X POST \"http://localhost:9090/api/auth/login\" -H \"Content-Type: application/json\" -d \"{\"\"username\"\":\"\"test@test.com\"\",\"\"password\"\":\"\"test123\"\"}\")",
+      "Bash(curl -s \"http://localhost:9090/api/stock/financial-indicators-sina/00700.HK\" -H \"Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJsaXRjaGk6bG9naW5fdXNlcl9rZXkiOiIyMDE5MDM5ODA1Nzg0NzkzMDg5LWQzNWJmNjRhYmUyMzQyNjZhZTVlYjg0YmZmZDZkOWM3In0.tRCmdT3mqxMLEVYZT5y-whwepzt6svHyvjp5lt8bQl8N9Qyje3xTm_3d6Caq53ZYDaUfuMAy7T6ecz1MEZx95Q\")",
+      "Bash(curl -s \"http://localhost:9090/api/stock/financial-indicator-em/00700.HK\" -H \"Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJsaXRjaGk6bG9naW5fdXNlcl9rZXkiOiIyMDE5MDM5ODA1Nzg0NzkzMDg5LWQzNWJmNjRhYmUyMzQyNjZhZTVlYjg0YmZmZDZkOWM3In0.tRCmdT3mqxMLEVYZT5y-whwepzt6svHyvjp5lt8bQl8N9Qyje3xTm_3d6Caq53ZYDaUfuMAy7T6ecz1MEZx95Q\")",
+      "Bash(npx tsc --noEmit components/StockInfoPanel.tsx)"
     ]
   }
 }

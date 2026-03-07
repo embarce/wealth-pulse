@@ -41,7 +41,7 @@ class LLMConfig:
         if provider == "doubao":
             return ProviderConfig(
                 api_key=os.getenv("DOUBAO_API_KEY"),
-                model=os.getenv("DOUBAO_MODEL", "ep-20250226185244-dxp9w"),
+                model=os.getenv("DOUBAO_MODEL", "doubao-seed-2-0-pro-260215"),
                 base_url=os.getenv(
                     "DOUBAO_ENDPOINT",
                     "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
@@ -54,7 +54,7 @@ class LLMConfig:
         elif provider == "openai":
             return ProviderConfig(
                 api_key=os.getenv("OPENAI_API_KEY"),
-                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                model=os.getenv("OPENAI_MODEL", "gpt-5"),
                 base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
                 extra={}
             )
@@ -62,7 +62,7 @@ class LLMConfig:
         elif provider == "qwen":
             return ProviderConfig(
                 api_key=os.getenv("QWEN_API_KEY") or os.getenv("DASHSCOPE_API_KEY"),
-                model=os.getenv("QWEN_MODEL", "qwen-turbo"),
+                model=os.getenv("QWEN_MODEL", "qwen3-max"),
                 base_url=os.getenv(
                     "QWEN_BASE_URL",
                     "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -91,7 +91,7 @@ class LLMConfig:
         elif provider == "anthropic":
             return ProviderConfig(
                 api_key=os.getenv("ANTHROPIC_API_KEY"),
-                model=os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307"),
+                model=os.getenv("ANTHROPIC_MODEL", "claude-5"),
                 base_url=os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
                 extra={}
             )
@@ -107,7 +107,7 @@ class LLMConfig:
         elif provider == "zhipu":
             return ProviderConfig(
                 api_key=os.getenv("ZHIPU_API_KEY"),
-                model=os.getenv("ZHIPU_MODEL", "glm-4"),
+                model=os.getenv("ZHIPU_MODEL", "glm-5"),
                 base_url=os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
                 extra={}
             )

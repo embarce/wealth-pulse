@@ -83,6 +83,91 @@ export interface LLMProviderInfo {
 }
 
 /**
+ * 持仓项 - 匹配后端 PositionItemDto
+ */
+export interface PositionItem {
+  stockCode: string; // 股票代码，如 "0700.HK"
+  buyPrice: number; // 买入价格
+  quantity: number; // 持仓数量（股）
+  buyDate?: string; // 买入日期，格式 YYYY-MM-DD
+}
+
+/**
+ * 持仓分析请求 - 匹配后端 PositionAnalysisRequestDto
+ */
+export interface PositionAnalysisRequest {
+  positions: PositionItem[]; // 持仓列表
+  analysisDepth?: 'quick' | 'standard' | 'deep'; // 分析深度，默认 "standard"
+  provider?: string; // LLM 供应商：doubao/openai 等
+  model?: string; // 模型名称
+}
+
+/**
+ * 投资组合摘要 - 匹配后端 PortfolioSummary
+ */
+export interface PortfolioSummary {
+  overallScore: number; // 综合评分 (0-100)
+  overallRating: string; // 综合评级：优秀/良好/一般/较差/极差
+  riskLevel: string; // 风险等级：低/中/高
+  diversification: string; // 分散程度：分散/一般/集中
+  investmentStyle: string; // 投资风格：价值/成长/均衡/投机型
+}
+
+/**
+ * 持仓评分 - 匹配后端 PositionScore
+ */
+export interface PositionScore {
+  stockCode: string; // 股票代码
+  score: number; // 评分 (0-100)
+  grade: string; // 等级：A/B/C/D/E
+  holdingQuality: string; // 持仓质量：优质/良好/一般/较差/劣质
+  profitProspect: string; // 盈利前景：看涨/震荡/看跌
+  riskWarning: string; // 风险提示
+}
+
+/**
+ * 持仓建议 - 匹配后端 PositionRecommendation
+ */
+export interface PositionRecommendation {
+  stockCode: string; // 股票代码
+  action: string; // 建议操作：持有/加仓/减仓/清仓
+  reason: string; // 建议理由
+  targetPriceRange: string; // 目标价格区间
+  stopLossPrice: number; // 建议止损价
+  confidence: string; // 置信度：high/medium/low
+}
+
+/**
+ * 整体建议 - 匹配后端 OverallRecommendation
+ */
+export interface OverallRecommendation {
+  strategy: string; // 策略：积极持有/稳健持有/逢高减仓/择机调仓
+  keyPoints: string[]; // 要点列表
+  riskSummary: string; // 整体风险描述
+  suggestedActions: string[]; // 建议操作列表
+}
+
+/**
+ * 市场展望 - 匹配后端 MarketOutlook
+ */
+export interface MarketOutlook {
+  trend: string; // 趋势：看涨/震荡/看跌
+  confidence: string; // 置信度：high/medium/low
+  keyFactors: string[]; // 关键因素列表
+}
+
+/**
+ * 持仓分析结果 - 匹配后端 PositionAnalysisVo
+ */
+export interface PositionAnalysisResult {
+  portfolioSummary: PortfolioSummary; // 投资组合摘要
+  positionScores: PositionScore[]; // 持仓评分列表
+  positionRecommendations: PositionRecommendation[]; // 持仓建议列表
+  overallRecommendation: OverallRecommendation; // 整体建议
+  marketOutlook: MarketOutlook; // 市场展望
+}
+
+/**
  * AI 分析服务
  */
 export const aiAnalysisApi = {
@@ -133,6 +218,24 @@ export const aiAnalysisApi = {
 
     if (res?.code !== 200 || !res?.data) {
       throw new Error((res as any)?.msg || '获取可用供应商失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * AI 分析持仓
+   * POST /api/ai/analyze-position
+   */
+  analyzePosition: async (request: PositionAnalysisRequest, options?: HttpRequestOptions): Promise<PositionAnalysisResult> => {
+    const res = await httpClient.post<ApiResult<PositionAnalysisResult>>(
+      `${API_BASE}/ai/analyze-position`,
+      request,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '持仓分析失败');
     }
 
     return res.data;

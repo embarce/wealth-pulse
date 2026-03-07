@@ -1,5 +1,6 @@
 package com.litchi.wealth.dto.rpc;
 
+import cn.hutool.core.annotation.Alias;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,6 +31,7 @@ public class PositionAnalysisRequestDto {
      * 分析深度：quick/standard/deep
      */
     @Builder.Default
+    @Alias("analysis_depth")
     private String analysisDepth = "standard";
 
     /**
@@ -54,11 +56,13 @@ public class PositionAnalysisRequestDto {
         /**
          * 股票代码
          */
+        @Alias("stock_code")
         private String stockCode;
 
         /**
          * 买入价格
          */
+        @Alias("buy_price")
         private Double buyPrice;
 
         /**
@@ -69,6 +73,7 @@ public class PositionAnalysisRequestDto {
         /**
          * 买入日期（可选，格式：YYYY-MM-DD）
          */
+        @Alias("buy_date")
         private String buyDate;
     }
 }

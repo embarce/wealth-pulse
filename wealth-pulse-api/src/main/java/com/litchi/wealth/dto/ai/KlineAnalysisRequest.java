@@ -32,6 +32,7 @@ public class KlineAnalysisRequest {
     private String period = "daily";
 
     @Schema(description = "是否强制刷新（跳过缓存）", example = "false")
+    @Deprecated
     private Boolean forceRefresh = false;
 
     @Schema(description = "LLM 供应商：doubao/openai/qwen 等", example = "doubao")

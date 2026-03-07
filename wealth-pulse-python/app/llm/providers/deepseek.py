@@ -4,7 +4,7 @@ DeepSeek LLM 提供者
 使用 OpenAI SDK 兼容接口
 文档：https://platform.deepseek.com/docs
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 
 from openai import AsyncOpenAI
 
@@ -20,21 +20,19 @@ class DeepSeekProvider(BaseLLMProvider):
     # DeepSeek 支持的模型列表
     MODELS = [
         "deepseek-chat",
-        "deepseek-coder",
-        "deepseek-v3",
     ]
 
     # DeepSeek 默认端点
     DEFAULT_BASE_URL = "https://api.deepseek.com"
 
     def __init__(
-        self,
-        api_key: str,
-        model: str,
-        base_url: Optional[str] = None,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-        timeout: float = 60.0
+            self,
+            api_key: str,
+            model: str,
+            base_url: Optional[str] = None,
+            max_retries: int = 3,
+            retry_delay: float = 1.0,
+            timeout: float = 60.0
     ):
         """
         初始化 DeepSeek 提供者
@@ -65,11 +63,11 @@ class DeepSeekProvider(BaseLLMProvider):
         )
 
     async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: float = 0.7,
-        max_tokens: int = 5000,
-        **kwargs
+            self,
+            messages: List[Dict[str, str]],
+            temperature: float = 0.7,
+            max_tokens: int = 5000,
+            **kwargs
     ) -> ChatResponse:
         """
         调用 DeepSeek 聊天接口

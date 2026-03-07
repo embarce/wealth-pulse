@@ -1,6 +1,7 @@
 
 import React, { useContext } from 'react';
 import { I18nContext } from '../App';
+import { AppConfig } from '../types';
 
 interface SidebarProps {
   activeTab: string;
@@ -12,9 +13,11 @@ interface SidebarProps {
     email: string;
     avatar?: string;
   };
+  config?: AppConfig | null;
+  onOpenLLMModal?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets, assetRate, user }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets, assetRate, user, config, onOpenLLMModal }) => {
   const { lang, t, setLang } = useContext(I18nContext);
 
   const menuItems = [
@@ -115,6 +118,49 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets,
             <i className="fas fa-power-off text-sm"></i>
           </button>
         </div>
+
+        {/* LLM 配置状态 */}
+        {config?.llmProvider && config?.llmModel && (
+          <button
+            onClick={onOpenLLMModal}
+            className="w-full p-4 rounded-2xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 border border-violet-500/20 hover:border-violet-500/40 transition-all group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-violet-500/30">
+                  <i className="fas fa-brain text-sm"></i>
+                </div>
+                <div className="text-left">
+                  <p className="text-[9px] text-violet-300 font-black uppercase tracking-widest">LLM Provider</p>
+                  <p className="text-xs font-black text-white">
+                    {config.llmProvider} <span className="text-violet-300 opacity-70">·</span> {config.llmModel}
+                  </p>
+                </div>
+              </div>
+              <i className="fas fa-chevron-right text-xs text-slate-500 group-hover:text-violet-400 transition-colors"></i>
+            </div>
+          </button>
+        )}
+
+        {!config?.llmProvider && (
+          <button
+            onClick={onOpenLLMModal}
+            className="w-full p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white shadow-lg shadow-amber-500/30">
+                  <i className="fas fa-triangle-exclamation text-sm"></i>
+                </div>
+                <div className="text-left">
+                  <p className="text-[9px] text-amber-300 font-black uppercase tracking-widest">未配置 LLM</p>
+                  <p className="text-xs font-bold text-amber-200">点击配置 AI 模型</p>
+                </div>
+              </div>
+              <i className="fas fa-chevron-right text-xs text-slate-500 group-hover:text-amber-400 transition-colors"></i>
+            </div>
+          </button>
+        )}
       </div>
     </aside>
   );

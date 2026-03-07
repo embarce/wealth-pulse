@@ -19,10 +19,11 @@ class QwenProvider(BaseLLMProvider):
 
     # 通义千问支持的模型列表
     MODELS = [
-        "qwen-turbo",
-        "qwen-plus",
-        "qwen-max",
+        "qwen3-max",
+        "qwen3.5-plus",
+        "qwen3.5-flash",
         "qwen-long",
+        "qwen3-coder-plus"
     ]
 
     def __init__(

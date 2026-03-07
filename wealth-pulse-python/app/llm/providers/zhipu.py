@@ -19,24 +19,20 @@ class ZhipuProvider(BaseLLMProvider):
 
     # 智谱 AI 支持的模型列表
     MODELS = [
-        "glm-4",
-        "glm-4-air",
-        "glm-4-flash",
-        "glm-3-turbo",
-        "cogview-3",
+        "glm-5"
     ]
 
     # 智谱 AI 默认端点
     DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
 
     def __init__(
-        self,
-        api_key: str,
-        model: str,
-        base_url: Optional[str] = None,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-        timeout: float = 60.0
+            self,
+            api_key: str,
+            model: str,
+            base_url: Optional[str] = None,
+            max_retries: int = 3,
+            retry_delay: float = 1.0,
+            timeout: float = 60.0
     ):
         """
         初始化智谱 AI 提供者
@@ -65,11 +61,11 @@ class ZhipuProvider(BaseLLMProvider):
         )
 
     async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: float = 0.7,
-        max_tokens: int = 5000,
-        **kwargs
+            self,
+            messages: List[Dict[str, str]],
+            temperature: float = 0.7,
+            max_tokens: int = 5000,
+            **kwargs
     ) -> ChatResponse:
         """
         调用智谱 AI 聊天接口

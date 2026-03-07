@@ -1,28 +1,130 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StockPrice } from '../types';
 import { stockApi, HotStock } from '../services/stockApi';
 import StockChart from '../components/StockChart';
 import StockChartDay from '../components/StockChartDay';
 import StockInfoPanel from '../components/StockInfoPanel';
+import StockAnalysisPanel from '../components/StockAnalysisPanel';
 
 interface MarketSearchProps {
   onTrade: (s: StockPrice) => void;
 }
 
-const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
+/**
+ * 防抖搜索 Hook - 重新设计的防抖搜索逻辑
+ * @param delay 防抖延迟（毫秒）
+ * @returns 搜索结果、加载状态、执行搜索的函数
+ */
+function useDebounceSearch(delay: number = 300) {
   const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<HotStock[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * 执行搜索（防抖核心逻辑）
+   * 每次调用都会取消之前的定时器，确保只在用户停止输入后才执行
+   */
+  const executeSearch = useCallback((searchQuery: string) => {
+    // 1. 清除之前的定时器 - 这是防抖的关键
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+
+    const trimmed = searchQuery.trim();
+
+    // 2. 空查询直接清空结果
+    if (!trimmed) {
+      setSearchResults([]);
+      setIsSearching(false);
+      setError(null);
+      return;
+    }
+
+    // 3. 设置加载状态
+    setIsSearching(true);
+    setError(null);
+
+    // 4. 设置新的防抖定时器
+    timerRef.current = setTimeout(async () => {
+      try {
+        const results = await stockApi.searchStocks(trimmed);
+        setSearchResults(results.slice(0, 50));
+        setError(null);
+      } catch (e: any) {
+        console.error('[useDebounceSearch] search error:', e);
+        setError(e.message || '搜索失败');
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, delay);
+  }, [delay]);
+
+  /**
+   * 更新搜索关键词 - 直接触发防抖搜索
+   * 使用 useCallback 确保引用稳定
+   */
+  const updateQuery = useCallback((newQuery: string) => {
+    setQuery(newQuery);
+    executeSearch(newQuery);
+  }, [executeSearch]);
+
+  /**
+   * 清空搜索 - 同步清空所有状态
+   */
+  const clearSearch = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setQuery('');
+    setSearchResults([]);
+    setIsSearching(false);
+    setError(null);
+  }, []);
+
+  /**
+   * 组件卸载时清理定时器，防止内存泄漏
+   */
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    query,
+    searchResults,
+    isSearching,
+    error,
+    updateQuery,
+    clearSearch,
+  };
+}
+
+const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [hotStocks, setHotStocks] = useState<HotStock[]>([]);
   const [isLoadingHot, setIsLoadingHot] = useState(false);
-  const [showInfoPanel, setShowInfoPanel] = useState(false); // 控制信息聚合面板显示
-  const [chartType, setChartType] = useState<'minute' | 'day'>('minute'); // 图表类型：分钟图/日线图
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [showAnalysisPanel, setShowAnalysisPanel] = useState(false);
+  const [chartType, setChartType] = useState<'minute' | 'day'>('minute');
 
-  // 搜索状态
-  const [searchResults, setSearchResults] = useState<HotStock[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchDebounceTimer, setSearchDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  // 使用防抖搜索 Hook - 300ms 防抖
+  const {
+    query,
+    searchResults,
+    isSearching,
+    updateQuery,
+    clearSearch,
+  } = useDebounceSearch(300);
 
   // 获取热门股票
   useEffect(() => {
@@ -41,50 +143,16 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
     fetchHotStocks();
   }, []);
 
-  // 后端搜索（防抖）
-  useEffect(() => {
-    // 清除之前的定时器
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer);
-    }
-
-    const trimmed = query.trim();
-    if (!trimmed) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    // 设置新的防抖定时器（300ms）
-    const timer = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const results = await stockApi.searchStocks(trimmed);
-        setSearchResults(results.slice(0, 50)); // 限制展示前50个
-      } catch (e) {
-        console.error('搜索股票失败', e);
-        setSearchResults([]);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
-
-    setSearchDebounceTimer(timer);
-
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [query]);
-
   const handleSelect = (stock: StockPrice) => {
     setSelectedStock(stock);
-    setQuery('');
     setIsFocused(false);
+    // 清空搜索框和结果，收起下拉列表
+    clearSearch();
   };
 
   return (
     <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-1000 pb-32">
-      
+
       {/* 搜索中枢：占据页面核心位置 */}
       <section className="relative z-50">
         <div className={`bg-white p-2 rounded-[2.5rem] border transition-all duration-500 shadow-2xl ${isFocused ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-slate-100 shadow-slate-200/50'}`}>
@@ -98,9 +166,23 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
               value={query}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => updateQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  clearSearch();
+                }
+              }}
               className="flex-grow bg-transparent py-6 pr-8 text-lg font-black text-slate-800 placeholder:text-slate-300 outline-none"
             />
+            {/* 清空按钮 */}
+            {query && (
+              <button
+                onClick={clearSearch}
+                className="absolute right-4 w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all"
+              >
+                <i className="fas fa-times text-xs"></i>
+              </button>
+            )}
           </div>
 
           {/* 实时搜索结果下拉框 */}
@@ -193,7 +275,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
                     };
                     // 点击热门股票查看详情，而不是直接交易
                     setSelectedStock(stockPrice);
-                    setQuery('');
+                    clearSearch();
                   }}
                   className="bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 rounded-2xl p-5 transition-all group"
                 >
@@ -219,7 +301,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
       {/* 动态显示区域 */}
       {selectedStock ? (
         <div className="space-y-10 animate-in fade-in slide-in-from-top-4 duration-700">
-          
+
           {/* 主分析终端 */}
           <div className="bg-white p-10 lg:p-14 rounded-[3.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-8 relative z-10">
@@ -276,7 +358,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                       }`}
                     >
-                      日K图
+                      日 K 图
                     </button>
                   </div>
                 </div>
@@ -295,7 +377,7 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
               )}
             </div>
 
-            {/* 交易操作浮动手写条 */}
+            {/* 交易操作浮动条 */}
             <div className="mt-12 flex flex-col sm:flex-row items-stretch sm:items-center gap-6">
               <button
                 onClick={() => onTrade(selectedStock)}
@@ -304,8 +386,15 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
                 <i className="fas fa-plus-circle mr-3 group-hover:rotate-90 transition-transform"></i> 立即执行申购
               </button>
               <button
+                onClick={() => setShowAnalysisPanel(true)}
+                className="px-8 py-6 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center shadow-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-indigo-600/30"
+              >
+                <i className="fas fa-brain mr-3 text-white"></i>
+                AI 分析
+              </button>
+              <button
                 onClick={() => setShowInfoPanel(true)}
-                className="px-10 py-6 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center shadow-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700 shadow-orange-600/30"
+                className="px-8 py-6 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center shadow-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700 shadow-orange-600/30"
               >
                 <i className="fas fa-newspaper mr-3 text-white"></i>
                 资讯财报
@@ -335,12 +424,20 @@ const MarketSearch: React.FC<MarketSearchProps> = ({ onTrade }) => {
 
           {/* 信息聚合面板 - 作为侧边抽屉 */}
           {selectedStock && (
-            <StockInfoPanel
-              isOpen={showInfoPanel}
-              onClose={() => setShowInfoPanel(false)}
-              stockCode={selectedStock.symbol}
-              stockName={selectedStock.name}
-            />
+            <>
+              <StockInfoPanel
+                isOpen={showInfoPanel}
+                onClose={() => setShowInfoPanel(false)}
+                stockCode={selectedStock.symbol}
+                stockName={selectedStock.name}
+              />
+              <StockAnalysisPanel
+                isOpen={showAnalysisPanel}
+                onClose={() => setShowAnalysisPanel(false)}
+                stockCode={selectedStock.symbol}
+                stockName={selectedStock.name}
+              />
+            </>
           )}
         </div>
       ) : (

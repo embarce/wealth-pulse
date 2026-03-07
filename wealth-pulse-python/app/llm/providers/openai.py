@@ -4,7 +4,7 @@ OpenAI LLM 提供者
 使用 openai-python SDK
 文档：https://platform.openai.com/docs
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 
 from openai import AsyncOpenAI
 
@@ -19,20 +19,17 @@ class OpenAIProvider(BaseLLMProvider):
 
     # OpenAI 支持的模型列表
     MODELS = [
-        "gpt-4o-mini",
-        "gpt-4o",
-        "gpt-4-turbo",
-        "gpt-3.5-turbo",
+        "gpt-5",
     ]
 
     def __init__(
-        self,
-        api_key: str,
-        model: str,
-        base_url: Optional[str] = None,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-        timeout: float = 60.0
+            self,
+            api_key: str,
+            model: str,
+            base_url: Optional[str] = None,
+            max_retries: int = 3,
+            retry_delay: float = 1.0,
+            timeout: float = 60.0
     ):
         """
         初始化 OpenAI 提供者
@@ -63,11 +60,11 @@ class OpenAIProvider(BaseLLMProvider):
         )
 
     async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: float = 0.7,
-        max_tokens: int = 5000,
-        **kwargs
+            self,
+            messages: List[Dict[str, str]],
+            temperature: float = 0.7,
+            max_tokens: int = 5000,
+            **kwargs
     ) -> ChatResponse:
         """
         调用 OpenAI 聊天接口

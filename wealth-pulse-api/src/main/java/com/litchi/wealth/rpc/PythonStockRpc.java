@@ -16,8 +16,10 @@ import com.litchi.wealth.vo.ai.PositionAnalysisVo;
 import com.litchi.wealth.vo.ai.StockAnalysisVo;
 import com.litchi.wealth.vo.ai.TechnicalPointVo;
 import com.litchi.wealth.vo.rpc.HkStockCompanyInfoSinaVo;
+import com.litchi.wealth.vo.rpc.HkStockCompanyNoticeVo;
 import com.litchi.wealth.vo.rpc.HkStockCompanyProfileVo;
 import com.litchi.wealth.vo.rpc.HkStockEnhancedHistoryVo;
+import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorEmVo;
 import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorVo;
 import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorsSinaVo;
 import com.litchi.wealth.vo.rpc.HkStockMinuteHistoryVo;
@@ -399,6 +401,71 @@ public class PythonStockRpc {
             String msg = result.getStr("msg");
             log.error("获取财务指标失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取财务指标失败");
+        }
+    }
+
+    /**
+     * 获取港股公司公告（新浪财经）
+     *
+     * @param stockCode 股票代码，如 09868.HK
+     * @param maxPages 最大爬取页数（1-10）
+     * @return 公告列表
+     */
+    @Cacheable(value = "getCompanyNotices", key = "#stockCode + '-' + #maxPages")
+    public List<HkStockCompanyNoticeVo> getCompanyNotices(String stockCode, Integer maxPages) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/stocks/" + stockCode + "/company-notices?max_pages=" + maxPages;
+        log.info("调用 Python API 获取公司公告 (新浪): stockCode={}, maxPages={}, url={}", stockCode, maxPages, url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONArray dataArray = result.getJSONArray("data");
+            return JSONUtil.toList(dataArray, HkStockCompanyNoticeVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取公司公告失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取公司公告失败");
+        }
+    }
+
+    /**
+     * 获取港股增强财务指标（扩展指标）
+     *
+     * @param stockCode 股票代码，如 01810.HK
+     * @return 增强财务指标
+     */
+    @Cacheable(value = "getFinancialIndicatorEm", key = "#stockCode")
+    public HkStockFinancialIndicatorEmVo getFinancialIndicatorEm(String stockCode) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/stocks/" + stockCode + "/financial-indicator-em";
+        log.info("调用 Python API 获取增强财务指标：stockCode={}, url={}", stockCode, url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, HkStockFinancialIndicatorEmVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取增强财务指标失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取增强财务指标失败");
         }
     }
 

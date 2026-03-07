@@ -53,12 +53,8 @@ public class StockServiceImpl implements StockService {
     public List<StockMarketDataVo> getHotStocks(Integer limit) {
         // 只查询当天的行情数据，按成交额降序排列
         LambdaQueryWrapper<StockMarketData> queryWrapper = new LambdaQueryWrapper<>();
-
-        // 获取今天的日期
-        LocalDate today = LocalDate.now();
-
         // 只需要按日期精确匹配和成交额排序
-        queryWrapper.eq(StockMarketData::getMarketDate, today)
+        queryWrapper.orderByDesc(StockMarketData::getMarketDate)
                 .orderByDesc(StockMarketData::getTurnover)
                 .last("LIMIT " + limit);
 
@@ -74,15 +70,7 @@ public class StockServiceImpl implements StockService {
     @Override
     public StockMarketDataVo getMarketData(String stockCode) {
         // 查询实时行情数据（最新的一条）
-        LocalDate today = LocalDate.now();
-        LambdaQueryWrapper<StockMarketData> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(StockMarketData::getStockCode, stockCode)
-                .eq(StockMarketData::getMarketDate, today)
-                .orderByDesc(StockMarketData::getQuoteTime)
-                .last("LIMIT 1");
-
-        StockMarketData marketData = stockMarketDataService.getOne(queryWrapper);
-
+        StockMarketData marketData = stockMarketDataService.getLatestMarketData(stockCode);
         if (marketData == null) {
             return null;
         }
@@ -267,14 +255,7 @@ public class StockServiceImpl implements StockService {
      */
     private StockSearchResultVo convertToSearchResultVo(StockInfo stockInfo) {
         // 查询实时行情数据
-        LocalDate today = LocalDate.now();
-        LambdaQueryWrapper<StockMarketData> marketQuery = new LambdaQueryWrapper<>();
-        marketQuery.eq(StockMarketData::getStockCode, stockInfo.getStockCode())
-                .eq(StockMarketData::getMarketDate, today)
-                .orderByDesc(StockMarketData::getQuoteTime)
-                .last("LIMIT 1");
-        StockMarketData marketData = stockMarketDataService.getOne(marketQuery);
-
+        StockMarketData marketData = stockMarketDataService.getLatestMarketData(stockInfo.getStockCode());
         return StockSearchResultVo.builder()
                 .stockCode(stockInfo.getStockCode())
                 .companyName(stockInfo.getCompanyName())

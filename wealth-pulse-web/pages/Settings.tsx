@@ -6,9 +6,20 @@ import { aiAnalysisApi, LLMProviderInfo } from '../services/aiAnalysis';
 interface SettingsProps {
   config: AppConfig;
   onUpdateConfig: (newConfig: Partial<AppConfig>) => void;
+  toast?: {
+    showSuccess: (message: string, duration?: number) => void;
+    showError: (message: string, duration?: number) => void;
+    showWarning: (message: string, duration?: number) => void;
+    showInfo: (message: string, duration?: number) => void;
+  };
 }
 
-const Settings: React.FC<SettingsProps> = ({ config, onUpdateConfig }) => {
+const Settings: React.FC<SettingsProps> = ({ config, onUpdateConfig, toast = {
+  showSuccess: () => {},
+  showError: () => {},
+  showWarning: () => {},
+  showInfo: () => {},
+} }) => {
   const { t, lang } = useContext(I18nContext);
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
@@ -439,8 +450,8 @@ const Settings: React.FC<SettingsProps> = ({ config, onUpdateConfig }) => {
         </section>
 
         <button
-          onClick={() => alert(t.settings_success)}
-          className="w-full bg-slate-950 text-white py-6 rounded-3xl font-black text-[11px] uppercase tracking-widest shadow-2xl transition-all"
+          onClick={() => toast.showSuccess(lang === 'zh' ? '设置已保存' : 'Settings saved')}
+          className="w-full bg-slate-950 text-white py-6 rounded-3xl font-black text-[11px] uppercase tracking-widest shadow-2xl transition-all hover:scale-[1.02] active:scale-95"
         >
           {t.settings_save_btn}
         </button>

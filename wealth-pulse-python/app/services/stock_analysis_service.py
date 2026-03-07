@@ -1,6 +1,6 @@
 """
 股票 AI 分析服务
-整合公司信息、K线数据、新闻、财务指标、公告等信息，通过 LLM 进行分析
+整合公司信息、K 线数据、新闻、财务指标、公告等信息，通过 LLM 进行分析
 """
 import logging
 from typing import Dict, Any, Optional, List
@@ -17,6 +17,7 @@ from app.services.sina_company_info_crawler import sina_company_info_crawler
 from app.services.sina_news_crawler import sina_news_crawler
 from app.services.sina_finance_crawler import sina_finance_crawler
 from app.services.sina_company_notice_crawler import sina_company_notice_crawler
+from app.services.akshare_provider import AkShareProvider
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class StockAnalysisService:
     def __init__(self, db: Session):
         self.db = db
         self.stock_service = StockService(db)
+        self.akshare_provider = AkShareProvider()
 
     async def analyze_stock(
         self,
@@ -62,7 +64,7 @@ class StockAnalysisService:
         Returns:
             分析结果字典
         """
-        logger.info(f"[StockAnalysis] 开始分析股票: {stock_code}")
+        logger.info(f"[StockAnalysis] 开始分析股票：{stock_code}")
 
         # 1. 获取股票基本信息
         stock_info = self.stock_service.get_stock_by_code(stock_code)
@@ -77,10 +79,10 @@ class StockAnalysisService:
             if not market_data:
                 raise ValueError(f"无法获取 {stock_code} 的市场数据")
 
-        # 3. 获取历史数据
+        # 3. 获取历史数据（带 fallback 机制）
         end_date = date.today()
-        start_date = end_date - timedelta(days=days * 2)  # 乘以2以包含非交易日
-        history_data = self.stock_service.get_historical_data(
+        start_date = end_date - timedelta(days=days * 2)  # 乘以 2 以包含非交易日
+        history_data = self._get_history_data_with_fallback(
             stock_code=stock_code,
             start_date=start_date,
             end_date=end_date,
@@ -94,32 +96,32 @@ class StockAnalysisService:
         try:
             company_info = sina_company_info_crawler.fetch_company_info_sync(stock_code)
         except Exception as e:
-            logger.warning(f"[StockAnalysis] 获取公司信息失败: {e}")
+            logger.warning(f"[StockAnalysis] 获取公司信息失败：{e}")
             company_info = {}
 
         # 5. 获取新闻（新浪）
         try:
             news_items = sina_news_crawler.fetch_stock_news_sync(stock_code)
-            # 只取最近5条新闻
+            # 只取最近 5 条新闻
             recent_news = news_items[:5] if news_items else []
         except Exception as e:
-            logger.warning(f"[StockAnalysis] 获取新闻失败: {e}")
+            logger.warning(f"[StockAnalysis] 获取新闻失败：{e}")
             recent_news = []
 
         # 6. 获取财务指标（新浪）
         try:
             financial_data = sina_finance_crawler.fetch_financial_indicators_sync(stock_code)
         except Exception as e:
-            logger.warning(f"[StockAnalysis] 获取财务指标失败: {e}")
+            logger.warning(f"[StockAnalysis] 获取财务指标失败：{e}")
             financial_data = {}
 
         # 7. 获取公告（新浪）
         try:
             notices = sina_company_notice_crawler.fetch_company_notices_sync(stock_code, max_pages=1)
-            # 只取最近3条公告
+            # 只取最近 3 条公告
             recent_notices = notices[:3] if notices else []
         except Exception as e:
-            logger.warning(f"[StockAnalysis] 获取公告失败: {e}")
+            logger.warning(f"[StockAnalysis] 获取公告失败：{e}")
             recent_notices = []
 
         # 8. 构建 LLM Prompt
@@ -155,11 +157,11 @@ class StockAnalysisService:
                 "tokens": response.total_tokens
             }
 
-            logger.info(f"[StockAnalysis] 分析完成: {stock_code}")
+            logger.info(f"[StockAnalysis] 分析完成：{stock_code}")
             return parsed_result
 
         except Exception as e:
-            logger.error(f"[StockAnalysis] LLM 分析失败: {e}")
+            logger.error(f"[StockAnalysis] LLM 分析失败：{e}")
             raise
 
     async def analyze_position(
@@ -181,7 +183,7 @@ class StockAnalysisService:
         Returns:
             持仓分析结果字典
         """
-        logger.info(f"[PositionAnalysis] 开始分析持仓: {len(positions)} 只股票")
+        logger.info(f"[PositionAnalysis] 开始分析持仓：{len(positions)} 只股票")
 
         # 收集每只股票的数据
         stocks_data = []
@@ -219,11 +221,11 @@ class StockAnalysisService:
                 total_cost += cost
                 total_current_value += current_value
 
-                # 获取历史数据（根据分析深度调整天数）
+                # 获取历史数据（带 fallback 机制）
                 days = {"quick": 20, "standard": 60, "deep": 120}.get(analysis_depth, 60)
                 end_date = date.today()
                 start_date = end_date - timedelta(days=days * 2)
-                history_data = self.stock_service.get_historical_data(
+                history_data = self._get_history_data_with_fallback(
                     stock_code=stock_code,
                     start_date=start_date,
                     end_date=end_date,
@@ -272,7 +274,7 @@ class StockAnalysisService:
                 stocks_data.append(stock_data)
 
             except Exception as e:
-                logger.error(f"[PositionAnalysis] 处理 {stock_code} 时出错: {e}")
+                logger.error(f"[PositionAnalysis] 处理 {stock_code} 时出错：{e}")
                 continue
 
         if not stocks_data:
@@ -317,8 +319,107 @@ class StockAnalysisService:
             return parsed_result
 
         except Exception as e:
-            logger.error(f"[PositionAnalysis] LLM 分析失败: {e}")
+            logger.error(f"[PositionAnalysis] LLM 分析失败：{e}")
             raise
+
+    def _get_history_data_with_fallback(
+        self,
+        stock_code: str,
+        start_date: date,
+        end_date: date,
+        limit: int = 100
+    ) -> List[StockMarketHistory]:
+        """
+        获取历史数据，带有 fallback 机制
+
+        优先从 MySQL 数据库查询，如果查询不到数据或数据量偏少，
+        则使用 akshare 的 stock_hk_daily 接口获取数据并转换为 StockMarketHistory
+
+        Args:
+            stock_code: 股票代码
+            start_date: 开始日期
+            end_date: 结束日期
+            limit: 最大返回记录数
+
+        Returns:
+            历史数据列表（StockMarketHistory 对象）
+        """
+        # 1. 先从 MySQL 查询
+        db_data = self.stock_service.get_historical_data(
+            stock_code=stock_code,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit
+        )
+
+        # 2. 如果数据库有足够数据，直接返回
+        if len(db_data) >= limit:
+            logger.info(f"[StockAnalysis] 从 MySQL 获取 {stock_code} 历史数据成功，共 {len(db_data)} 条记录")
+            return db_data
+
+        # 3. 数据库数据不足，从 akshare 获取并转换
+        logger.info(f"[StockAnalysis] MySQL 数据不足 ({len(db_data)} 条)，从 akshare 获取 {stock_code} 历史数据")
+
+        try:
+            ak_data = self.akshare_provider.get_stock_daily_history_enhanced(
+                stock_code=stock_code,
+                start_date=start_date,
+                end_date=end_date,
+                period="daily",
+                adjust="qfq"
+            )
+
+            if ak_data:
+                logger.info(f"[StockAnalysis] 从 akshare 获取 {stock_code} 历史数据成功，共 {len(ak_data)} 条记录")
+                # 转换为 StockMarketHistory 对象
+                history_list = self._convert_to_history(ak_data, stock_code)
+                return history_list[:limit]
+
+            logger.warning(f"[StockAnalysis] akshare 也未能获取 {stock_code} 历史数据")
+
+        except Exception as e:
+            logger.error(f"[StockAnalysis] 从 akshare 获取 {stock_code} 历史数据失败：{e}")
+
+        # 4. 如果 akshare 也失败，返回 MySQL 数据（即使不足）
+        if db_data:
+            logger.warning(f"[StockAnalysis] akshare 获取失败，返回 MySQL 数据 ({len(db_data)} 条)")
+            return db_data
+
+        return []
+
+    def _convert_to_history(
+        self,
+        ak_data: List[Dict[str, Any]],
+        stock_code: str
+    ) -> List[StockMarketHistory]:
+        """
+        将 akshare 返回的数据转换为 StockMarketHistory 对象列表
+
+        Args:
+            ak_data: akshare 返回的数据列表
+            stock_code: 股票代码
+
+        Returns:
+            StockMarketHistory 对象列表
+        """
+        history_list = []
+        for item in ak_data:
+            try:
+                history = StockMarketHistory(
+                    stock_code=stock_code,
+                    trade_date=item.get('trade_date'),
+                    open_price=item.get('open_price'),
+                    high_price=item.get('high_price'),
+                    low_price=item.get('low_price'),
+                    close_price=item.get('close_price'),
+                    adj_close=item.get('adj_close'),
+                    volume=item.get('volume')
+                )
+                history_list.append(history)
+            except Exception as e:
+                logger.warning(f"转换 akshare 数据行失败：{e}")
+                continue
+        return history_list
 
     def _summarize_history(self, history_data: List[StockMarketHistory]) -> Dict[str, Any]:
         """总结历史数据"""
@@ -333,7 +434,7 @@ class StockAnalysisService:
             "available": True,
             "highest": max(prices),
             "lowest": min(prices),
-            "average": sum(prices) / len(prices),
+            "average": round(sum(prices) / len(prices), 2) if prices else None,
             "data_points": len(prices),
             "latest_price": prices[0] if prices else None,
         }
@@ -369,7 +470,7 @@ class StockAnalysisService:
         # 格式化历史数据
         history_text = ""
         if history_data:
-            recent = history_data[:20]  # 只取最近20条
+            recent = history_data[:20]  # 只取最近 20 条
             history_text = "\n".join([
                 f"  {h.trade_date}: 开盘={h.open_price}, 最高={h.high_price}, "
                 f"最低={h.low_price}, 收盘={h.close_price}, 成交量={h.volume}"
@@ -398,50 +499,50 @@ class StockAnalysisService:
             latest = financial_data.get('latest', {})
             if latest:
                 financial_text = f"""
-  - 最新报告期: {latest.get('end_date', '')} ({latest.get('report_type', '')})
-  - 营业收入: {latest.get('revenue', 'N/A')} 百万元
-  - 净利润: {latest.get('net_profit', 'N/A')} 百万元
-  - 毛利率: {latest.get('gross_profit_margin', 'N/A')}%
-  - 净利率: {latest.get('net_profit_margin', 'N/A')}%
-  - 基本每股盈利: {latest.get('eps_basic', 'N/A')} 仙
-  - 流动比率: {latest.get('current_ratio', 'N/A')}
-  - 负债率: {latest.get('debt_ratio', 'N/A')}%
+  - 最新报告期：{latest.get('end_date', '')} ({latest.get('report_type', '')})
+  - 营业收入：{latest.get('revenue', 'N/A')} 百万元
+  - 净利润：{latest.get('net_profit', 'N/A')} 百万元
+  - 毛利率：{latest.get('gross_profit_margin', 'N/A')}%
+  - 净利率：{latest.get('net_profit_margin', 'N/A')}%
+  - 基本每股盈利：{latest.get('eps_basic', 'N/A')} 仙
+  - 流动比率：{latest.get('current_ratio', 'N/A')}
+  - 负债率：{latest.get('debt_ratio', 'N/A')}%
 """
 
-        prompt = f"""你是一位专业的股票分析师，请根据以下信息对股票进行综合分析，并以 JSON 格式返回分析结果。
+        prompt = f"""你是一位专业的股票分析师，请根据以下信息进行综合分析，并以 JSON 格式返回分析结果。
 
 ## 股票基本信息
-- 股票代码: {stock_code}
-- 公司名称: {stock_info.company_name}
-- 所属行业: {stock_info.industry or 'N/A'}
-- 市值: {stock_info.market_cap or 'N/A'}
+- 股票代码：{stock_code}
+- 公司名称：{stock_info.company_name}
+- 所属行业：{stock_info.industry or 'N/A'}
+- 市值：{stock_info.market_cap or 'N/A'}
 
 ## 当前市场数据
-- 最新价格: {market_data.last_price} 港元
-- 涨跌额: {market_data.change_number}
-- 涨跌幅: {market_data.change_rate}%
-- 开盘价: {market_data.open_price}
-- 最高价: {market_data.high_price}
-- 最低价: {market_data.low_price}
-- 成交量: {market_data.volume}
-- 成交额: {market_data.turnover} 港元
-- 市盈率: {market_data.pe_ratio or 'N/A'}
-- 市净率: {market_data.pb_ratio or 'N/A'}
+- 最新价格：{market_data.last_price} 港元
+- 涨跌额：{market_data.change_number}
+- 涨跌幅：{market_data.change_rate}%
+- 开盘价：{market_data.open_price}
+- 最高价：{market_data.high_price}
+- 最低价：{market_data.low_price}
+- 成交量：{market_data.volume}
+- 成交额：{market_data.turnover} 港元
+- 市盈率：{market_data.pe_ratio or 'N/A'}
+- 市净率：{market_data.pb_ratio or 'N/A'}
 
 ## 公司信息
-- 主营业务: {company_info.get('business_description', 'N/A')}
-- 主席: {company_info.get('chairman', 'N/A')}
+- 主营业务：{company_info.get('business_description', 'N/A')}
+- 主席：{company_info.get('chairman', 'N/A')}
 
 ## 财务指标
 {financial_text if financial_text else "  暂无财务数据"}
 
-## 最近 K 线数据（最近20个交易日）
+## 最近 K 线数据（最近 20 个交易日）
 {history_text if history_text else "  暂无历史数据"}
 
-## 最近新闻（最近5条）
+## 最近新闻（最近 5 条）
 {news_text if news_text else "  暂无新闻"}
 
-## 最近公告（最近3条）
+## 最近公告（最近 3 条）
 {notices_text if notices_text else "  暂无公告"}
 
 ---
@@ -453,7 +554,7 @@ class StockAnalysisService:
   "stock_code": "{stock_code}",
   "current_price": "{market_data.last_price}",
   "trend": "uptrend/downtrend/sideways",
-  "trend_description": "趋势描述（50字以内）",
+  "trend_description": "趋势描述（50 字以内）",
   "technical_points": [
     {{
       "type": "support/resistance/stop_loss/take_profit",
@@ -463,13 +564,13 @@ class StockAnalysisService:
     }}
   ],
   "recommendation": "strong_buy/buy/hold/sell/strong_sell",
-  "recommendation_reason": "建议理由（100字以内）",
+  "recommendation_reason": "建议理由（100 字以内）",
   "risk_level": "low/medium/high",
-  "risk_description": "风险描述（50字以内）",
+  "risk_description": "风险描述（50 字以内）",
   "target_price_range": "目标价区间（如：150-165）",
-  "fundamental_analysis": "基本面分析（150字以内）",
-  "technical_analysis": "技术面分析（150字以内）",
-  "news_impact": "新闻影响分析（100字以内）",
+  "fundamental_analysis": "基本面分析（150 字以内）",
+  "technical_analysis": "技术面分析（150 字以内）",
+  "news_impact": "新闻影响分析（100 字以内）",
   "rating": "买入/持有/卖出/观望",
   "confidence": "high/medium/low"
 }}
@@ -478,8 +579,10 @@ class StockAnalysisService:
 注意：
 1. 趋势判断要基于 K 线数据和价格走势
 2. 技术点位要基于实际价格水平（支撑位低于当前价，压力位高于当前价）
-3. 风险等级要结合估值、波动性等因素综合评估
-4. 确保返回的是合法的 JSON 格式，不要有其他额外文字
+3. 一定要列出所有技术点位，不要遗漏
+4. 保证有基本面，技术面和新闻分析
+6. 风险等级要结合估值、波动性等因素综合评估
+7. 确保返回的是合法的 JSON 格式，不要有其他额外文字
 """
 
         return prompt
@@ -510,7 +613,7 @@ class StockAnalysisService:
 
             for field in required_fields:
                 if field not in result:
-                    logger.warning(f"[StockAnalysis] LLM 返回结果缺少字段: {field}")
+                    logger.warning(f"[StockAnalysis] LLM 返回结果缺少字段：{field}")
                     # 设置默认值
                     if field == "technical_points":
                         result[field] = []
@@ -522,8 +625,8 @@ class StockAnalysisService:
             return result
 
         except json.JSONDecodeError as e:
-            logger.error(f"[StockAnalysis] 解析 LLM 返回结果失败: {e}")
-            logger.error(f"[StockAnalysis] LLM 输出: {llm_output}")
+            logger.error(f"[StockAnalysis] 解析 LLM 返回结果失败：{e}")
+            logger.error(f"[StockAnalysis] LLM 输出：{llm_output}")
 
             # 返回默认结构
             return {
@@ -560,24 +663,24 @@ class StockAnalysisService:
 ### 股票 {i}: {stock['stock_code']} - {stock['company_name']}
 - **行业**: {stock['industry'] or 'N/A'}
 - **持仓情况**:
-  - 买入价格: {stock['buy_price']:.2f} 港元
-  - 持仓数量: {stock['quantity']} 股
-  - 买入日期: {stock['buy_date'] or '未知'}
-  - 成本: {stock['cost']:.2f} 港元
-  - 当前市值: {stock['current_value']:.2f} 港元
-  - 盈亏: {stock['profit_loss']:.2f} 港元 ({stock['profit_loss_percent']:.2f}%)
+  - 买入价格：{stock['buy_price']:.2f} 港元
+  - 持仓数量：{stock['quantity']} 股
+  - 买入日期：{stock['buy_date'] or '未知'}
+  - 成本：{stock['cost']:.2f} 港元
+  - 当前市值：{stock['current_value']:.2f} 港元
+  - 盈亏：{stock['profit_loss']:.2f} 港元 ({stock['profit_loss_percent']:.2f}%)
 - **市场数据**:
-  - 当前价格: {stock['current_price']:.2f} 港元
-  - 今日涨跌: {stock['market_data'].get('change_rate', 'N/A')}%
-  - 52周最高: {stock['market_data'].get('week52_high', 'N/A')}
-  - 52周最低: {stock['market_data'].get('week52_low', 'N/A')}
-  - 市盈率: {stock['market_data'].get('pe_ratio', 'N/A')}
-  - 市净率: {stock['market_data'].get('pb_ratio', 'N/A')}
+  - 当前价格：{stock['current_price']:.2f} 港元
+  - 今日涨跌：{stock['market_data'].get('change_rate', 'N/A')}%
+  - 52 周最高：{stock['market_data'].get('week52_high', 'N/A')}
+  - 52 周最低：{stock['market_data'].get('week52_low', 'N/A')}
+  - 市盈率：{stock['market_data'].get('pe_ratio', 'N/A')}
+  - 市净率：{stock['market_data'].get('pb_ratio', 'N/A')}
 - **历史走势摘要**:
-  - 数据点数: {stock['history_summary'].get('data_points', 0)}
-  - 期间最高: {stock['history_summary'].get('highest', 'N/A')}
-  - 期间最低: {stock['history_summary'].get('lowest', 'N/A')}
-  - 期间均价: {stock['history_summary'].get('average', 'N/A'):.2f if stock['history_summary'].get('average') else 'N/A'}
+  - 数据点数：{stock['history_summary'].get('data_points', 0)}
+  - 期间最高：{stock['history_summary'].get('highest', 'N/A')}
+  - 期间最低：{stock['history_summary'].get('lowest', 'N/A')}
+  - 期间均价：{stock['history_summary'].get('average', 'N/A') }
 - **公司信息**: {stock['company_info'].get('business', 'N/A')[:150]}
 - **财务摘要**: PE={stock['financial_summary'].get('pe_ratio', 'N/A')}, PB={stock['financial_summary'].get('pb_ratio', 'N/A')}, ROE={stock['financial_summary'].get('roe', 'N/A')}
 
@@ -593,10 +696,10 @@ class StockAnalysisService:
         prompt = f"""你是一位专业的投资组合分析师，请根据以下持仓信息进行综合分析，并以 JSON 格式返回结果。
 
 ## 组合概况
-- 总成本: {portfolio_stats['total_cost']:.2f} 港元
-- 当前总市值: {portfolio_stats['total_current_value']:.2f} 港元
-- 总盈亏: {portfolio_stats['total_profit_loss']:.2f} 港元 ({portfolio_stats['total_profit_loss_percent']:.2f}%)
-- 持仓数量: {portfolio_stats['position_count']} 只
+- 总成本：{portfolio_stats['total_cost']:.2f} 港元
+- 当前总市值：{portfolio_stats['total_current_value']:.2f} 港元
+- 总盈亏：{portfolio_stats['total_profit_loss']:.2f} 港元 ({portfolio_stats['total_profit_loss_percent']:.2f}%)
+- 持仓数量：{portfolio_stats['position_count']} 只
 
 ## 持仓明细
 {stocks_text}
@@ -622,7 +725,7 @@ class StockAnalysisService:
       "grade": "A/B/C/D/E",
       "holding_quality": "优质/良好/一般/较差/劣质",
       "profit_prospect": "看涨/震荡/看跌",
-      "risk_warning": "风险提示内容"
+      "risk_warning": "风险提示"
     }}
   ],
   "position_recommendations": [
@@ -637,24 +740,24 @@ class StockAnalysisService:
   ],
   "overall_recommendation": {{
     "strategy": "积极持有/稳健持有/逢高减仓/择机调仓",
-    "key_points": ["要点1", "要点2", "要点3"],
+    "key_points": ["要点 1", "要点 2", "要点 3"],
     "risk_summary": "整体风险描述",
-    "suggested_actions": ["建议操作1", "建议操作2"]
+    "suggested_actions": ["建议操作 1", "建议操作 2"]
   }},
   "market_outlook": {{
     "trend": "看涨/震荡/看跌",
     "confidence": "high/medium/low",
-    "key_factors": ["因素1", "因素2"]
+    "key_factors": ["因素 1", "因素 2"]
   }}
 }}
 ```
 
 **评分标准参考**：
-- 90-100分(A): 优质持仓，基本面优秀，技术面强势，风险可控
-- 80-89分(B): 良好持仓，基本面稳健，有一定上涨空间
-- 70-79分(C): 一般持仓，需关注风险，可考虑调整
-- 60-69分(D): 较差持仓，存在明显问题，建议减仓或清仓
-- 60分以下(E): 劣质持仓，风险较高，建议清仓
+- 90-100 分 (A): 优质持仓，基本面优秀，技术面强势，风险可控
+- 80-89 分 (B): 良好持仓，基本面稳健，有一定上涨空间
+- 70-79 分 (C): 一般持仓，需关注风险，可考虑调整
+- 60-69 分 (D): 较差持仓，存在明显问题，建议减仓或清仓
+- 60 分以下 (E): 劣质持仓，风险较高，建议清仓
 
 注意：
 1. 确保返回合法的 JSON 格式
@@ -698,8 +801,8 @@ class StockAnalysisService:
             return result
 
         except json.JSONDecodeError as e:
-            logger.error(f"[PositionAnalysis] 解析失败: {e}")
-            logger.error(f"[PositionAnalysis] 输出: {llm_output[:500]}")
+            logger.error(f"[PositionAnalysis] 解析失败：{e}")
+            logger.error(f"[PositionAnalysis] 输出：{llm_output[:500]}")
 
             return {
                 "portfolio_summary": {

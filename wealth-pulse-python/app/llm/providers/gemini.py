@@ -4,7 +4,8 @@ Google Gemini LLM 提供者
 使用新的 google-genai SDK
 文档：https://ai.google.dev/docs
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
+
 from google import genai
 from google.genai import types
 
@@ -20,18 +21,16 @@ class GeminiProvider(BaseLLMProvider):
     # Gemini 支持的模型列表
     MODELS = [
         "gemini-2.0-flash",
-        "gemini-1.5-pro",
-        "gemini-pro",
     ]
 
     def __init__(
-        self,
-        api_key: str,
-        model: str,
-        base_url: Optional[str] = None,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-        timeout: float = 60.0
+            self,
+            api_key: str,
+            model: str,
+            base_url: Optional[str] = None,
+            max_retries: int = 3,
+            retry_delay: float = 1.0,
+            timeout: float = 60.0
     ):
         """
         初始化 Gemini 提供者

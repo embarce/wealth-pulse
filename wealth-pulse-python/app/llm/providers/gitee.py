@@ -4,7 +4,7 @@ Gitee AI LLM 提供者
 使用 OpenAI SDK 兼容接口
 文档：https://ai.gitee.com/docs
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
 from openai import AsyncOpenAI
 
@@ -19,6 +19,9 @@ class GiteeProvider(BaseLLMProvider):
 
     # Gitee AI 支持的模型列表
     MODELS = [
+        "MiniMax-M2.5",
+        "GLM-5",
+        "Kimi-K2.5",
         "Qwen2.5-72B-Instruct",
         "Qwen3-235B-A22B",
         "deepseek-coder-33B-instruct",
@@ -28,13 +31,13 @@ class GiteeProvider(BaseLLMProvider):
     DEFAULT_BASE_URL = "https://ai.gitee.com/v1"
 
     def __init__(
-        self,
-        api_key: str,
-        model: str,
-        base_url: Optional[str] = None,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-        timeout: float = 60.0
+            self,
+            api_key: str,
+            model: str,
+            base_url: Optional[str] = None,
+            max_retries: int = 3,
+            retry_delay: float = 1.0,
+            timeout: float = 60.0
     ):
         """
         初始化 Gitee 提供者
@@ -65,11 +68,11 @@ class GiteeProvider(BaseLLMProvider):
         )
 
     async def chat(
-        self,
-        messages: list,
-        temperature: float = 0.7,
-        max_tokens: int = 5000,
-        **kwargs
+            self,
+            messages: list,
+            temperature: float = 0.7,
+            max_tokens: int = 5000,
+            **kwargs
     ) -> ChatResponse:
         """
         调用 Gitee AI 聊天接口

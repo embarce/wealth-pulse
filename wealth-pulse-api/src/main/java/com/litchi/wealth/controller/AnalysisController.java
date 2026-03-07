@@ -80,34 +80,6 @@ public class AnalysisController {
     }
 
     @Operation(
-            summary = "清除分析缓存",
-            description = "清除指定股票的 AI 分析缓存，下次请求将重新计算",
-            method = "DELETE",
-            tags = {"AI 分析管理"}
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "清除成功"
-            )
-    })
-    @DeleteMapping("/cache/{stockCode}")
-    public Result clearAnalysisCache(
-            @Parameter(description = "股票代码", example = "03900.HK", required = true)
-            @PathVariable String stockCode,
-
-            @Parameter(description = "分析周期", example = "daily")
-            @RequestParam(defaultValue = "daily") String period) {
-
-        boolean cleared = analysisService.clearCache(stockCode, period);
-        if (cleared) {
-            return Result.success("缓存清除成功");
-        } else {
-            return Result.success("缓存不存在或已过期");
-        }
-    }
-
-    @Operation(
             summary = "获取 LLM 供应商列表",
             description = "获取所有支持的 LLM 供应商信息（包括名称、默认模型、是否可用等）",
             method = "GET",

@@ -14,7 +14,7 @@ redis==5.2.0
 
 # Data fetching
 yfinance==1.1.0
-akshare>=1.14.0  # Chinese stock data provider
+akshare>=1.18.35  # Chinese stock data provider
 pandas==2.2.3
 openpyxl==3.1.5  # Excel file support
 

@@ -13,6 +13,8 @@ import com.litchi.wealth.vo.ai.StockAnalysisVo;
 import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -31,45 +33,18 @@ import java.util.stream.Collectors;
 @Service
 public class AnalysisServiceImpl implements AnalysisService {
 
-    private static final String CACHE_PREFIX = "ai:kline:analysis:";
-    private static final int CACHE_TTL_MINUTES = 5;
-
-    @Resource
-    private RedisCache redisCache;
-
-    @Resource
+    @Autowired
     private PythonStockRpc pythonStockRpc;
 
     @Override
+    @Cacheable(value = "analyzeKline", key = "#request.stockCode + '-' + #request.period+'-'+#request.model +'-'+#request.provider")
     public KlineAnalysisVo analyzeKline(KlineAnalysisRequest request) {
-        String cacheKey = buildCacheKey(request);
-
-        // 如果不是强制刷新，先尝试从缓存获取
-        if (!Boolean.TRUE.equals(request.getForceRefresh())) {
-            KlineAnalysisVo cached = redisCache.getCacheObject(cacheKey);
-            if (cached != null) {
-                log.info("从缓存获取 K 线分析结果：{}", request.getStockCode());
-                return cached;
-            }
-        }
-
         // 调用 Python AI 服务执行分析
         KlineAnalysisVo result = callPythonAiService(request);
-
-        // 缓存结果
-        redisCache.setCacheObject(cacheKey, result, CACHE_TTL_MINUTES, TimeUnit.MINUTES);
         log.info("K 线分析完成并已缓存：{}", request.getStockCode());
-
         return result;
     }
 
-    @Override
-    public boolean clearCache(String stockCode, String period) {
-        String cacheKey = buildCacheKey(stockCode, period);
-        boolean deleted = redisCache.deleteObject(cacheKey);
-        log.info("清除 K 线分析缓存：stockCode={}, period={}, deleted={}", stockCode, period, deleted);
-        return deleted;
-    }
 
     @Override
     public List<LLMProviderInfoVo> listProviders() {
@@ -82,6 +57,7 @@ public class AnalysisServiceImpl implements AnalysisService {
     }
 
     @Override
+    @Cacheable(value = "analyzeStock", key = "#request.stockCode + '-' + #request.period+'-'+#request.days+'-'+#request.provider+'-'+#request.model")
     public StockAnalysisVo analyzeStock(StockAnalysisRequestDto request) {
         log.info("收到股票分析请求：股票代码={}, 周期={}, 天数={}, provider={}",
                 request.getStockCode(), request.getPeriod(), request.getDays(), request.getProvider());
@@ -116,20 +92,6 @@ public class AnalysisServiceImpl implements AnalysisService {
             log.error("持仓分析失败", e);
             throw new RuntimeException("持仓分析失败：" + e.getMessage(), e);
         }
-    }
-
-    /**
-     * 构建缓存 Key
-     */
-    private String buildCacheKey(KlineAnalysisRequest request) {
-        return buildCacheKey(request.getStockCode(), request.getPeriod());
-    }
-
-    /**
-     * 构建缓存 Key
-     */
-    private String buildCacheKey(String stockCode, String period) {
-        return CACHE_PREFIX + stockCode + ":" + period;
     }
 
     /**

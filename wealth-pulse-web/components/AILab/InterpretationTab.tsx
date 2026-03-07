@@ -1,8 +1,7 @@
 
-import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useContext, useEffect, useRef, useCallback } from 'react';
 import type { KLineData } from 'klinecharts';
 import { StockPrice, ChartInterpretation } from '../../types';
-import { interpretChart } from '../../services/gemini';
 import { stockApi, HotStock, EnhancedDataPoint } from '../../services/stockApi';
 import StockChart from '../StockChart';
 import StockChartWithOverlay from '../StockChartWithOverlay';
@@ -11,6 +10,12 @@ import { I18nContext } from '../../App';
 
 interface InterpretationTabProps {
   stocks: StockPrice[];
+  toast?: {
+    showSuccess: (message: string, duration?: number) => void;
+    showError: (message: string, duration?: number) => void;
+    showWarning: (message: string, duration?: number) => void;
+    showInfo: (message: string, duration?: number) => void;
+  };
 }
 
 // 将热门股票转换为 StockPrice 格式
@@ -30,13 +35,91 @@ const convertToStockPrice = (hotStock: HotStock): StockPrice => {
   };
 };
 
-const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
+/**
+ * 防抖搜索 Hook - 用于后端股票搜索
+ */
+function useDebounceStockSearch(delay: number = 300) {
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<StockPrice[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const executeSearch = useCallback((searchQuery: string) => {
+    // 清除之前的定时器
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+
+    const trimmed = searchQuery.trim();
+
+    // 空查询直接清空结果
+    if (!trimmed) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+
+    // 设置新的防抖定时器
+    timerRef.current = setTimeout(async () => {
+      try {
+        const results = await stockApi.searchStocks(trimmed);
+        setSearchResults(results.slice(0, 50).map(convertToStockPrice));
+      } catch (e: any) {
+        console.error('[useDebounceStockSearch] search error:', e);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, delay);
+  }, [delay]);
+
+  const updateQuery = useCallback((newQuery: string) => {
+    setQuery(newQuery);
+    executeSearch(newQuery);
+  }, [executeSearch]);
+
+  const clearSearch = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setQuery('');
+    setSearchResults([]);
+    setIsSearching(false);
+  }, []);
+
+  // 组件卸载时清理
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    query,
+    searchResults,
+    isSearching,
+    updateQuery,
+    clearSearch,
+  };
+}
+
+const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks, toast = {
+  showSuccess: () => {},
+  showError: () => {},
+  showWarning: () => {},
+  showInfo: () => {},
+} }) => {
   const { t, lang } = useContext(I18nContext);
 
   // 状态管理
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
   const [hotStocks, setHotStocks] = useState<StockPrice[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [interpretation, setInterpretation] = useState<ChartInterpretation | null>(null);
@@ -44,6 +127,15 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
   const [chartType, setChartType] = useState<'minute' | 'day'>('day');
   const [keyLevels, setKeyLevels] = useState<KeyLevel[]>([]);
   const [showAIOverlay, setShowAIOverlay] = useState(true);
+
+  // 使用防抖搜索 Hook
+  const {
+    query: searchQuery,
+    searchResults,
+    isSearching,
+    updateQuery: setSearchQuery,
+    clearSearch,
+  } = useDebounceStockSearch(300);
 
   // 保存当前图表数据
   const [currentKlineData, setCurrentKlineData] = useState<KLineData[]>([]);
@@ -78,21 +170,42 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
     fetchHotStocks();
   }, []);
 
-  // 搜索逻辑
-  const searchResults = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) {
-      return hotStocks.length > 0 ? hotStocks.slice(0, 6) : stocks.slice(0, 4);
+  // 搜索结果显示（使用后端搜索结果，如果为空则显示热门股票）
+  const displayResults = useMemo(() => {
+    if (searchResults.length > 0) {
+      return searchResults;
     }
-    return stocks.filter(s => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)).slice(0, 5);
-  }, [searchQuery, stocks, hotStocks]);
+    // 没有搜索时，显示热门股票
+    return hotStocks.length > 0 ? hotStocks.slice(0, 6) : stocks.slice(0, 4);
+  }, [searchResults, hotStocks, stocks]);
 
   // 分析逻辑
   const handleAnalyze = async () => {
-    if (!selectedStock) return;
+    console.log('[handleAnalyze] selectedStock:', selectedStock);
+    console.log('[handleAnalyze] currentKlineData.length:', currentKlineData.length);
+
+    if (!selectedStock) {
+      toast.showError('请先选择股票');
+      return;
+    }
 
     if (currentKlineData.length === 0) {
-      alert('请等待图表数据加载完成后再进行分析');
+      toast.showError('请等待图表数据加载完成后再进行分析');
+      return;
+    }
+
+    // 从 localStorage 获取用户配置的 LLM provider 和 model
+    const configStr = localStorage.getItem('app_config');
+    const appConfig = configStr ? JSON.parse(configStr) : null;
+    const llmProvider = appConfig?.llmProvider;
+    const llmModel = appConfig?.llmModel;
+
+    console.log('[handleAnalyze] llmProvider:', llmProvider);
+    console.log('[handleAnalyze] llmModel:', llmModel);
+
+    // 检查用户是否配置了 LLM
+    if (!llmProvider || !llmModel) {
+      toast.showWarning('请先在设置中配置 LLM 供应商和模型');
       return;
     }
 
@@ -123,13 +236,7 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
         };
       });
 
-      // 从 localStorage 获取用户配置的 LLM provider 和 model
-      const configStr = localStorage.getItem('pulse_app_config');
-      const appConfig = configStr ? JSON.parse(configStr) : null;
-      const llmProvider = appConfig?.llmProvider || undefined;
-      const llmModel = appConfig?.llmModel || undefined;
-
-      // 构建请求参数
+      // 构建请求参数（包含用户配置的 LLM provider 和 model）
       const analysisRequest: AIAnalysisRequest = {
         stockCode: selectedStock.symbol,
         period: chartType === 'minute' ? 'minute' : currentPeriod,
@@ -167,28 +274,30 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
         stopLoss: convertedKeyLevels.find((k) => k.type === 'stopLoss')?.price,
         advice: aiResponse.recommendationReason || aiResponse.trendDescription,
       });
+
+      // 分析成功提示
+      toast.showSuccess('AI 分析完成！');
     } catch (e: any) {
       if (e.name === 'AbortError') {
-        console.log('AI 分析已取消');
+        toast.showInfo('AI 分析已取消');
         return;
       }
 
       console.error('AI 分析失败:', e);
 
-      // Fallback
-      try {
-        const data = await interpretChart(selectedStock.symbol, selectedStock.history, lang);
-        setInterpretation(data);
-      } catch (e2) {
-        setInterpretation({
-          patterns: lang === 'zh' ? ["底部盘整", "量价背离"] : ["Bottom Consolidation", "Divergence"],
-          support: selectedStock.price * 0.92,
-          resistance: selectedStock.price * 1.08,
-          takeProfit: selectedStock.price * 1.15,
-          stopLoss: selectedStock.price * 0.88,
-          advice: lang === 'zh' ? "当前处于筑底阶段，建议轻仓分批入场。" : "Bottoming out. Suggest light position entry."
-        });
-      }
+      // 显示错误提示，不使用 Fallback
+      const errorMessage = e.message || 'AI 分析失败，请稍后重试';
+      toast.showError(errorMessage);
+
+      // 清空分析结果
+      setKeyLevels([]);
+      setInterpretation(null);
+      setAiTrend('');
+      setAiTrendDescription('');
+      setAiRecommendation('');
+      setAiRecommendationReason('');
+      setAiRiskLevel('');
+      setAiTargetPriceRange('');
     } finally {
       setIsAnalyzing(false);
       abortControllerRef.current = null;
@@ -296,12 +405,12 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
                   </div>
                 )}
                 <div className="p-2">
-                  {isLoadingHotStocks ? (
+                  {isSearching ? (
                     <div className="flex items-center justify-center py-8">
                       <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
                     </div>
-                  ) : searchResults.length > 0 ? (
-                    searchResults.map(s => (
+                  ) : displayResults.length > 0 ? (
+                    displayResults.map(s => (
                       <button
                         key={s.symbol}
                         onClick={() => { setSelectedStock(s); setSearchQuery(''); setIsSearchFocused(false); setInterpretation(null); }}

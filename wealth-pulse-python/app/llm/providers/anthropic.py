@@ -4,7 +4,7 @@ Anthropic LLM 提供者
 使用 anthropic SDK
 文档：https://docs.anthropic.com/claude/reference
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 
 from anthropic import AsyncAnthropic
 
@@ -19,21 +19,17 @@ class AnthropicProvider(BaseLLMProvider):
 
     # Anthropic 支持的模型列表
     MODELS = [
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-haiku-20241022",
-        "claude-3-opus-20240229",
-        "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307",
+        "claude-5-sonnet",
     ]
 
     def __init__(
-        self,
-        api_key: str,
-        model: str,
-        base_url: Optional[str] = None,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-        timeout: float = 60.0
+            self,
+            api_key: str,
+            model: str,
+            base_url: Optional[str] = None,
+            max_retries: int = 3,
+            retry_delay: float = 1.0,
+            timeout: float = 60.0
     ):
         """
         初始化 Anthropic 提供者
@@ -64,11 +60,11 @@ class AnthropicProvider(BaseLLMProvider):
         )
 
     async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: float = 0.7,
-        max_tokens: int = 5000,
-        **kwargs
+            self,
+            messages: List[Dict[str, str]],
+            temperature: float = 0.7,
+            max_tokens: int = 5000,
+            **kwargs
     ) -> ChatResponse:
         """
         调用 Anthropic 聊天接口

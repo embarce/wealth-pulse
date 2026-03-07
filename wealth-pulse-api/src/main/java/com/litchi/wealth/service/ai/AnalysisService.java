@@ -29,15 +29,6 @@ public interface AnalysisService {
     KlineAnalysisVo analyzeKline(KlineAnalysisRequest request);
 
     /**
-     * 清除分析缓存
-     *
-     * @param stockCode 股票代码
-     * @param period 分析周期
-     * @return 是否清除成功
-     */
-    boolean clearCache(String stockCode, String period);
-
-    /**
      * 获取 LLM 供应商列表
      *
      * @return LLM 供应商列表
