@@ -4,11 +4,11 @@ Gitee AI LLM 提供者
 使用 OpenAI SDK 兼容接口
 文档：https://ai.gitee.com/docs
 """
-from typing import List, Optional
+from typing import List, Dict, Optional, AsyncIterator
 
 from openai import AsyncOpenAI
 
-from app.llm.base import BaseLLMProvider, ChatResponse
+from app.llm.base import BaseLLMProvider, ChatResponse, StreamChunk
 
 
 class GiteeProvider(BaseLLMProvider):
@@ -21,6 +21,7 @@ class GiteeProvider(BaseLLMProvider):
     MODELS = [
         "MiniMax-M2.5",
         "GLM-5",
+        "GLM-4.7-Flash",
         "Kimi-K2.5",
         "Qwen2.5-72B-Instruct",
         "Qwen3-235B-A22B",
@@ -35,9 +36,9 @@ class GiteeProvider(BaseLLMProvider):
             api_key: str,
             model: str,
             base_url: Optional[str] = None,
-            max_retries: int = 3,
-            retry_delay: float = 1.0,
-            timeout: float = 60.0
+            max_retries: int = 2,
+            retry_delay: float = 0.5,
+            timeout: float = 120.0
     ):
         """
         初始化 Gitee 提供者
@@ -101,8 +102,6 @@ class GiteeProvider(BaseLLMProvider):
                 request_params["presence_penalty"] = kwargs["presence_penalty"]
             if "frequency_penalty" in kwargs:
                 request_params["frequency_penalty"] = kwargs["frequency_penalty"]
-            if "stream" in kwargs:
-                request_params["stream"] = kwargs["stream"]
 
             # 调用 API
             response = await self._client.chat.completions.create(**request_params)
@@ -129,6 +128,79 @@ class GiteeProvider(BaseLLMProvider):
         except Exception as e:
             self.logger.error(f"[Gitee] 调用失败：{str(e)}")
             raise RuntimeError(f"[Gitee] 调用失败：{str(e)}")
+
+    async def chat_stream(
+            self,
+            messages: List[Dict[str, str]],
+            temperature: float = 0.7,
+            max_tokens: int = 5000,
+            **kwargs
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        调用 Gitee AI 流式聊天接口
+
+        Args:
+            messages: 消息列表
+            temperature: 温度参数 (0-1)
+            max_tokens: 最大 token 数
+
+        Yields:
+            StreamChunk 对象
+        """
+        try:
+            # 构建请求参数，启用流式
+            request_params = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            }
+
+            # 添加可选参数
+            if "top_p" in kwargs:
+                request_params["top_p"] = kwargs["top_p"]
+            if "presence_penalty" in kwargs:
+                request_params["presence_penalty"] = kwargs["presence_penalty"]
+            if "frequency_penalty" in kwargs:
+                request_params["frequency_penalty"] = kwargs["frequency_penalty"]
+
+            # 启用流式
+            request_params["stream"] = True
+
+            # 流式调用
+            stream = await self._client.chat.completions.create(**request_params)
+
+            # 异步迭代响应
+            async for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                content = delta.content if delta and delta.content else ""
+                if content:
+                    self.logger.info(
+                        f"[Gitee] 流式调用成功，返回 {content}"
+                    )
+                    yield StreamChunk(content=content)
+
+                # 检查是否结束
+                finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
+                if finish_reason:
+                    # 尝试获取 usage 信息
+                    usage = None
+                    if hasattr(chunk, 'usage') and chunk.usage:
+                        usage = {
+                            "prompt_tokens": chunk.usage.prompt_tokens,
+                            "completion_tokens": chunk.usage.completion_tokens,
+                            "total_tokens": chunk.usage.total_tokens
+                        }
+                    yield StreamChunk(
+                        content="",
+                        finish_reason=finish_reason,
+                        usage=usage
+                    )
+                    break
+
+        except Exception as e:
+            self.logger.error(f"[Gitee] 流式调用失败：{str(e)}")
+            raise RuntimeError(f"[Gitee] 流式调用失败：{str(e)}")
 
     def get_available_models(self) -> List[str]:
         """获取支持的模型列表"""

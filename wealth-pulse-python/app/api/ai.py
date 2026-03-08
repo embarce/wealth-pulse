@@ -14,7 +14,9 @@ from app.core.security import get_current_user
 from app.db.session import get_db
 from app.llm import llm_service
 from app.schemas.common import success_response, ResponseCode
-from app.schemas.kline_analysis import KlineAnalysisRequest, KlineAnalysisVo
+from app.schemas.hkstock_news import HKStockMarketAnalysisRequest
+from app.schemas.kline_analysis import KlineAnalysisRequest
+from app.services.sina_hkstock_crawler import SinaHKStockCrawler
 from app.services.stock_analysis_service import StockAnalysisService
 from app.services.stock_kline_analysis_service import StockKlineAnalysisService
 
@@ -401,7 +403,8 @@ async def analyze_kline(request: KlineAnalysisRequest):
     ```
     """
     try:
-        logger.info(f"[Kline] 收到 K 线分析请求：{request.stock_code}, 数据条数={len(request.kline_data)}, provider={request.provider}, model={request.model}")
+        logger.info(
+            f"[Kline] 收到 K 线分析请求：{request.stock_code}, 数据条数={len(request.kline_data)}, provider={request.provider}, model={request.model}")
 
         # 验证 K 线数据
         if not request.kline_data or len(request.kline_data) < 5:
@@ -436,6 +439,110 @@ async def analyze_kline(request: KlineAnalysisRequest):
         raise
     except Exception as e:
         logger.error(f"[Kline] 分析 K 线失败：{str(e)}")
+        raise ApiException(
+            msg=f"分析失败：{str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+# ==================== 港股市场分析接口 ====================
+
+@router.post("/analyze-hkstock-market", summary="AI 分析港股市场")
+async def analyze_hkstock_market(
+        request: HKStockMarketAnalysisRequest,
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    AI 分析港股市场新闻，给出投资建议（需要认证）
+
+    基于新浪财经爬取的港股新闻（要闻 + 大行研报 + 公司新闻），
+    通过 LLM 分析最近的投资方向、政策变动、经济状况等，
+    并提供投资策略建议
+
+    **分析维度：**
+    1. 市场要闻解读 - 热点话题、政策变动、宏观经济信号
+    2. 行业趋势分析 - 机构关注方向、行业政策、产业链动态
+    3. 大行观点汇总 - 投行评级倾向、重点推荐板块
+    4. 公司动态分析 - 龙头企业动向、业绩披露、资本运作
+    5. 风险因素识别 - 政策/市场/汇率/地缘政治风险
+    6. 投资策略建议 - 仓位建议、配置方向、操作策略
+
+    **请求参数：**
+    - `provider`: LLM 供应商（可选：doubao, openai 等）
+    - `model`: 模型名称（可选）
+
+    **返回内容：**
+    - `report`: Markdown 格式的投资建议报告
+    - `news_summary`: 新闻摘要统计信息（新闻数量等）
+
+    **示例请求：**
+    ```json
+    {
+      "provider": "openai",
+      "model": "gpt-4o-mini"
+    }
+    ```
+
+    **返回示例：**
+    ```markdown
+    # 港股市场投资策略报告
+
+    ## 一、市场要闻解读
+
+    当前市场关注焦点集中在以下几个方面：
+    - **政策面**：...
+    - **宏观经济**：...
+
+    ## 二、行业趋势分析
+
+    ### 热门板块
+    1. 科技股：...
+    2. 金融股：...
+
+    ## 三、投资策略建议
+
+    - **总体仓位**：建议保持 70% 左右仓位
+    - **重点配置**：...
+    - **关注时点**：...
+    ```
+    """
+    try:
+        logger.info(f"[HKStockMarket] 收到港股市场分析请求，provider={request.provider}, model={request.model}")
+
+        # 创建分析服务（需要 db 会话，但此功能不实际使用 db）
+        analysis_service = StockAnalysisService(db)
+
+        # 获取新闻数据并进行分析
+        report = await analysis_service.analyze_hkstock_market(
+            news_data=None,  # None 表示自动获取
+            provider=request.provider,
+            model=request.model
+        )
+
+        # 获取新闻统计信息
+        crawler = SinaHKStockCrawler()
+        news_data = crawler.fetch_all_news_sync()
+        news_summary = news_data.get('summary', {})
+
+        return success_response(
+            data={
+                "report": report,
+                "news_summary": news_summary
+            },
+            msg="港股市场分析完成"
+        )
+
+    except ValueError as e:
+        logger.error(f"[HKStockMarket] 分析请求参数错误：{str(e)}")
+        raise ApiException(
+            msg=str(e),
+            code=ResponseCode.BAD_REQUEST
+        )
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"[HKStockMarket] 分析港股市场失败：{str(e)}")
         raise ApiException(
             msg=f"分析失败：{str(e)}",
             code=ResponseCode.INTERNAL_ERROR

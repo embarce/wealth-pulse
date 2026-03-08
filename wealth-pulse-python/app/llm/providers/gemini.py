@@ -4,12 +4,12 @@ Google Gemini LLM 提供者
 使用新的 google-genai SDK
 文档：https://ai.google.dev/docs
 """
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, AsyncIterator
 
 from google import genai
 from google.genai import types
 
-from app.llm.base import BaseLLMProvider, ChatResponse
+from app.llm.base import BaseLLMProvider, ChatResponse, StreamChunk
 
 
 class GeminiProvider(BaseLLMProvider):
@@ -28,9 +28,9 @@ class GeminiProvider(BaseLLMProvider):
             api_key: str,
             model: str,
             base_url: Optional[str] = None,
-            max_retries: int = 3,
-            retry_delay: float = 1.0,
-            timeout: float = 60.0
+            max_retries: int = 2,
+            retry_delay: float = 0.5,
+            timeout: float = 120.0
     ):
         """
         初始化 Gemini 提供者
@@ -109,6 +109,62 @@ class GeminiProvider(BaseLLMProvider):
         except Exception as e:
             self.logger.error(f"[Gemini] 调用失败：{str(e)}")
             raise RuntimeError(f"[Gemini] 调用失败：{str(e)}")
+
+    async def chat_stream(
+            self,
+            messages: List[Dict[str, str]],
+            temperature: float = 0.7,
+            max_tokens: int = 5000,
+            **kwargs
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        调用 Gemini 流式聊天接口
+
+        Args:
+            messages: 消息列表
+            temperature: 温度参数 (0-1)
+            max_tokens: 最大 token 数
+
+        Yields:
+            StreamChunk 对象
+        """
+        try:
+            prompt = messages[-1]["content"]
+
+            # 流式调用
+            response = await self._client.aio.models.generate_content_stream(
+                model=self.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=temperature,
+                    max_output_tokens=max_tokens
+                )
+            )
+
+            # 异步迭代响应
+            async for chunk in response:
+                text = chunk.text if hasattr(chunk, 'text') else ""
+                if text:
+                    self.logger.info(
+                        f"[Gemini] 流式调用成功，返回 {text}"
+                    )
+                    yield StreamChunk(content=text)
+
+                # 检查是否有 usage 信息
+                if hasattr(chunk, 'usage_metadata') and chunk.usage_metadata:
+                    yield StreamChunk(
+                        content="",
+                        finish_reason="stop",
+                        usage={
+                            "prompt_tokens": chunk.usage_metadata.prompt_token_count,
+                            "completion_tokens": chunk.usage_metadata.candidates_token_count,
+                            "total_tokens": chunk.usage_metadata.total_token_count
+                        }
+                    )
+
+        except Exception as e:
+            self.logger.error(f"[Gemini] 流式调用失败：{str(e)}")
+            raise RuntimeError(f"[Gemini] 流式调用失败：{str(e)}")
 
     def get_available_models(self) -> List[str]:
         """获取支持的模型列表"""

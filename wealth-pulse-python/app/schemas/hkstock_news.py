@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 
+# ==================== 新闻爬取相关模型 ====================
+
 class HKStockNewsItem(BaseModel):
     """港股新闻条目"""
     title: str = Field(..., description="新闻标题")
@@ -52,3 +54,17 @@ class HKStockSingleNewsResult(BaseModel):
     url_used: Optional[str] = Field(None, description="实际使用的 URL")
     url_fallback: bool = Field(default=False, description="是否使用了默认 URL")
     skipped: bool = Field(default=False, description="是否跳过爬取")
+
+
+# ==================== AI 分析相关模型 ====================
+
+class HKStockMarketAnalysisRequest(BaseModel):
+    """港股市场 AI 分析请求"""
+    provider: Optional[str] = Field(default=None, description="LLM 供应商：doubao/openai")
+    model: Optional[str] = Field(default=None, description="模型名称")
+
+
+class HKStockMarketAnalysisVo(BaseModel):
+    """港股市场 AI 分析结果"""
+    report: str = Field(..., description="Markdown 格式的投资建议报告")
+    news_summary: Optional[dict] = Field(None, description="新闻摘要统计信息")

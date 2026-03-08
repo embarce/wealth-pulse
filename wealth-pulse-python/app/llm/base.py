@@ -3,8 +3,8 @@ LLM 提供者抽象基类
 定义所有 LLM 提供者必须实现的接口
 """
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from typing import List, Dict, Any, Optional, AsyncIterator
+from dataclasses import dataclass, field
 import logging
 
 
@@ -19,6 +19,14 @@ class ChatResponse:
     @property
     def total_tokens(self) -> int:
         return self.usage.get("total_tokens", 0)
+
+
+@dataclass
+class StreamChunk:
+    """流式响应 chunk"""
+    content: str = ""  # 当前 chunk 的内容
+    finish_reason: Optional[str] = None  # 结束原因：stop, length, etc.
+    usage: Optional[Dict[str, int]] = None  # token 使用统计（通常在最后一个 chunk）
 
 
 @dataclass
@@ -42,9 +50,9 @@ class BaseLLMProvider(ABC):
         api_key: str,
         model: str,
         base_url: Optional[str] = None,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-        timeout: float = 60.0
+        max_retries: int = 2,  # 减少默认重试次数
+        retry_delay: float = 0.5,  # 减少默认延迟
+        timeout: float = 120.0  # 默认 2 分钟超时
     ):
         """
         初始化 LLM 提供者
@@ -71,14 +79,14 @@ class BaseLLMProvider(ABC):
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: int = 5000,  # 增加默认值，确保能输出完整的 JSON
+        max_tokens: int = 5000,
         **kwargs
     ) -> ChatResponse:
         """
-        聊天接口
+        聊天接口（非流式）
 
         Args:
-            messages: 消息列表，格式: [{"role": "user", "content": "..."}]
+            messages: 消息列表
             temperature: 温度参数 (0-1)
             max_tokens: 最大 token 数
             **kwargs: 其他参数
@@ -87,6 +95,52 @@ class BaseLLMProvider(ABC):
             ChatResponse 对象
         """
         pass
+
+    async def chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 5000,
+        **kwargs
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        聊天接口（流式）- 生成器形式返回
+
+        默认实现：通过非流式 chat() 包装，适用于没有原生流式支持的 provider
+
+        Args:
+            messages: 消息列表
+            temperature: 温度参数 (0-1)
+            max_tokens: 最大 token 数
+            **kwargs: 其他参数
+
+        Yields:
+            StreamChunk 对象
+
+        Note:
+            - 每个 chunk 包含一部分内容
+            - 最后一个 chunk 可能包含 usage 统计
+            - finish_reason 为 'stop' 表示正常结束
+        """
+        # 默认实现：调用非流式接口，然后按字符返回
+        # 子类应该覆盖此方法以提供真正的流式支持
+        response = await self.chat(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs
+        )
+
+        # 按字符模拟流式返回
+        for char in response.content:
+            yield StreamChunk(content=char)
+
+        # 返回 final chunk
+        yield StreamChunk(
+            content="",
+            finish_reason="stop",
+            usage=response.usage
+        )
 
     @abstractmethod
     def get_available_models(self) -> List[str]:

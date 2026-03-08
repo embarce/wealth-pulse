@@ -1,6 +1,11 @@
 """
 股票 AI 分析服务
 整合公司信息、K 线数据、新闻、财务指标、公告等信息，通过 LLM 进行分析
+
+主要功能：
+1. analyze_stock - 单只股票 AI 分析（含 K 线、新闻、财务等）
+2. analyze_position - 持仓组合 AI 分析（多只股票综合评估）
+3. analyze_hkstock_market - 港股市场新闻分析（基于新浪财经新闻给出投资建议）
 """
 import logging
 from typing import Dict, Any, Optional, List
@@ -18,6 +23,7 @@ from app.services.sina_news_crawler import sina_news_crawler
 from app.services.sina_finance_crawler import sina_finance_crawler
 from app.services.sina_company_notice_crawler import sina_company_notice_crawler
 from app.services.akshare_provider import AkShareProvider
+from app.services.sina_hkstock_crawler import SinaHKStockCrawler
 
 logger = logging.getLogger(__name__)
 
@@ -824,3 +830,291 @@ class StockAnalysisService:
                 "stocks_detail": stocks_data,
                 "error": "解析失败"
             }
+
+    async def analyze_hkstock_market(
+        self,
+        news_data: Optional[Dict[str, Any]] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None
+    ) -> str:
+        """
+        AI 分析港股市场新闻，给出投资建议
+
+        基于新浪财经爬取的港股新闻（要闻 + 大行研报 + 公司新闻），
+        通过 LLM 分析最近的投资方向、政策变动、经济状况等，
+        并提供投资策略建议
+
+        Args:
+            news_data: 新闻数据字典，包含 important_news, rank_news, company_news
+                      如果为 None，则自动调用爬虫获取
+            provider: LLM 供应商名称
+            model: 模型名称
+
+        Returns:
+            Markdown 格式的投资建议报告
+        """
+        logger.info("[HKStockMarketAnalysis] 开始分析港股市场新闻")
+
+        # 1. 获取新闻数据
+        if news_data is None:
+            logger.info("[HKStockMarketAnalysis] 自动获取新闻数据")
+            try:
+                crawler = SinaHKStockCrawler()
+                news_data = crawler.fetch_all_news_sync()
+                logger.info(f"[HKStockMarketAnalysis] 获取到 {news_data['summary']['total_count']} 条新闻")
+            except Exception as e:
+                logger.error(f"[HKStockMarketAnalysis] 获取新闻数据失败：{e}")
+                raise ValueError(f"无法获取港股新闻数据：{e}")
+
+        # 2. 构建新闻文本
+        news_text = self._build_hkstock_news_text(news_data)
+
+        # 3. 构建分析 Prompt
+        prompt = self._build_hkstock_market_analysis_prompt(news_text)
+
+        # 4. 调用 LLM 分析（使用流式调用，收集完整文本）
+        try:
+            content_parts = []
+            async for chunk in llm_service.chat_stream(
+                messages=[{"role": "user", "content": prompt}],
+                provider=provider,
+                model=model,
+                temperature=0.5,  # 降低温度，使分析更稳定
+                max_tokens=8000
+            ):
+                if chunk.content:
+                    content_parts.append(chunk.content)
+
+            result = "".join(content_parts)
+            logger.info("[HKStockMarketAnalysis] 分析完成")
+            return result
+
+        except Exception as e:
+            logger.error(f"[HKStockMarketAnalysis] LLM 分析失败：{e}")
+            raise
+
+    def _build_hkstock_news_text(self, news_data: Dict[str, Any]) -> str:
+        """构建新闻文本"""
+        lines = []
+
+        # 要闻
+        important_news = news_data.get('important_news', [])
+        if important_news:
+            lines.append("【要闻】")
+            for i, news in enumerate(important_news[:20], 1):
+                title = news.get('title', '')
+                lines.append(f"  {i}. {title}")
+            lines.append("")
+
+        # 大行研报
+        rank_news = news_data.get('rank_news', [])
+        if rank_news:
+            lines.append("【大行研报】")
+            for i, news in enumerate(rank_news[:20], 1):
+                title = news.get('title', '')
+                publish_time = news.get('publish_time', '')
+                line = f"  {i}. {title}"
+                if publish_time:
+                    line += f" ({publish_time})"
+                lines.append(line)
+            lines.append("")
+
+        # 公司新闻
+        company_news = news_data.get('company_news', [])
+        if company_news:
+            lines.append("【公司新闻】")
+            for i, news in enumerate(company_news[:20], 1):
+                title = news.get('title', '')
+                publish_time = news.get('publish_time', '')
+                line = f"  {i}. {title}"
+                if publish_time:
+                    line += f" ({publish_time})"
+                lines.append(line)
+            lines.append("")
+
+        # 统计信息
+        summary = news_data.get('summary', {})
+        lines.append(f"【新闻统计】共 {summary.get('total_count', 0)} 条新闻")
+        lines.append(f"  - 要闻：{summary.get('important_news_count', 0)} 条")
+        lines.append(f"  - 大行研报：{summary.get('rank_news_count', 0)} 条")
+        lines.append(f"  - 公司新闻：{summary.get('company_news_count', 0)} 条")
+
+        return "\n".join(lines)
+
+    def _build_hkstock_market_analysis_prompt(self, news_text: str) -> str:
+        """构建港股市场分析 Prompt"""
+
+        prompt = f"""你是一位专业的港股投资顾问，拥有丰富的港股市场经验。请基于以下最新的市场新闻，进行全面的分析并给出投资建议。
+
+## 市场新闻汇总
+
+{news_text}
+
+---
+
+## 分析要求
+
+请从以下几个维度进行深度分析，并以 **Markdown 格式** 返回报告：
+
+### 1. 市场要闻解读
+- 识别当前市场最关注的热点话题
+- 分析重大政策变动及其影响
+- 解读宏观经济信号
+
+### 2. 行业趋势分析
+- 哪些行业受到机构关注
+- 行业政策环境变化
+- 产业链上下游动态
+
+### 3. 大行观点汇总
+- 主流投行的评级倾向（看好/谨慎/中性）
+- 重点推荐板块和个股
+- 目标价预测区间
+
+### 4. 公司动态分析
+- 龙头企业最新动向
+- 业绩披露情况
+- 重大资本运作（并购、分拆、回购等）
+
+### 5. 风险因素识别
+- 政策风险
+- 市场风险
+- 汇率风险
+- 地缘政治风险
+
+### 6. 投资策略建议
+- **总体仓位建议**：高仓位/中等仓位/低仓位
+- **配置方向**：推荐关注的板块和主题
+- **操作策略**：逢低吸纳/逢高减仓/观望等待
+- **关注时点**：需要重点关注的经济数据发布时间、政策窗口期等
+
+---
+
+## 输出格式要求
+
+1. **标题层级**：使用一级标题 (#) 作为报告主标题，二级标题 (##) 作为各章节标题
+2. **重点突出**：关键信息使用 **加粗** 标记
+3. **列表格式**：使用无序列表 (-) 或有序列表 (1. 2. 3.) 展示要点
+4. **引用强调**：重要提示使用引用块 (> )
+5. **表格呈现**：如有数据对比，优先使用表格格式
+6. **篇幅控制**：报告总长度控制在 1500-2500 字
+7. **语言风格**：专业但不晦涩，适合中等投资经验的读者
+
+---
+
+## Markdown 输出模板
+
+```markdown
+# 港股市场投资策略报告
+
+> 报告日期：YYYY-MM-DD
+
+## 一、市场要闻解读
+
+（此处撰写市场要闻解读，约 300-400 字）
+
+**核心观点**：
+- 观点一
+- 观点二
+- 观点三
+
+## 二、行业趋势分析
+
+### 热门板块
+
+| 板块名称 | 关注热度 | 主要驱动因素 |
+|---------|---------|-------------|
+| xxx     | 高/中/低 | xxx         |
+
+### 行业政策动态
+
+- **政策一**：影响分析
+- **政策二**：影响分析
+
+## 三、大行观点汇总
+
+**整体评级倾向**：看好 / 中性 / 谨慎
+
+**重点推荐**：
+- 板块/个股 1：目标价 xxx
+- 板块/个股 2：目标价 xxx
+
+## 四、公司动态分析
+
+- **公司名称 1**：重要事件及点评
+- **公司名称 2**：重要事件及点评
+
+## 五、风险因素
+
+| 风险类型 | 风险等级 | 说明 |
+|---------|---------|------|
+| 政策风险 | 高/中/低 | xxx  |
+| 市场风险 | 高/中/低 | xxx  |
+| 汇率风险 | 高/中/低 | xxx  |
+
+## 六、投资策略建议
+
+> 核心策略：XXXXXX
+
+### 仓位建议
+
+建议保持 **XX%** 左右仓位
+
+### 配置方向
+
+1. **首选板块**：xxx
+2. **次选板块**：xxx
+
+### 操作策略
+
+- 逢低吸纳：xxx
+- 逢高减仓：xxx
+- 观望等待：xxx
+
+### 近期关注时点
+
+- **日期/时段**：事件名称
+- **日期/时段**：事件名称
+
+---
+
+> **免责声明**：以上分析仅供参考，不构成投资建议。投资有风险，决策需谨慎。
+```
+
+---
+
+请根据实际新闻内容，按照上述模板格式输出专业的分析报告：
+"""
+        return prompt
+
+    def analyze_hkstock_market_sync(
+        self,
+        news_data: Optional[Dict[str, Any]] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None
+    ) -> str:
+        """
+        同步版本：AI 分析港股市场新闻，给出投资建议
+
+        Args:
+            news_data: 新闻数据字典，包含 important_news, rank_news, company_news
+            provider: LLM 供应商名称
+            model: 模型名称
+
+        Returns:
+            Markdown 格式的投资建议报告
+        """
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        return loop.run_until_complete(
+            self.analyze_hkstock_market(news_data=news_data, provider=provider, model=model)
+        )
+
+
+# 创建全局单例（需要 db 会话的实例在使用时创建）
+# stock_analysis_service = StockAnalysisService(db=None)  # type: ignore

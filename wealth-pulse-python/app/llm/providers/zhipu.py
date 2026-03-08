@@ -4,11 +4,12 @@
 使用 zhipuai SDK
 文档：https://open.bigmodel.cn/dev/api
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncIterator
+import asyncio
 
 from zai import ZhipuAiClient
 
-from app.llm.base import BaseLLMProvider, ChatResponse
+from app.llm.base import BaseLLMProvider, ChatResponse, StreamChunk
 
 
 class ZhipuProvider(BaseLLMProvider):
@@ -30,9 +31,9 @@ class ZhipuProvider(BaseLLMProvider):
             api_key: str,
             model: str,
             base_url: Optional[str] = None,
-            max_retries: int = 3,
-            retry_delay: float = 1.0,
-            timeout: float = 60.0
+            max_retries: int = 2,
+            retry_delay: float = 0.5,
+            timeout: float = 120.0
     ):
         """
         初始化智谱 AI 提供者
@@ -92,7 +93,6 @@ class ZhipuProvider(BaseLLMProvider):
                 request_params["top_p"] = kwargs["top_p"]
 
             # 调用 API (同步调用，需要用 asyncio.to_thread 包装)
-            import asyncio
             response = await asyncio.to_thread(
                 self._client.chat.completions.create,
                 **request_params
@@ -120,6 +120,78 @@ class ZhipuProvider(BaseLLMProvider):
         except Exception as e:
             self.logger.error(f"[ZhipuAI] 调用失败：{str(e)}")
             raise RuntimeError(f"[ZhipuAI] 调用失败：{str(e)}")
+
+    async def chat_stream(
+            self,
+            messages: List[Dict[str, str]],
+            temperature: float = 0.7,
+            max_tokens: int = 5000,
+            **kwargs
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        调用智谱 AI 流式聊天接口
+
+        Args:
+            messages: 消息列表
+            temperature: 温度参数 (0-1)
+            max_tokens: 最大 token 数
+
+        Yields:
+            StreamChunk 对象
+        """
+        try:
+            # 构建请求参数
+            request_params = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": True  # 启用流式
+            }
+
+            # 添加可选参数
+            if "top_p" in kwargs:
+                request_params["top_p"] = kwargs["top_p"]
+
+            # 同步流式调用，需要用 asyncio.to_thread 包装生成器
+            def _create_stream():
+                return self._client.chat.completions.create(**request_params)
+
+            # 获取流式响应（在后台线程中执行）
+            stream = await asyncio.to_thread(_create_stream)
+
+            # 迭代响应
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                content = delta.content if delta and delta.content else ""
+
+                if content:
+                    self.logger.info(
+                        f"[ZhipuAI] 流式调用返回 {content}"
+                    )
+                    yield StreamChunk(content=content)
+
+                # 检查是否结束
+                finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
+                if finish_reason:
+                    # 尝试获取 usage 信息
+                    usage = None
+                    if hasattr(chunk, 'usage') and chunk.usage:
+                        usage = {
+                            "prompt_tokens": chunk.usage.prompt_tokens,
+                            "completion_tokens": chunk.usage.completion_tokens,
+                            "total_tokens": chunk.usage.total_tokens
+                        }
+                    yield StreamChunk(
+                        content="",
+                        finish_reason=finish_reason,
+                        usage=usage
+                    )
+                    break
+
+        except Exception as e:
+            self.logger.error(f"[ZhipuAI] 流式调用失败：{str(e)}")
+            raise RuntimeError(f"[ZhipuAI] 流式调用失败：{str(e)}")
 
     def get_available_models(self) -> List[str]:
         """获取支持的模型列表"""

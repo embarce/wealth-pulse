@@ -60,9 +60,6 @@ class SinaHKStockCrawler:
                 response = await client.get(self.BASE_URL)
                 response.raise_for_status()
 
-                # 设置正确的编码
-                response.encoding = 'gb2312'
-
                 # 解析 HTML
                 soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -227,7 +224,6 @@ class SinaHKStockCrawler:
                 async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
                     response = await client.get(self.BASE_URL)
                     response.raise_for_status()
-                    response.encoding = 'gb2312'
                     soup = BeautifulSoup(response.text, 'html.parser')
                     url = self._extract_rank_url(soup)
             except Exception as e:
@@ -254,9 +250,6 @@ class SinaHKStockCrawler:
             async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
                 response = await client.get(target_url)
                 response.raise_for_status()
-
-                # 设置正确的编码
-                response.encoding = 'gb2312'
 
                 # 解析 HTML
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -356,7 +349,6 @@ class SinaHKStockCrawler:
                 async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
                     response = await client.get(self.BASE_URL)
                     response.raise_for_status()
-                    response.encoding = 'gb2312'
                     soup = BeautifulSoup(response.text, 'html.parser')
                     url = self._extract_company_news_url(soup)
             except Exception as e:
@@ -383,9 +375,6 @@ class SinaHKStockCrawler:
             async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
                 response = await client.get(target_url)
                 response.raise_for_status()
-
-                # 设置正确的编码
-                response.encoding = 'gb2312'
 
                 # 解析 HTML
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -490,7 +479,6 @@ class SinaHKStockCrawler:
                 try:
                     rank_response = await client.get(home_result['rank_url'])
                     rank_response.raise_for_status()
-                    rank_response.encoding = 'gb2312'
                     rank_soup = BeautifulSoup(rank_response.text, 'html.parser')
                     rank_news = self._extract_rank_news_items(rank_soup)
                     logger.info(f"[SinaHKStockCrawler] Successfully fetched {len(rank_news)} rank news")
@@ -504,7 +492,6 @@ class SinaHKStockCrawler:
                 try:
                     company_response = await client.get(home_result['company_news_url'])
                     company_response.raise_for_status()
-                    company_response.encoding = 'gb2312'
                     company_soup = BeautifulSoup(company_response.text, 'html.parser')
                     company_news = self._extract_company_news_items(company_soup)
                     logger.info(f"[SinaHKStockCrawler] Successfully fetched {len(company_news)} company news")
