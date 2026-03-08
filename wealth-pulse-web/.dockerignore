@@ -25,7 +25,6 @@ build
 # Docker
 Dockerfile
 .dockerignore
-nginx.conf
 
 # 文档
 README.md
