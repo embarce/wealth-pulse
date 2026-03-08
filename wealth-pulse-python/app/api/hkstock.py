@@ -4,6 +4,7 @@
 """
 import logging
 from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 
 from app.core.exceptions import ApiException
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/api/hkstock", tags=["hkstock"])
 
 @router.get("/news/home", summary="Get HK stock homepage news")
 def get_homepage_news(
-    current_user: dict = Depends(get_current_user)
+        current_user: dict = Depends(get_current_user)
 ):
     """
     获取港股首页新闻（要闻 + 研报 URL+ 公司新闻 URL）(requires authentication)
@@ -63,9 +64,9 @@ def get_homepage_news(
 
 @router.get("/news/rank", summary="Get HK stock analyst reports")
 def get_rank_news(
-    url: Optional[str] = Query(None, description="自定义研报列表页 URL"),
-    skip_if_url_missing: bool = Query(False, description="如果 URL 缺失是否跳过爬取"),
-    current_user: dict = Depends(get_current_user)
+        url: Optional[str] = Query(None, description="自定义研报列表页 URL"),
+        skip_if_url_missing: bool = Query(False, description="如果 URL 缺失是否跳过爬取"),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     获取港股大行研报 (requires authentication)
@@ -112,9 +113,9 @@ def get_rank_news(
 
 @router.get("/news/company", summary="Get HK stock company news")
 def get_company_news(
-    url: Optional[str] = Query(None, description="自定义公司新闻列表页 URL"),
-    skip_if_url_missing: bool = Query(False, description="如果 URL 缺失是否跳过爬取"),
-    current_user: dict = Depends(get_current_user)
+        url: Optional[str] = Query(None, description="自定义公司新闻列表页 URL"),
+        skip_if_url_missing: bool = Query(False, description="如果 URL 缺失是否跳过爬取"),
+        current_user: dict = Depends(get_current_user)
 ):
     """
     获取港股公司新闻 (requires authentication)
@@ -161,7 +162,7 @@ def get_company_news(
 
 @router.get("/news/all", summary="Get all HK stock news")
 def get_all_news(
-    current_user: dict = Depends(get_current_user)
+        current_user: dict = Depends(get_current_user)
 ):
     """
     获取所有港股新闻（汇总）(requires authentication)
@@ -170,6 +171,55 @@ def get_all_news(
     - 要闻
     - 大行研报
     - 公司新闻
+
+    **Data Source:**
+    - Sina Finance (https://finance.sina.com.cn/stock/hkstock/)
+
+    **Returned Fields:**
+    - important_news: 要闻列表
+    - rank_news: 大行研报列表
+    - company_news: 公司新闻列表
+    - summary: 汇总统计信息
+        - important_news_count: 要闻数量
+        - rank_news_count: 研报数量
+        - company_news_count: 公司新闻数量
+        - total_count: 总新闻数量
+    - warnings: 警告信息列表
+
+    **Note:**
+    - 如果某个分类爬取失败，会返回 warning 但不会影响其他分类的数据
+    - 失败的分类返回空列表
+    """
+    try:
+        crawler = SinaHKStockCrawler()
+        result = crawler.fetch_all_news_sync()
+
+        logger.info(f"[HKStockNews] Successfully fetched all news: {result['summary']['total_count']} items")
+
+        return success_response(
+            data=result,
+            msg=f"All news retrieved successfully: {result['summary']['total_count']} items"
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching all news: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve all news: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/news/all-raw", summary="Get all HK stock news")
+def get_all_news_raw():
+    """
+    获取所有港股新闻（原始数据，无需认证）
+
+    一次性获取所有港股相关新闻，包括：
+    - 要闻
+    - 大行研报
+    - 公司新闻
+
+    此接口不需要认证，供 Java 后端内部调用使用
 
     **Data Source:**
     - Sina Finance (https://finance.sina.com.cn/stock/hkstock/)

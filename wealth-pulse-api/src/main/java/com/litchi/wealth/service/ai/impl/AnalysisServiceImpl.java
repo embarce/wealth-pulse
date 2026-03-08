@@ -1,5 +1,7 @@
 package com.litchi.wealth.service.ai.impl;
 
+import cn.hutool.core.date.DateUtil;
+import com.litchi.wealth.dto.ai.HkStockMarketAnalysisRequest;
 import com.litchi.wealth.dto.ai.KlineAnalysisRequest;
 import com.litchi.wealth.dto.rpc.KlineAnalysisRequestDto;
 import com.litchi.wealth.dto.rpc.PositionAnalysisRequestDto;
@@ -7,11 +9,11 @@ import com.litchi.wealth.dto.rpc.StockAnalysisRequestDto;
 import com.litchi.wealth.rpc.PythonStockRpc;
 import com.litchi.wealth.service.ai.AnalysisService;
 import com.litchi.wealth.utils.RedisCache;
+import com.litchi.wealth.vo.ai.HkStockMarketAnalysisVo;
 import com.litchi.wealth.vo.ai.KlineAnalysisVo;
 import com.litchi.wealth.vo.ai.PositionAnalysisVo;
 import com.litchi.wealth.vo.ai.StockAnalysisVo;
 import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
-import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
@@ -20,6 +22,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static com.litchi.wealth.constant.Constants.ANALYSIS_REDIS_KEY_PREFIX;
 
 /**
  * AI 分析服务实现
@@ -35,6 +39,9 @@ public class AnalysisServiceImpl implements AnalysisService {
 
     @Autowired
     private PythonStockRpc pythonStockRpc;
+
+    @Autowired
+    private RedisCache redisCache;
 
     @Override
     @Cacheable(value = "analyzeKline", key = "#request.stockCode + '-' + #request.period+'-'+#request.model +'-'+#request.provider")
@@ -91,6 +98,56 @@ public class AnalysisServiceImpl implements AnalysisService {
         } catch (Exception e) {
             log.error("持仓分析失败", e);
             throw new RuntimeException("持仓分析失败：" + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public HkStockMarketAnalysisVo getHkStockMarketAnalysis() {
+        String today = DateUtil.today();
+        String redisKey = ANALYSIS_REDIS_KEY_PREFIX + today;
+        HkStockMarketAnalysisVo result = redisCache.getCacheObject(redisKey);
+
+        if (result == null) {
+            // Redis 中没有，尝试实时调用
+            log.info("Redis 中未找到 {} 的港股市场分析，尝试实时调用", today);
+            HkStockMarketAnalysisVo hkStockMarketAnalysisVo = analyzeHkStockMarketRealtime(new HkStockMarketAnalysisRequest());
+            redisCache.setCacheObject(redisKey, hkStockMarketAnalysisVo, 4 * 60 * 60, TimeUnit.SECONDS);
+            return hkStockMarketAnalysisVo;
+        }
+
+        // 处理 Markdown 换行符，将 \n 转换为实际的换行
+        if (result.getReport() != null) {
+            result.setReport(result.getReport().replace("\\n", "\n"));
+        }
+        result.setRawReport(result.getReport());
+
+        log.info("从 Redis 获取港股市场分析成功：date={}, redisKey={}", today, redisKey);
+        return result;
+    }
+
+    @Override
+    public HkStockMarketAnalysisVo analyzeHkStockMarketRealtime(HkStockMarketAnalysisRequest request) {
+        log.info("实时调用 Python AI 服务分析港股市场：provider={}, model={}",
+                request != null ? request.getProvider() : "default",
+                request != null ? request.getModel() : "default");
+
+        try {
+            HkStockMarketAnalysisVo result = pythonStockRpc.analyzeHkStockMarket(request);
+
+            // 处理 Markdown 换行符
+            if (result.getReport() != null) {
+                // 保存原始报告（用于前端展示）
+                result.setRawReport(result.getReport());
+                // 处理换行符，将 \n 转换为实际换行
+                result.setReport(result.getReport().replace("\\n", "\n"));
+            }
+
+            log.info("港股市场分析完成：新闻总数={}",
+                    result.getNewsSummary() != null ? result.getNewsSummary().getTotalCount() : 0);
+            return result;
+        } catch (Exception e) {
+            log.error("港股市场分析失败", e);
+            throw new RuntimeException("港股市场分析失败：" + e.getMessage(), e);
         }
     }
 

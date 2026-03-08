@@ -1,10 +1,12 @@
 package com.litchi.wealth.controller;
 
 import com.litchi.wealth.constant.Result;
+import com.litchi.wealth.dto.ai.HkStockMarketAnalysisRequest;
 import com.litchi.wealth.dto.ai.KlineAnalysisRequest;
 import com.litchi.wealth.dto.rpc.PositionAnalysisRequestDto;
 import com.litchi.wealth.dto.rpc.StockAnalysisRequestDto;
 import com.litchi.wealth.service.ai.AnalysisService;
+import com.litchi.wealth.vo.ai.HkStockMarketAnalysisVo;
 import com.litchi.wealth.vo.ai.KlineAnalysisVo;
 import com.litchi.wealth.vo.ai.PositionAnalysisVo;
 import com.litchi.wealth.vo.ai.StockAnalysisVo;
@@ -201,6 +203,71 @@ public class AnalysisController {
         } catch (Exception e) {
             log.error("持仓分析失败", e);
             return Result.error("持仓分析失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(
+            summary = "获取港股市场分析结果",
+            description = "获取港股市场 AI 分析结果（投资建议报告），优先从 Redis 缓存读取，若不存在则实时调用",
+            method = "GET",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "获取成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = HkStockMarketAnalysisVo.class)
+                    )
+            )
+    })
+    @GetMapping("/hkstock-market-analysis")
+    public Result getHkStockMarketAnalysis() {
+        try {
+            HkStockMarketAnalysisVo result = analysisService.getHkStockMarketAnalysis();
+            log.info("获取港股市场分析成功：新闻总数={}", result.getNewsSummary() != null ? result.getNewsSummary().getTotalCount() : 0);
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("获取港股市场分析失败", e);
+            return Result.error("获取港股市场分析失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(
+            summary = "实时分析港股市场",
+            description = "实时调用 Python AI 服务分析港股市场（不经过缓存），返回 Markdown 格式的投资建议报告",
+            method = "POST",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "分析成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = HkStockMarketAnalysisVo.class)
+                    )
+            )
+    })
+    @PostMapping("/analyze-hkstock-market")
+    public Result analyzeHkStockMarket(
+            @Parameter(description = "港股市场分析请求参数")
+            @RequestBody(required = false) HkStockMarketAnalysisRequest request) {
+
+        log.info("收到实时港股市场分析请求：provider={}, model={}",
+                request != null ? request.getProvider() : "default",
+                request != null ? request.getModel() : "default");
+
+        try {
+            HkStockMarketAnalysisVo result = analysisService.analyzeHkStockMarketRealtime(request);
+            log.info("港股市场分析完成：新闻总数={}, 报告长度={}",
+                    result.getNewsSummary() != null ? result.getNewsSummary().getTotalCount() : 0,
+                    result.getReport() != null ? result.getReport().length() : 0);
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("港股市场分析失败", e);
+            return Result.error("港股市场分析失败：" + e.getMessage());
         }
     }
 }

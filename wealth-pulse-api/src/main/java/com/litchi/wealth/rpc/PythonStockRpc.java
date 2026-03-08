@@ -15,6 +15,9 @@ import com.litchi.wealth.vo.ai.KlineAnalysisVo;
 import com.litchi.wealth.vo.ai.PositionAnalysisVo;
 import com.litchi.wealth.vo.ai.StockAnalysisVo;
 import com.litchi.wealth.vo.ai.TechnicalPointVo;
+import com.litchi.wealth.vo.ai.HkStockMarketAnalysisVo;
+import com.litchi.wealth.dto.ai.HkStockMarketAnalysisRequest;
+import com.litchi.wealth.vo.rpc.HkStockAllNewsVo;
 import com.litchi.wealth.vo.rpc.HkStockCompanyInfoSinaVo;
 import com.litchi.wealth.vo.rpc.HkStockCompanyNoticeVo;
 import com.litchi.wealth.vo.rpc.HkStockCompanyProfileVo;
@@ -635,6 +638,75 @@ public class PythonStockRpc {
             String msg = result.getStr("msg");
             log.error("AI 分析持仓失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "AI 分析持仓失败");
+        }
+    }
+
+    /**
+     * AI 分析港股市场（需要认证）
+     *
+     * @param request 港股市场分析请求
+     * @return 港股市场分析结果
+     */
+    public HkStockMarketAnalysisVo analyzeHkStockMarket(HkStockMarketAnalysisRequest request) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/analyze-hkstock-market";
+        log.info("调用 Python AI API 分析港股市场：provider={}, model={}, url={}",
+                request != null ? request.getProvider() : "default",
+                request != null ? request.getModel() : "default", url);
+
+        String json = JSONUtil.toJsonStr(request);
+        log.debug("请求参数：{}", json);
+
+        String resultStr = HttpRequest.post(url)
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .body(json)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, HkStockMarketAnalysisVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("AI 分析港股市场失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "AI 分析港股市场失败");
+        }
+    }
+
+    /**
+     * 获取所有港股新闻
+     *
+     * @return 港股新闻汇总结果
+     */
+    @Cacheable(value = "hkstock:news:all")
+    public HkStockAllNewsVo getAllNews() {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/hkstock/news/all-raw";
+        log.info("调用 Python API 获取所有港股新闻：url={}", url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, HkStockAllNewsVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取所有港股新闻失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取所有港股新闻失败");
         }
     }
 

@@ -1,8 +1,10 @@
 package com.litchi.wealth.service.ai;
 
+import com.litchi.wealth.dto.ai.HkStockMarketAnalysisRequest;
 import com.litchi.wealth.dto.ai.KlineAnalysisRequest;
 import com.litchi.wealth.dto.rpc.PositionAnalysisRequestDto;
 import com.litchi.wealth.dto.rpc.StockAnalysisRequestDto;
+import com.litchi.wealth.vo.ai.HkStockMarketAnalysisVo;
 import com.litchi.wealth.vo.ai.KlineAnalysisVo;
 import com.litchi.wealth.vo.ai.PositionAnalysisVo;
 import com.litchi.wealth.vo.ai.StockAnalysisVo;
@@ -57,4 +59,18 @@ public interface AnalysisService {
      * @return 分析结果
      */
     PositionAnalysisVo analyzePosition(PositionAnalysisRequestDto request);
+
+    /**
+     * 获取港股市场分析结果（从 Redis 缓存）
+     * @return 港股市场分析结果
+     */
+    HkStockMarketAnalysisVo getHkStockMarketAnalysis();
+
+    /**
+     * 调用 Python AI 服务分析港股市场（实时调用）
+     *
+     * @param request 港股市场分析请求
+     * @return 分析结果
+     */
+    HkStockMarketAnalysisVo analyzeHkStockMarketRealtime(HkStockMarketAnalysisRequest request);
 }
