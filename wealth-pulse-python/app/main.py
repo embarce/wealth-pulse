@@ -3,9 +3,13 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import nest_asyncio
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
+# Apply nest_asyncio to allow nested event loops (for asyncio.run() in sync wrappers)
+nest_asyncio.apply()
 
 from app.api import stocks, health, auth, ai, hkstock
 from app.core.config import settings

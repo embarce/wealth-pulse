@@ -860,7 +860,7 @@ class StockAnalysisService:
             logger.info("[HKStockMarketAnalysis] 自动获取新闻数据")
             try:
                 crawler = SinaHKStockCrawler()
-                news_data = crawler.fetch_all_news_sync()
+                news_data = await crawler.fetch_all_news()
                 logger.info(f"[HKStockMarketAnalysis] 获取到 {news_data['summary']['total_count']} 条新闻")
             except Exception as e:
                 logger.error(f"[HKStockMarketAnalysis] 获取新闻数据失败：{e}")
@@ -1086,30 +1086,6 @@ class StockAnalysisService:
 请根据实际新闻内容，按照上述模板格式输出专业的分析报告：
 """
         return prompt
-
-    def analyze_hkstock_market_sync(
-        self,
-        news_data: Optional[Dict[str, Any]] = None,
-        provider: Optional[str] = None,
-        model: Optional[str] = None
-    ) -> str:
-        """
-        同步版本：AI 分析港股市场新闻，给出投资建议
-
-        Args:
-            news_data: 新闻数据字典，包含 important_news, rank_news, company_news
-            provider: LLM 供应商名称
-            model: 模型名称
-
-        Returns:
-            Markdown 格式的投资建议报告
-        """
-        import asyncio
-
-        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
-        return asyncio.run(
-            self.analyze_hkstock_market(news_data=news_data, provider=provider, model=model)
-        )
 
 
 # 创建全局单例（需要 db 会话的实例在使用时创建）

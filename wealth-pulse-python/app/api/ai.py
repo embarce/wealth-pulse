@@ -520,9 +520,9 @@ async def analyze_hkstock_market(
             model=request.model
         )
 
-        # 获取新闻统计信息
+        # 获取新闻统计信息（使用异步方法）
         crawler = SinaHKStockCrawler()
-        news_data = crawler.fetch_all_news_sync()
+        news_data = await crawler.fetch_all_news()
         news_summary = news_data.get('summary', {})
 
         return success_response(
