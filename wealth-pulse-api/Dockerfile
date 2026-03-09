@@ -19,7 +19,7 @@ ENV TZ Asia/Shanghai
 RUN mkdir -p /root/ai/logs
 
 # 复制构建产物（使用通配符避免版本号固定问题）
-COPY --from=build /app/target/litchi-api-*.jar /root/server.jar
+COPY --from=build /app/target/wealth-pulse-api-*.jar /root/server.jar
 
 EXPOSE 9090
 # 设置容器启动命令

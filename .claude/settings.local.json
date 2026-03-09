@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install google-genai)",
+      "Bash(pip install anthropic)",
+      "Bash(python -c \"from app.llm.factory import LLMFactory; from app.llm.providers.gemini import GeminiProvider; print\\(''Import successful''\\); providers = LLMFactory.list_providers\\(\\); print\\(f''Providers: {list\\(providers.keys\\(\\)\\)}''\\)\")",
+      "Bash(pip install volcengine-python-sdk dashscope)",
+      "Bash(python -c \"from app.llm.factory import LLMFactory; providers = LLMFactory.list_providers\\(\\); print\\(f''Providers: {list\\(providers.keys\\(\\)\\)}''\\); print\\(''Models per provider:''\\); [print\\(f''  {name}: {info.models}''\\) for name, info in providers.items\\(\\)]\")",
+      "Bash(npx tsc --no-emit components/StockInfoPanel.tsx)",
+      "Bash(curl -s \"http://localhost:9090/api/stock/financial-indicators-sina/00700.HK\")",
+      "Bash(curl -s \"http://localhost:9090/api/stock/financial-indicator-em/00700.HK\")",
+      "Bash(curl -s -X POST \"http://localhost:9090/api/auth/login\" -H \"Content-Type: application/json\" -d \"{\"\"username\"\":\"\"test@test.com\"\",\"\"password\"\":\"\"test123\"\"}\")",
+      "Bash(curl -s \"http://localhost:9090/api/stock/financial-indicators-sina/00700.HK\" -H \"Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJsaXRjaGk6bG9naW5fdXNlcl9rZXkiOiIyMDE5MDM5ODA1Nzg0NzkzMDg5LWQzNWJmNjRhYmUyMzQyNjZhZTVlYjg0YmZmZDZkOWM3In0.tRCmdT3mqxMLEVYZT5y-whwepzt6svHyvjp5lt8bQl8N9Qyje3xTm_3d6Caq53ZYDaUfuMAy7T6ecz1MEZx95Q\")",
+      "Bash(curl -s \"http://localhost:9090/api/stock/financial-indicator-em/00700.HK\" -H \"Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJsaXRjaGk6bG9naW5fdXNlcl9rZXkiOiIyMDE5MDM5ODA1Nzg0NzkzMDg5LWQzNWJmNjRhYmUyMzQyNjZhZTVlYjg0YmZmZDZkOWM3In0.tRCmdT3mqxMLEVYZT5y-whwepzt6svHyvjp5lt8bQl8N9Qyje3xTm_3d6Caq53ZYDaUfuMAy7T6ecz1MEZx95Q\")",
+      "Bash(npx tsc --noEmit components/StockInfoPanel.tsx)",
+      "Bash(python -c \"\nfrom app.services.stock_analysis_service import StockAnalysisService\nfrom app.services.sina_hkstock_crawler import SinaHKStockCrawler\nprint\\(''Import test passed!''\\)\n\n# 检查方法是否存在\nservice = StockAnalysisService\\(db=None\\)\nprint\\(f''analyze_hkstock_market: {hasattr\\(service, \"\"analyze_hkstock_market\"\"\\)}''\\)\nprint\\(f''analyze_hkstock_market_sync: {hasattr\\(service, \"\"analyze_hkstock_market_sync\"\"\\)}''\\)\nprint\\(f''_build_hkstock_news_text: {hasattr\\(service, \"\"_build_hkstock_news_text\"\"\\)}''\\)\nprint\\(f''_build_hkstock_market_analysis_prompt: {hasattr\\(service, \"\"_build_hkstock_market_analysis_prompt\"\"\\)}''\\)\n\")",
+      "Bash(python -c \"\nimport sys\nimport ast\n\n# 读取并解析 stock_analysis_service.py\nwith open\\(''app/services/stock_analysis_service.py'', ''r'', encoding=''utf-8''\\) as f:\n    code = f.read\\(\\)\n\n# 尝试解析 AST\ntree = ast.parse\\(code\\)\nprint\\(''stock_analysis_service.py: Syntax OK''\\)\n\n# 读取并解析 ai.py\nwith open\\(''app/api/ai.py'', ''r'', encoding=''utf-8''\\) as f:\n    code = f.read\\(\\)\n\ntree = ast.parse\\(code\\)\nprint\\(''ai.py: Syntax OK''\\)\n\n# 读取并解析测试文件\nwith open\\(''test_hkstock_market_analysis.py'', ''r'', encoding=''utf-8''\\) as f:\n    code = f.read\\(\\)\n\ntree = ast.parse\\(code\\)\nprint\\(''test_hkstock_market_analysis.py: Syntax OK''\\)\n\nprint\\(\\)\nprint\\(''All files syntax check passed!''\\)\n\")",
+      "Bash(python -m py_compile test_hkstock_market_analysis.py)",
+      "Bash(python -m py_compile app/services/stock_analysis_service.py)",
+      "Bash(python -m py_compile app/llm/base.py app/llm/service.py app/llm/providers/gemini.py app/llm/providers/openai.py app/llm/providers/doubao.py app/services/stock_analysis_service.py)",
+      "Bash(python -m py_compile app/llm/providers/qwen.py app/llm/providers/gitee.py app/llm/providers/zhipu.py app/llm/providers/anthropic.py app/llm/providers/deepseek.py)"
+    ]
+  }
+}

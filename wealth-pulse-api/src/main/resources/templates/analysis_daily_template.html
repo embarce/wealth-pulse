@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[Wealth Pulse] AI 市场分析报告</title>
+    <style>
+        /* 基础样式，兼容大多数邮件客户端 */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f8;
+            color: #1f2937;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, 'Helvetica Neue', Helvetica, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 24px 16px;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            border: 1px solid #eef0f5;
+        }
+
+        /* 头部 - 紫色渐变 */
+        .header {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+            padding: 24px 28px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 头部背景装饰 */
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -5%;
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .logo-text {
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+        }
+
+        .header-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 0 0 6px 0;
+            line-height: 1.3;
+        }
+
+        .header-subtitle {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.4;
+        }
+
+        /* 日期条 */
+        .date-bar {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 10px 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .date-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .date-icon {
+            width: 16px;
+            height: 16px;
+            opacity: 0.9;
+        }
+
+        /* 内容区域 */
+        .content {
+            padding: 28px 28px 20px 28px;
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #374151;
+            margin: 0 0 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 12px;
+        }
+
+        /* 新闻统计卡片 */
+        .stats-grid {
+            display: table;
+            width: 100%;
+            margin: 0 0 24px 0;
+            border-collapse: separate;
+            border-spacing: 12px;
+        }
+
+        .stat-cell {
+            display: table-cell;
+            width: 25%;
+            vertical-align: top;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+
+        .stat-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-size: 16px;
+        }
+
+        .stat-icon-indigo { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+        .stat-icon-purple { background: linear-gradient(135deg, #a855f7, #9333ea); }
+        .stat-icon-pink { background: linear-gradient(135deg, #ec4899, #db2777); }
+        .stat-icon-emerald { background: linear-gradient(135deg, #10b981, #059669); }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* 报告正文区域 */
+        .report-section {
+            background: linear-gradient(135deg, #fafafa, #f5f5f5);
+            border-radius: 12px;
+            border: 1px solid #e5e5e5;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .report-content {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #374151;
+        }
+
+        /* 报告内容中的表格样式（Markdown 转换后的 HTML） */
+        .report-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 16px 0;
+            font-size: 13px;
+        }
+
+        .report-content thead {
+            background-color: #f3f4f6;
+        }
+
+        .report-content th {
+            border: 1px solid #e5e7eb;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            background-color: #f9fafb;
+        }
+
+        .report-content td {
+            border: 1px solid #e5e7eb;
+            padding: 10px 12px;
+            color: #1f2937;
+        }
+
+        .report-content tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+        /* 报告内容中的标题样式 */
+        .report-content h1 {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 24px 0 16px;
+            color: #1f2937;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 8px;
+        }
+
+        .report-content h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 20px 0 12px;
+            color: #1f2937;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 6px;
+        }
+
+        .report-content h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 16px 0 10px;
+            color: #1f2937;
+        }
+
+        .report-content h4 {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 14px 0 8px;
+            color: #1f2937;
+        }
+
+        /* 报告内容中的段落样式 */
+        .report-content p {
+            margin: 12px 0;
+            line-height: 1.8;
+            color: #374151;
+        }
+
+        /* 报告内容中的列表样式 */
+        .report-content ul,
+        .report-content ol {
+            padding-left: 24px;
+            margin: 12px 0;
+        }
+
+        .report-content li {
+            margin: 6px 0;
+            line-height: 1.6;
+            color: #374151;
+        }
+
+        /* 报告内容中的引用块样式 */
+        .report-content blockquote {
+            border-left: 4px solid #e5e7eb;
+            margin: 16px 0;
+            padding: 12px 16px;
+            background-color: #f9fafb;
+            color: #4b5563;
+        }
+
+        /* 报告内容中的代码块样式 */
+        .report-content pre {
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 12px;
+            overflow-x: auto;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #1f2937;
+        }
+
+        .report-content code {
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            color: #dc2626;
+        }
+
+        /* 报告内容中的加粗和斜体样式 */
+        .report-content strong {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .report-content em {
+            font-style: italic;
+        }
+
+        /* 报告内容中的删除线样式 */
+        .report-content del {
+            text-decoration: line-through;
+            color: #9ca3af;
+        }
+
+        /* 报告内容中的水平线样式 */
+        .report-content hr {
+            border: none;
+            border-top: 1px solid #e5e7eb;
+            margin: 24px 0;
+        }
+
+        /* 系统信息 */
+        .system-info {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .info-row {
+            display: table;
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        .info-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-label {
+            display: table-cell;
+            width: 35%;
+            font-size: 12px;
+            color: #6b7280;
+            padding-right: 8px;
+        }
+
+        .info-value {
+            display: table-cell;
+            font-size: 12px;
+            color: #1f2937;
+            font-weight: 500;
+        }
+
+        /* 页脚 */
+        .footer {
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            padding: 20px 28px;
+            text-align: center;
+        }
+
+        .footer-text {
+            font-size: 12px;
+            color: #9ca3af;
+            line-height: 1.6;
+            margin: 0 0 8px 0;
+        }
+
+        .footer-brand {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+
+        .footer-links {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .footer-link {
+            font-size: 11px;
+            color: #6366f1;
+            text-decoration: none;
+            margin: 0 8px;
+        }
+
+        /* 装饰元素 */
+        .accent-bar {
+            height: 4px;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7);
+            margin-bottom: 0;
+        }
+
+        /* 响应式 */
+        @media only screen and (max-width: 600px) {
+            .container { padding: 16px 12px; }
+            .header { padding: 20px 16px; }
+            .content { padding: 20px 16px; }
+            .date-bar { padding: 12px 16px; flex-direction: column; gap: 8px; }
+            .stat-cell { width: 50%; }
+            .info-row { display: block; margin-bottom: 12px; }
+            .info-label, .info-value { display: block; }
+            .info-label { margin-bottom: 2px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <!-- 顶部装饰条 -->
+        <div class="accent-bar"></div>
+
+        <!-- 头部 -->
+        <div class="header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo">
+                        <!-- SVG Logo 图标 -->
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="logo-text">Wealth Pulse · 财富脉搏-智投</div>
+                    </div>
+                </div>
+                <h1 class="header-title">AI 市场分析报告</h1>
+                <p class="header-subtitle">基于人工智能的港股市场深度分析与投资策略</p>
+            </div>
+        </div>
+
+        <!-- 日期信息条 -->
+        <div class="date-bar">
+            <div class="date-item">
+                <!-- 日历图标 -->
+                <svg class="date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <span>报告日期：{{reportDate}}</span>
+            </div>
+            <div class="date-item">
+                <!-- AI 芯片图标 -->
+                <svg class="date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                    <rect x="9" y="9" width="6" height="6"/>
+                    <line x1="9" y1="1" x2="9" y2="4"/>
+                    <line x1="15" y1="1" x2="15" y2="4"/>
+                    <line x1="9" y1="20" x2="9" y2="23"/>
+                    <line x1="15" y1="20" x2="15" y2="23"/>
+                    <line x1="20" y1="9" x2="23" y2="9"/>
+                    <line x1="20" y1="14" x2="23" y2="14"/>
+                    <line x1="1" y1="9" x2="4" y2="9"/>
+                    <line x1="1" y1="14" x2="4" y2="14"/>
+                </svg>
+                <span>AI 模型：{{aiModel}}</span>
+            </div>
+        </div>
+
+        <!-- 内容区域 -->
+        <div class="content">
+            <!-- 新闻统计 -->
+            <h2 class="section-title">
+                <span class="section-title-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                </span>
+                数据概览
+            </h2>
+
+            <table class="stats-grid">
+                <tr>
+                    <td class="stat-cell">
+                        <div class="stat-card">
+                            <div class="stat-icon stat-icon-indigo">★</div>
+                            <div class="stat-value">{{importantNewsCount}}</div>
+                            <div class="stat-label">要闻</div>
+                        </div>
+                    </td>
+                    <td class="stat-cell">
+                        <div class="stat-card">
+                            <div class="stat-icon stat-icon-purple">📊</div>
+                            <div class="stat-value">{{rankNewsCount}}</div>
+                            <div class="stat-label">大行研报</div>
+                        </div>
+                    </td>
+                    <td class="stat-cell">
+                        <div class="stat-card">
+                            <div class="stat-icon stat-icon-pink">🏢</div>
+                            <div class="stat-value">{{companyNewsCount}}</div>
+                            <div class="stat-label">公司新闻</div>
+                        </div>
+                    </td>
+                    <td class="stat-cell">
+                        <div class="stat-card">
+                            <div class="stat-icon stat-icon-emerald">📈</div>
+                            <div class="stat-value">{{totalNewsCount}}</div>
+                            <div class="stat-label">总计</div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- AI 分析报告 -->
+            <h2 class="section-title">
+                <span class="section-title-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </span>
+                AI 深度分析
+            </h2>
+
+            <div class="report-section">
+                <div class="report-content">{{analysisReport}}</div>
+            </div>
+
+            <!-- 系统信息 -->
+            <div class="system-info">
+                <div class="info-row">
+                    <span class="info-label">报告生成时间</span>
+                    <span class="info-value">{{generatedTime}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">数据来源</span>
+                    <span class="info-value">{{dataSource}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">AI 服务提供商</span>
+                    <span class="info-value">{{provider}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">用户邮箱</span>
+                    <span class="info-value">{{userEmail}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">系统版本</span>
+                    <span class="info-value">{{systemVersion}}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <div class="footer">
+            <p class="footer-text">
+                此报告由 AI 自动生成，仅供参考，不构成投资建议。<br>
+                市场有风险，投资需谨慎。
+            </p>
+            <div class="footer-brand">© 2026 Wealth Pulse · 荔影科技</div>
+            <div class="footer-links">
+                <a href="{{websiteUrl}}" class="footer-link">官方网站</a>
+                <span style="color: #d1d5db;">|</span>
+                <a href="{{contactUrl}}" class="footer-link">联系我们</a>
+                <span style="color: #d1d5db;">|</span>
+                <a href="{{unsubscribeUrl}}" class="footer-link">取消订阅</a>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

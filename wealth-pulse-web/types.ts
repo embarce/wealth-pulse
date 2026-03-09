@@ -74,14 +74,17 @@ export interface AppConfig {
   notifyVisionReady: boolean;    // 视觉识图数据就绪
   notifyMarketAlert: boolean;    // 异动行情监控提醒
   notifyPortfolioRisk: boolean;  // 仓位健康动态警报
+  // AI 模型配置
+  llmProvider?: string;  // LLM 供应商：doubao/openai/qwen 等
+  llmModel?: string;     // 模型名称
 }
 
 export interface ChartInterpretation {
   patterns: string[];
-  support: number;
-  resistance: number;
-  takeProfit: number;
-  stopLoss: number;
+  support: number | string;
+  resistance: number | string;
+  takeProfit: number | string;
+  stopLoss: number | string;
   advice: string;
 }
 
@@ -92,6 +95,69 @@ export interface PortfolioAnalysis {
   summary: string;
   warnings: string[];
   suggestions: string[];
+}
+
+// ==================== 持仓分析相关类型（匹配后端 PositionAnalysisVo）====================
+
+/** 持仓项 */
+export interface PositionItem {
+  stockCode: string; // 股票代码
+  buyPrice: number; // 买入价格
+  quantity: number; // 持仓数量（股）
+  buyDate?: string; // 买入日期，格式 YYYY-MM-DD
+}
+
+/** 投资组合摘要 */
+export interface PortfolioSummary {
+  overallScore: number; // 综合评分 (0-100)
+  overallRating: string; // 综合评级：优秀/良好/一般/较差/极差
+  riskLevel: string; // 风险等级：低/中/高
+  diversification: string; // 分散程度：分散/一般/集中
+  investmentStyle: string; // 投资风格：价值/成长/均衡/投机型
+}
+
+/** 持仓评分 */
+export interface PositionScore {
+  stockCode: string; // 股票代码
+  score: number; // 评分 (0-100)
+  grade: string; // 等级：A/B/C/D/E
+  holdingQuality: string; // 持仓质量：优质/良好/一般/较差/劣质
+  profitProspect: string; // 盈利前景：看涨/震荡/看跌
+  riskWarning: string; // 风险提示
+}
+
+/** 持仓建议 */
+export interface PositionRecommendation {
+  stockCode: string; // 股票代码
+  action: string; // 建议操作：持有/加仓/减仓/清仓
+  reason: string; // 建议理由
+  targetPriceRange: string; // 目标价格区间
+  stopLossPrice: number; // 建议止损价
+  confidence: string; // 置信度：high/medium/low
+}
+
+/** 整体建议 */
+export interface OverallRecommendation {
+  strategy: string; // 策略：积极持有/稳健持有/逢高减仓/择机调仓
+  keyPoints: string[]; // 要点列表
+  riskSummary: string; // 整体风险描述
+  suggestedActions: string[]; // 建议操作列表
+}
+
+/** 市场展望 */
+export interface MarketOutlook {
+  trend: string; // 趋势：看涨/震荡/看跌
+  confidence: string; // 置信度：high/medium/low
+  keyFactors: string[]; // 关键因素列表
+}
+
+/** 持仓分析结果（完整版本，匹配后端 PositionAnalysisVo） */
+export interface PositionAnalysisResult {
+  portfolioSummary: PortfolioSummary; // 投资组合摘要
+  positionScores: PositionScore[]; // 持仓评分列表
+  positionRecommendations: PositionRecommendation[]; // 持仓建议列表
+  overallRecommendation: OverallRecommendation; // 整体建议
+  marketOutlook: MarketOutlook; // 市场展望
 }
 
 export interface AINewsItem {

@@ -1,6 +1,6 @@
 
 import React, { useState, useContext } from 'react';
-import { StockPrice, Transaction } from '../types';
+import { StockPrice, Transaction, AppConfig } from '../types';
 import { I18nContext } from '../App';
 
 // Sub-components
@@ -13,6 +13,8 @@ import MarketTrendsTab from '../components/AILab/MarketTrendsTab';
 interface AILabProps {
   stocks: StockPrice[];
   transactions: Transaction[];
+  config?: AppConfig | null;
+  toast?: any;
   onAddTransactions?: (newTxs: Transaction[]) => void;
   onUpdateTransaction?: (id: string, updates: Partial<Transaction>) => void;
 }
@@ -38,8 +40,8 @@ const AILab: React.FC<AILabProps> = (props) => {
             key={tab.id}
             onClick={() => setActiveSubTab(tab.id as any)}
             className={`px-6 py-2.5 rounded-xl text-[10px] font-black flex items-center space-x-2 transition-all uppercase tracking-widest ${
-              activeSubTab === tab.id 
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
+              activeSubTab === tab.id
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -51,23 +53,24 @@ const AILab: React.FC<AILabProps> = (props) => {
 
       {/* 模块渲染容器 */}
       <div className="max-w-7xl mx-auto">
-        {activeSubTab === 'chart' && <InterpretationTab stocks={props.stocks} />}
+        {activeSubTab === 'chart' && <InterpretationTab stocks={props.stocks} toast={props.toast} />}
         {activeSubTab === 'portfolio' && (
-          <PortfolioTab 
-            transactions={props.transactions} 
-            lang={useContext(I18nContext).lang} 
+          <PortfolioTab
+            transactions={props.transactions}
+            config={props.config}
+            lang={useContext(I18nContext).lang}
           />
         )}
         {activeSubTab === 'review' && (
-          <ReviewTab 
-            transactions={props.transactions} 
+          <ReviewTab
+            transactions={props.transactions}
             stocks={props.stocks}
             onUpdateTransaction={props.onUpdateTransaction}
             lang={useContext(I18nContext).lang}
           />
         )}
         {activeSubTab === 'vision' && (
-          <VisionTab 
+          <VisionTab
             onAddTransactions={props.onAddTransactions}
             lang={useContext(I18nContext).lang}
           />

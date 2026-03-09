@@ -78,7 +78,7 @@ google:
 
 resend:
   key: ${RESEND_KEY:}
-  from: no-reply <no-reply@aicatpaint.com>
+  from: no-reply <no-reply@girls-rating.com>
 
 cloudflare:
   turnstile:
@@ -101,3 +101,17 @@ rpc:
     url: ${PYTHON_API_HOST:}
     clientId: ${PYTHON_CLIENT_ID:}
     clientSecret: ${PYTHON_SECRET:}
+
+# ====================================
+# 邮件通知配置
+# ====================================
+email:
+  notification:
+    enabled: true
+
+# 系统配置
+system:
+  website-url: https://stock.embracechw.top
+  contact-url: mailto:support@girls-rating.com
+  unsubscribe-url: https://stock.embracechw.top/settings
+  version: 1.0.0

@@ -20,18 +20,26 @@ from app.services.stock_service import StockService
 from app.services.yfinance_provider import YFinanceProvider
 from app.services.akshare_provider import AkShareProvider
 
+# Stock analysis services
+from app.services.stock_analysis_service import StockAnalysisService
+from app.services.stock_kline_analysis_service import StockKlineAnalysisService
+
 __all__ = [
-    # Factory functions (recommended for all operations)
+    # Stock data factory functions (recommended for all operations)
     'get_stock_data_provider',
     'StockDataProviderFactory',
 
-    # Base class
+    # Stock data base class
     'BaseStockDataProvider',
 
-    # Unified service
+    # Unified stock service
     'StockService',
 
-    # Provider implementations
+    # Stock analysis services
+    'StockAnalysisService',
+    'StockKlineAnalysisService',
+
+    # Stock provider implementations
     'YFinanceProvider',
     'AkShareProvider',
 ]

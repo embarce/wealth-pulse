@@ -4,6 +4,7 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 import { StockPrice, Holding } from '../types';
 import { PositionsDashboardData, PositionSnapshotData, TimeRangeModel, userApi } from '../services/userApi';
 import LiveMarketWatch from '../components/LiveMarketWatch';
+import MarketAnalysisDaily from '../components/MarketAnalysisDaily';
 import { I18nContext } from '../App';
 
 // 时间范围配置映射
@@ -22,8 +23,6 @@ interface DashboardProps {
   holdings: Holding[];
   positionsDashboard?: PositionsDashboardData | null;
   onTrade: (s: StockPrice) => void;
-  onNavigateToAI: () => void;
-  aiOutlook: string;
   isRefreshing?: boolean;
   lastRefreshTime?: Date | null;
   refreshProgress?: {
@@ -39,8 +38,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   holdingsCount,
   stocks,
   onTrade,
-  onNavigateToAI,
-  aiOutlook,
   positionsDashboard,
   isRefreshing,
   lastRefreshTime,
@@ -210,6 +207,9 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-10 items-stretch">
         <div className="lg:col-span-3 space-y-6 lg:space-y-10 flex flex-col">
+          {/* AI 分析日报 - 放在前面 */}
+          <MarketAnalysisDaily />
+
           {/* 图表 */}
           <div className="bg-white p-6 lg:p-10 rounded-[3rem] lg:rounded-[3.5rem] border border-slate-100 shadow-sm flex-grow">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 lg:mb-10 gap-4">
@@ -292,33 +292,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </ResponsiveContainer>
               )}
             </div>
-          </div>
-
-          {/* AI 诊断 */}
-          <div className="bg-[#10121d] p-8 lg:p-10 rounded-[3rem] lg:rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden group">
-            <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 lg:gap-10">
-               <div className="w-16 h-16 lg:w-24 lg:h-24 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center border-4 border-white/10 shadow-2xl shrink-0 group-hover:scale-110 transition-transform duration-700">
-                  <i className="fas fa-microchip text-2xl lg:text-4xl"></i>
-               </div>
-               <div className="space-y-4 text-center md:text-left flex-grow">
-                  <div className="flex items-center justify-center md:justify-start space-x-3">
-                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{t.diagnosticPanel}</span>
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                  </div>
-                  <h3 className="text-lg lg:text-2xl font-black tracking-tight leading-relaxed italic">
-                    {aiOutlook}
-                  </h3>
-                  <div className="pt-2">
-                    <button 
-                      onClick={onNavigateToAI}
-                      className="bg-white text-slate-950 px-8 lg:px-10 py-3 lg:py-4 rounded-2xl font-black text-[10px] lg:text-[11px] transition-all uppercase tracking-widest hover:bg-indigo-500 hover:text-white shadow-xl"
-                    >
-                      {t.alphaDiagnosticBtn}
-                    </button>
-                  </div>
-               </div>
-            </div>
-            <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-[120px]"></div>
           </div>
         </div>
 

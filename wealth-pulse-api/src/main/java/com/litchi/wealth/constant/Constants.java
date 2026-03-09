@@ -213,4 +213,10 @@ public class Constants {
      * python rpc token
      */
     public static final String PYTHON_RPC_TOKEN = "python_rpc_token";
+
+
+    /**
+     * Redis Key analysis 前缀
+     */
+    public static final String ANALYSIS_REDIS_KEY_PREFIX = "hkstock:market:analysis:";
 }

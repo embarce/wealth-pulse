@@ -11,4 +11,11 @@ import com.litchi.wealth.entity.StockMarketData;
 */
 public interface StockMarketDataService extends IService<StockMarketData> {
 
+    /**
+     * 获取股票最新行情数据
+     *
+     * @param stockCode 股票代码
+     * @return 最新行情数据
+     */
+    StockMarketData getLatestMarketData(String stockCode);
 }

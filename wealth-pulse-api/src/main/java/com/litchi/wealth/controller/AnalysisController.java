@@ -1,11 +1,19 @@
 package com.litchi.wealth.controller;
 
 import com.litchi.wealth.constant.Result;
+import com.litchi.wealth.dto.ai.HkStockMarketAnalysisRequest;
 import com.litchi.wealth.dto.ai.KlineAnalysisRequest;
+import com.litchi.wealth.dto.rpc.PositionAnalysisRequestDto;
+import com.litchi.wealth.dto.rpc.StockAnalysisRequestDto;
 import com.litchi.wealth.service.ai.AnalysisService;
+import com.litchi.wealth.vo.ai.HkStockMarketAnalysisVo;
 import com.litchi.wealth.vo.ai.KlineAnalysisVo;
+import com.litchi.wealth.vo.ai.PositionAnalysisVo;
+import com.litchi.wealth.vo.ai.StockAnalysisVo;
+import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -16,28 +24,30 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
- * AI分析控制器
+ * AI 分析控制器
  *
  * @author Embrace
  * @version 1.0
- * @description: 提供AI股票分析相关的REST API接口
+ * @description: 提供 AI 股票分析相关的 REST API 接口
  * @date 2026/2/24
  */
 @Slf4j
 @RestController
 @RequestMapping("/ai")
-@Tag(name = "AI分析管理", description = "提供AI股票分析的 API接口")
+@Tag(name = "AI 分析管理", description = "提供 AI 股票分析的 API 接口")
 public class AnalysisController {
 
     @Resource
     private AnalysisService analysisService;
 
     @Operation(
-            summary = "分析K线数据",
-            description = "发送K线数据到AI模型，返回关键技术点位分析（支撑位、压力位、止损位、止盈位等）",
+            summary = "分析 K 线数据",
+            description = "发送 K 线数据到 AI 模型，返回关键技术点位分析（支撑位、压力位、止损位、止盈位等）",
             method = "POST",
-            tags = {"AI分析管理"}
+            tags = {"AI 分析管理"}
     )
     @ApiResponses(value = {
             @ApiResponse(
@@ -51,51 +61,213 @@ public class AnalysisController {
     })
     @PostMapping("/analyze-kline")
     public Result analyzeKline(
-            @Parameter(description = "K线分析请求参数", required = true)
+            @Parameter(description = "K 线分析请求参数", required = true)
             @Valid @RequestBody KlineAnalysisRequest request) {
 
-        log.info("收到K线分析请求: 股票代码={}, K线数据量={}",
+        log.info("收到 K 线分析请求：股票代码={}, K 线数据量={}",
                 request.getStockCode(),
                 request.getKlineData() != null ? request.getKlineData().size() : 0);
 
         try {
             KlineAnalysisVo result = analysisService.analyzeKline(request);
-            log.info("K线分析完成: 股票代码={}, 趋势={}, 建议={}",
+            log.info("K 线分析完成：股票代码={}, 趋势={}, 建议={}",
                     result.getStockCode(),
                     result.getTrend(),
                     result.getRecommendation());
             return Result.success(result);
         } catch (Exception e) {
-            log.error("K线分析失败: 股票代码={}", request.getStockCode(), e);
-            return Result.error("K线分析失败: " + e.getMessage());
+            log.error("K 线分析失败：股票代码={}", request.getStockCode(), e);
+            return Result.error("K 线分析失败：" + e.getMessage());
         }
     }
 
     @Operation(
-            summary = "清除分析缓存",
-            description = "清除指定股票的AI分析缓存，下次请求将重新计算",
-            method = "DELETE",
-            tags = {"AI分析管理"}
+            summary = "获取 LLM 供应商列表",
+            description = "获取所有支持的 LLM 供应商信息（包括名称、默认模型、是否可用等）",
+            method = "GET",
+            tags = {"AI 分析管理"}
     )
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
-                    description = "清除成功"
+                    description = "获取成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(
+                                    schema = @Schema(implementation = LLMProviderInfoVo.class)
+                            )
+                    )
             )
     })
-    @DeleteMapping("/cache/{stockCode}")
-    public Result clearAnalysisCache(
-            @Parameter(description = "股票代码", example = "03900.HK", required = true)
-            @PathVariable String stockCode,
+    @GetMapping("/providers")
+    public Result listProviders() {
+        try {
+            List<LLMProviderInfoVo> providers = analysisService.listProviders();
+            return Result.success(providers);
+        } catch (Exception e) {
+            log.error("获取 LLM 供应商列表失败", e);
+            return Result.error("获取 LLM 供应商列表失败：" + e.getMessage());
+        }
+    }
 
-            @Parameter(description = "分析周期", example = "daily")
-            @RequestParam(defaultValue = "daily") String period) {
+    @Operation(
+            summary = "获取可用的 LLM 供应商",
+            description = "获取已配置 API Key 的可用 LLM 供应商名称列表",
+            method = "GET",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "获取成功"
+            )
+    })
+    @GetMapping("/available-providers")
+    public Result listAvailableProviders() {
+        try {
+            List<String> providers = analysisService.listAvailableProviders();
+            return Result.success(providers);
+        } catch (Exception e) {
+            log.error("获取可用的 LLM 供应商失败", e);
+            return Result.error("获取可用的 LLM 供应商失败：" + e.getMessage());
+        }
+    }
 
-        boolean cleared = analysisService.clearCache(stockCode, period);
-        if (cleared) {
-            return Result.success("缓存清除成功");
-        } else {
-            return Result.success("缓存不存在或已过期");
+    @Operation(
+            summary = "AI 分析股票",
+            description = "AI 分析股票（整合公司信息、K 线数据、新闻、财务指标、公告等信息进行综合分析）",
+            method = "POST",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "分析成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = StockAnalysisVo.class)
+                    )
+            )
+    })
+    @PostMapping("/analyze-stock")
+    public Result analyzeStock(
+            @Parameter(description = "股票分析请求参数", required = true)
+            @Valid @RequestBody StockAnalysisRequestDto request) {
+
+        log.info("收到股票分析请求：股票代码={}, 周期={}, 天数={}",
+                request.getStockCode(), request.getPeriod(), request.getDays());
+
+        try {
+            StockAnalysisVo result = analysisService.analyzeStock(request);
+            log.info("股票分析完成：股票代码={}, 趋势={}, 建议={}, 评级={}",
+                    result.getStockCode(), result.getTrend(), result.getRecommendation(), result.getRating());
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("股票分析失败：股票代码={}", request.getStockCode(), e);
+            return Result.error("股票分析失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(
+            summary = "AI 分析持仓",
+            description = "AI 分析持仓（对多只股票的持仓组合进行综合分析，给出评分和建议）",
+            method = "POST",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "分析成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PositionAnalysisVo.class)
+                    )
+            )
+    })
+    @PostMapping("/analyze-position")
+    public Result analyzePosition(
+            @Parameter(description = "持仓分析请求参数", required = true)
+            @Valid @RequestBody PositionAnalysisRequestDto request) {
+
+        log.info("收到持仓分析请求：持仓数量={}, 分析深度={}",
+                request.getPositions() != null ? request.getPositions().size() : 0,
+                request.getAnalysisDepth());
+
+        try {
+            PositionAnalysisVo result = analysisService.analyzePosition(request);
+            log.info("持仓分析完成：持仓数量={}, 综合评分={}, 综合评级={}",
+                    request.getPositions() != null ? request.getPositions().size() : 0,
+                    result.getPortfolioSummary() != null ? result.getPortfolioSummary().getOverallScore() : null,
+                    result.getPortfolioSummary() != null ? result.getPortfolioSummary().getOverallRating() : null);
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("持仓分析失败", e);
+            return Result.error("持仓分析失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(
+            summary = "获取港股市场分析结果",
+            description = "获取港股市场 AI 分析结果（投资建议报告），优先从 Redis 缓存读取，若不存在则实时调用",
+            method = "GET",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "获取成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = HkStockMarketAnalysisVo.class)
+                    )
+            )
+    })
+    @GetMapping("/hkstock-market-analysis")
+    public Result getHkStockMarketAnalysis() {
+        try {
+            HkStockMarketAnalysisVo result = analysisService.getHkStockMarketAnalysis();
+            log.info("获取港股市场分析成功：新闻总数={}", result.getNewsSummary() != null ? result.getNewsSummary().getTotalCount() : 0);
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("获取港股市场分析失败", e);
+            return Result.error("获取港股市场分析失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(
+            summary = "实时分析港股市场",
+            description = "实时调用 Python AI 服务分析港股市场（不经过缓存），返回 Markdown 格式的投资建议报告",
+            method = "POST",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "分析成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = HkStockMarketAnalysisVo.class)
+                    )
+            )
+    })
+    @PostMapping("/analyze-hkstock-market")
+    public Result analyzeHkStockMarket(
+            @Parameter(description = "港股市场分析请求参数")
+            @RequestBody(required = false) HkStockMarketAnalysisRequest request) {
+
+        log.info("收到实时港股市场分析请求：provider={}, model={}",
+                request != null ? request.getProvider() : "default",
+                request != null ? request.getModel() : "default");
+
+        try {
+            HkStockMarketAnalysisVo result = analysisService.analyzeHkStockMarketRealtime(request);
+            log.info("港股市场分析完成：新闻总数={}, 报告长度={}",
+                    result.getNewsSummary() != null ? result.getNewsSummary().getTotalCount() : 0,
+                    result.getReport() != null ? result.getReport().length() : 0);
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("港股市场分析失败", e);
+            return Result.error("港股市场分析失败：" + e.getMessage());
         }
     }
 }

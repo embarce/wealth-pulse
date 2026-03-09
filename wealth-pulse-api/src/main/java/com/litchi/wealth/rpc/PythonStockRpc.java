@@ -6,9 +6,29 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.litchi.wealth.dto.rpc.CreateAccessTokenDto;
+import com.litchi.wealth.dto.rpc.KlineAnalysisRequestDto;
+import com.litchi.wealth.dto.rpc.PositionAnalysisRequestDto;
+import com.litchi.wealth.dto.rpc.StockAnalysisRequestDto;
 import com.litchi.wealth.exception.ServiceException;
 import com.litchi.wealth.utils.RedisCache;
-import com.litchi.wealth.vo.rpc.*;
+import com.litchi.wealth.vo.ai.KlineAnalysisVo;
+import com.litchi.wealth.vo.ai.PositionAnalysisVo;
+import com.litchi.wealth.vo.ai.StockAnalysisVo;
+import com.litchi.wealth.vo.ai.TechnicalPointVo;
+import com.litchi.wealth.vo.ai.HkStockMarketAnalysisVo;
+import com.litchi.wealth.dto.ai.HkStockMarketAnalysisRequest;
+import com.litchi.wealth.vo.rpc.HkStockAllNewsVo;
+import com.litchi.wealth.vo.rpc.HkStockCompanyInfoSinaVo;
+import com.litchi.wealth.vo.rpc.HkStockCompanyNoticeVo;
+import com.litchi.wealth.vo.rpc.HkStockCompanyProfileVo;
+import com.litchi.wealth.vo.rpc.HkStockEnhancedHistoryVo;
+import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorEmVo;
+import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorVo;
+import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorsSinaVo;
+import com.litchi.wealth.vo.rpc.HkStockMinuteHistoryVo;
+import com.litchi.wealth.vo.rpc.HkStockNewsVo;
+import com.litchi.wealth.vo.rpc.HkStockSecurityProfileVo;
+import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -73,7 +93,7 @@ public class PythonStockRpc {
         String resultStr = HttpRequest.post(pythonApiUrl + "/api/auth/token")
                 .body(json)
                 .execute().body();
-        log.info("获取token结果：{}", resultStr);
+        log.info("获取 token 结果：{}", resultStr);
         JSONObject result = JSONUtil.parseObj(resultStr);
         Integer code = result.getInt("code");
         if (code == 200) {
@@ -82,8 +102,8 @@ public class PythonStockRpc {
             redisCache.setCacheObject(PYTHON_RPC_TOKEN, accessToken, 80400, TimeUnit.SECONDS);
             return accessToken;
         } else {
-            log.error("获取token失败：{}", result);
-            throw new ServiceException("获取token失败");
+            log.error("获取 token 失败：{}", result);
+            throw new ServiceException("获取 token 失败");
         }
     }
 
@@ -98,14 +118,14 @@ public class PythonStockRpc {
         String token = createAccessToken();
 
         String url = pythonApiUrl + "/api/stocks/" + stockCode + "/security-profile";
-        log.info("调用Python API获取证券资料: stockCode={}, url={}", stockCode, url);
+        log.info("调用 Python API 获取证券资料：stockCode={}, url={}", stockCode, url);
 
         String resultStr = HttpRequest.get(url)
                 .header("Authorization", "Bearer " + token)
                 .execute()
                 .body();
 
-        log.info("Python API返回: {}", resultStr);
+        log.info("Python API 返回：{}", resultStr);
 
         JSONObject result = JSONUtil.parseObj(resultStr);
         Integer code = result.getInt("code");
@@ -114,7 +134,7 @@ public class PythonStockRpc {
             return JSONUtil.toBean(data, HkStockSecurityProfileVo.class);
         } else {
             String msg = result.getStr("msg");
-            log.error("获取证券资料失败: code={}, msg={}", code, msg);
+            log.error("获取证券资料失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取证券资料失败");
         }
     }
@@ -130,14 +150,14 @@ public class PythonStockRpc {
         String token = createAccessToken();
 
         String url = pythonApiUrl + "/api/stocks/" + stockCode + "/company-profile";
-        log.info("调用Python API获取公司资料: stockCode={}, url={}", stockCode, url);
+        log.info("调用 Python API 获取公司资料：stockCode={}, url={}", stockCode, url);
 
         String resultStr = HttpRequest.get(url)
                 .header("Authorization", "Bearer " + token)
                 .execute()
                 .body();
 
-        log.info("Python API返回: {}", resultStr);
+        log.info("Python API 返回：{}", resultStr);
 
         JSONObject result = JSONUtil.parseObj(resultStr);
         Integer code = result.getInt("code");
@@ -146,7 +166,7 @@ public class PythonStockRpc {
             return JSONUtil.toBean(data, HkStockCompanyProfileVo.class);
         } else {
             String msg = result.getStr("msg");
-            log.error("获取公司资料失败: code={}, msg={}", code, msg);
+            log.error("获取公司资料失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取公司资料失败");
         }
     }
@@ -162,14 +182,14 @@ public class PythonStockRpc {
         String token = createAccessToken();
 
         String url = pythonApiUrl + "/api/stocks/" + stockCode + "/financial-indicator";
-        log.info("调用Python API获取财务指标: stockCode={}, url={}", stockCode, url);
+        log.info("调用 Python API 获取财务指标：stockCode={}, url={}", stockCode, url);
 
         String resultStr = HttpRequest.get(url)
                 .header("Authorization", "Bearer " + token)
                 .execute()
                 .body();
 
-        log.info("Python API返回: {}", resultStr);
+        log.info("Python API 返回：{}", resultStr);
 
         JSONObject result = JSONUtil.parseObj(resultStr);
         Integer code = result.getInt("code");
@@ -178,27 +198,27 @@ public class PythonStockRpc {
             return JSONUtil.toBean(data, HkStockFinancialIndicatorVo.class);
         } else {
             String msg = result.getStr("msg");
-            log.error("获取财务指标失败: code={}, msg={}", code, msg);
+            log.error("获取财务指标失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取财务指标失败");
         }
     }
 
     /**
-     * 获取港股增强历史数据（K线图数据）
+     * 获取港股增强历史数据（K 线图数据）
      *
      * @param stockCode 股票代码，如 03900.HK
-     * @param period    周期类型: daily/weekly/monthly
-     * @param adjust    复权类型: 空字符串=不复权, qfq=前复权, hfq=后复权
-     * @param startDate 开始日期，可为null
-     * @param endDate   结束日期，可为null
-     * @return K线图数据列表
+     * @param period    周期类型：daily/weekly/monthly
+     * @param adjust    复权类型：空字符串=不复权，qfq=前复权，hfq=后复权
+     * @param startDate 开始日期，可为 null
+     * @param endDate   结束日期，可为 null
+     * @return K 线图数据列表
      */
     @Cacheable(value = "getEnhancedHistory", key = "#stockCode +'-' + #period +'-'+ #adjust + '-'+#startDate +'-'+ #endDate")
     public List<HkStockEnhancedHistoryVo> getEnhancedHistory(String stockCode, String period,
                                                              String adjust, LocalDate startDate, LocalDate endDate) {
         String token = createAccessToken();
 
-        // 构建URL和查询参数
+        // 构建 URL 和查询参数
         StringBuilder urlBuilder = new StringBuilder(pythonApiUrl)
                 .append("/api/stocks/")
                 .append(stockCode)
@@ -216,14 +236,14 @@ public class PythonStockRpc {
         }
 
         String url = urlBuilder.toString();
-        log.info("调用Python API获取增强历史数据: stockCode={}, period={}, url={}", stockCode, period, url);
+        log.info("调用 Python API 获取增强历史数据：stockCode={}, period={}, url={}", stockCode, period, url);
 
         String resultStr = HttpRequest.get(url)
                 .header("Authorization", "Bearer " + token)
                 .execute()
                 .body();
 
-        log.info("Python API返回: {}", resultStr);
+        log.info("Python API 返回：{}", resultStr);
 
         JSONObject result = JSONUtil.parseObj(resultStr);
         Integer code = result.getInt("code");
@@ -232,7 +252,7 @@ public class PythonStockRpc {
             return JSONUtil.toList(dataArray, HkStockEnhancedHistoryVo.class);
         } else {
             String msg = result.getStr("msg");
-            log.error("获取增强历史数据失败: code={}, msg={}", code, msg);
+            log.error("获取增强历史数据失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取增强历史数据失败");
         }
     }
@@ -241,10 +261,10 @@ public class PythonStockRpc {
      * 获取港股分钟级历史数据（分时图数据）
      *
      * @param stockCode 股票代码，如 03900.HK
-     * @param period    周期: 1/5/15/30/60 (分钟)
-     * @param adjust    复权类型: 空字符串=不复权, hfq=后复权
-     * @param startDate 开始日期时间，可为null
-     * @param endDate   结束日期时间，可为null
+     * @param period    周期：1/5/15/30/60 (分钟)
+     * @param adjust    复权类型：空字符串=不复权，hfq=后复权
+     * @param startDate 开始日期时间，可为 null
+     * @param endDate   结束日期时间，可为 null
      * @return 分时图数据列表
      */
     @Cacheable(value = "getMinuteHistory", key = "#stockCode +'-' + #period +'-'+ #adjust + '-'+#startDate +'-'+ #endDate")
@@ -252,7 +272,7 @@ public class PythonStockRpc {
                                                          String adjust, String startDate, String endDate) {
         String token = createAccessToken();
 
-        // 构建URL和查询参数
+        // 构建 URL 和查询参数
         StringBuilder urlBuilder = new StringBuilder(pythonApiUrl)
                 .append("/api/stocks/")
                 .append(stockCode)
@@ -270,14 +290,14 @@ public class PythonStockRpc {
         }
 
         String url = urlBuilder.toString();
-        log.info("调用Python API获取分钟级历史数据: stockCode={}, period={}, url={}", stockCode, period, url);
+        log.info("调用 Python API 获取分钟级历史数据：stockCode={}, period={}, url={}", stockCode, period, url);
 
         String resultStr = HttpRequest.get(url)
                 .header("Authorization", "Bearer " + token)
                 .execute()
                 .body();
 
-        log.info("Python API返回: {}", resultStr);
+        log.info("Python API 返回：{}", resultStr);
 
         JSONObject result = JSONUtil.parseObj(resultStr);
         Integer code = result.getInt("code");
@@ -286,7 +306,7 @@ public class PythonStockRpc {
             return JSONUtil.toList(dataArray, HkStockMinuteHistoryVo.class);
         } else {
             String msg = result.getStr("msg");
-            log.error("获取分钟级历史数据失败: code={}, msg={}", code, msg);
+            log.error("获取分钟级历史数据失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取分钟级历史数据失败");
         }
     }
@@ -302,14 +322,14 @@ public class PythonStockRpc {
         String token = createAccessToken();
 
         String url = pythonApiUrl + "/api/stocks/" + stockCode + "/news";
-        log.info("调用Python API获取股票新闻: stockCode={}, url={}", stockCode, url);
+        log.info("调用 Python API 获取股票新闻：stockCode={}, url={}", stockCode, url);
 
         String resultStr = HttpRequest.get(url)
                 .header("Authorization", "Bearer " + token)
                 .execute()
                 .body();
 
-        log.info("Python API返回: {}", resultStr);
+        log.info("Python API 返回：{}", resultStr);
 
         JSONObject result = JSONUtil.parseObj(resultStr);
         Integer code = result.getInt("code");
@@ -318,7 +338,7 @@ public class PythonStockRpc {
             return JSONUtil.toList(dataArray, HkStockNewsVo.class);
         } else {
             String msg = result.getStr("msg");
-            log.error("获取股票新闻失败: code={}, msg={}", code, msg);
+            log.error("获取股票新闻失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取股票新闻失败");
         }
     }
@@ -334,14 +354,14 @@ public class PythonStockRpc {
         String token = createAccessToken();
 
         String url = pythonApiUrl + "/api/stocks/" + stockCode + "/company-info-sina";
-        log.info("调用Python API获取公司信息(新浪): stockCode={}, url={}", stockCode, url);
+        log.info("调用 Python API 获取公司信息 (新浪): stockCode={}, url={}", stockCode, url);
 
         String resultStr = HttpRequest.get(url)
                 .header("Authorization", "Bearer " + token)
                 .execute()
                 .body();
 
-        log.info("Python API返回: {}", resultStr);
+        log.info("Python API 返回：{}", resultStr);
 
         JSONObject result = JSONUtil.parseObj(resultStr);
         Integer code = result.getInt("code");
@@ -350,7 +370,7 @@ public class PythonStockRpc {
             return JSONUtil.toBean(data, HkStockCompanyInfoSinaVo.class);
         } else {
             String msg = result.getStr("msg");
-            log.error("获取公司信息失败: code={}, msg={}", code, msg);
+            log.error("获取公司信息失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取公司信息失败");
         }
     }
@@ -366,14 +386,14 @@ public class PythonStockRpc {
         String token = createAccessToken();
 
         String url = pythonApiUrl + "/api/stocks/" + stockCode + "/financial-indicators-sina";
-        log.info("调用Python API获取财务指标(新浪): stockCode={}, url={}", stockCode, url);
+        log.info("调用 Python API 获取财务指标 (新浪): stockCode={}, url={}", stockCode, url);
 
         String resultStr = HttpRequest.get(url)
                 .header("Authorization", "Bearer " + token)
                 .execute()
                 .body();
 
-        log.info("Python API返回: {}", resultStr);
+        log.info("Python API 返回：{}", resultStr);
 
         JSONObject result = JSONUtil.parseObj(resultStr);
         Integer code = result.getInt("code");
@@ -382,8 +402,311 @@ public class PythonStockRpc {
             return JSONUtil.toBean(data, HkStockFinancialIndicatorsSinaVo.class);
         } else {
             String msg = result.getStr("msg");
-            log.error("获取财务指标失败: code={}, msg={}", code, msg);
+            log.error("获取财务指标失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取财务指标失败");
+        }
+    }
+
+    /**
+     * 获取港股公司公告（新浪财经）
+     *
+     * @param stockCode 股票代码，如 09868.HK
+     * @param maxPages 最大爬取页数（1-10）
+     * @return 公告列表
+     */
+    @Cacheable(value = "getCompanyNotices", key = "#stockCode + '-' + #maxPages")
+    public List<HkStockCompanyNoticeVo> getCompanyNotices(String stockCode, Integer maxPages) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/stocks/" + stockCode + "/company-notices?max_pages=" + maxPages;
+        log.info("调用 Python API 获取公司公告 (新浪): stockCode={}, maxPages={}, url={}", stockCode, maxPages, url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONArray dataArray = result.getJSONArray("data");
+            return JSONUtil.toList(dataArray, HkStockCompanyNoticeVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取公司公告失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取公司公告失败");
+        }
+    }
+
+    /**
+     * 获取港股增强财务指标（扩展指标）
+     *
+     * @param stockCode 股票代码，如 01810.HK
+     * @return 增强财务指标
+     */
+    @Cacheable(value = "getFinancialIndicatorEm", key = "#stockCode")
+    public HkStockFinancialIndicatorEmVo getFinancialIndicatorEm(String stockCode) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/stocks/" + stockCode + "/financial-indicator-em";
+        log.info("调用 Python API 获取增强财务指标：stockCode={}, url={}", stockCode, url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, HkStockFinancialIndicatorEmVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取增强财务指标失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取增强财务指标失败");
+        }
+    }
+
+    /**
+     * AI 分析 K 线
+     *
+     * @param request K 线分析请求
+     * @return K 线分析结果
+     */
+    public KlineAnalysisVo analyzeKline(KlineAnalysisRequestDto request) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/analyze-kline";
+        log.info("调用 Python AI API 分析 K 线：stockCode={}, provider={}, url={}", request.getStockCode(), request.getProvider(), url);
+
+        String json = JSONUtil.toJsonStr(request);
+        log.debug("请求参数：{}", json);
+
+        String resultStr = HttpRequest.post(url)
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .body(json)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, KlineAnalysisVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("AI 分析 K 线失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "AI 分析失败");
+        }
+    }
+
+    /**
+     * 获取 LLM 供应商列表
+     *
+     * @return LLM 供应商列表
+     */
+    public List<LLMProviderInfoVo> listProviders() {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/providers";
+        log.info("调用 Python AI API 获取 LLM 供应商列表：url={}", url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONArray dataArray = result.getJSONArray("data");
+            return JSONUtil.toList(dataArray, LLMProviderInfoVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取 LLM 供应商列表失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取 LLM 供应商列表失败");
+        }
+    }
+
+    /**
+     * 获取可用的 LLM 供应商
+     *
+     * @return 可用的 LLM 供应商名称列表
+     */
+    public List<String> listAvailableProviders() {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/available-providers";
+        log.info("调用 Python AI API 获取可用的 LLM 供应商：url={}", url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONArray dataArray = result.getJSONArray("data");
+            return JSONUtil.toList(dataArray, String.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取可用的 LLM 供应商失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取可用的 LLM 供应商失败");
+        }
+    }
+
+    /**
+     * AI 分析股票（需要认证）
+     *
+     * @param request 股票分析请求
+     * @return 股票分析结果
+     */
+    public StockAnalysisVo analyzeStock(StockAnalysisRequestDto request) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/analyze-stock";
+        log.info("调用 Python AI API 分析股票：stockCode={}, provider={}, url={}", request.getStockCode(), request.getProvider(), url);
+
+        String json = JSONUtil.toJsonStr(request);
+        log.debug("请求参数：{}", json);
+
+        String resultStr = HttpRequest.post(url)
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .body(json)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, StockAnalysisVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("AI 分析股票失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "AI 分析股票失败");
+        }
+    }
+
+    /**
+     * AI 分析持仓（需要认证）
+     *
+     * @param request 持仓分析请求
+     * @return 持仓分析结果
+     */
+    public PositionAnalysisVo analyzePosition(PositionAnalysisRequestDto request) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/analyze-position";
+        log.info("调用 Python AI API 分析持仓：positionCount={}, provider={}, url={}",
+                request.getPositions() != null ? request.getPositions().size() : 0, request.getProvider(), url);
+
+        String json = JSONUtil.toJsonStr(request);
+        log.debug("请求参数：{}", json);
+
+        String resultStr = HttpRequest.post(url)
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .body(json)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, PositionAnalysisVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("AI 分析持仓失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "AI 分析持仓失败");
+        }
+    }
+
+    /**
+     * AI 分析港股市场
+     *
+     * @param request 港股市场分析请求
+     * @return 港股市场分析结果
+     */
+    public HkStockMarketAnalysisVo analyzeHkStockMarket(HkStockMarketAnalysisRequest request) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/analyze-hkstock-market";
+        log.info("调用 Python AI API 分析港股市场：provider={}, model={}, url={}",
+                request != null ? request.getProvider() : "default",
+                request != null ? request.getModel() : "default", url);
+
+        String json = JSONUtil.toJsonStr(request);
+        log.debug("请求参数：{}", json);
+
+        String resultStr = HttpRequest.post(url)
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .body(json)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, HkStockMarketAnalysisVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("AI 分析港股市场失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "AI 分析港股市场失败");
+        }
+    }
+
+    /**
+     * 获取所有港股新闻
+     *
+     * @return 港股新闻汇总结果
+     */
+    @Cacheable(value = "hkstock:news:all")
+    public HkStockAllNewsVo getAllNews() {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/hkstock/news/all-raw";
+        log.info("调用 Python API 获取所有港股新闻：url={}", url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, HkStockAllNewsVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取所有港股新闻失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取所有港股新闻失败");
         }
     }
 

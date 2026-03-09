@@ -10,8 +10,10 @@ import com.litchi.wealth.vo.StockInfoVo;
 import com.litchi.wealth.vo.StockMarketDataVo;
 import com.litchi.wealth.vo.StockSearchResultVo;
 import com.litchi.wealth.vo.rpc.HkStockCompanyInfoSinaVo;
+import com.litchi.wealth.vo.rpc.HkStockCompanyNoticeVo;
 import com.litchi.wealth.vo.rpc.HkStockCompanyProfileVo;
 import com.litchi.wealth.vo.rpc.HkStockEnhancedHistoryVo;
+import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorEmVo;
 import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorVo;
 import com.litchi.wealth.vo.rpc.HkStockFinancialIndicatorsSinaVo;
 import com.litchi.wealth.vo.rpc.HkStockMinuteHistoryVo;
@@ -316,6 +318,16 @@ public class StockController {
         return Result.success(result);
     }
 
+    @GetMapping("/financial-indicator-em/{stockCode}")
+    @Operation(summary = "获取港股增强财务指标", description = "从 Python 服务获取港股增强财务指标（包含资产负债表、现金流量表、营运能力指标等）")
+    public Result getFinancialIndicatorEm(
+            @Parameter(description = "股票代码", example = "01810.HK", required = true)
+            @PathVariable String stockCode) {
+
+        HkStockFinancialIndicatorEmVo result = pythonStockRpc.getFinancialIndicatorEm(stockCode);
+        return Result.success(result);
+    }
+
     @GetMapping("/financial-indicators-sina/{stockCode}")
     @Operation(summary = "获取港股财务指标（新浪财经）", description = "从Python服务获取港股财务指标（通过新浪财经爬虫）")
     public Result getFinancialIndicatorsSina(
@@ -323,6 +335,18 @@ public class StockController {
             @PathVariable String stockCode) {
 
         HkStockFinancialIndicatorsSinaVo result = pythonStockRpc.getFinancialIndicatorsSina(stockCode);
+        return Result.success(result);
+    }
+
+    @GetMapping("/company-notices/{stockCode}")
+    @Operation(summary = "获取港股公司公告（新浪财经）", description = "从 Python 服务获取港股公司公告（通过新浪财经爬虫）")
+    public Result getCompanyNotices(
+            @Parameter(description = "股票代码", example = "09868.HK", required = true)
+            @PathVariable String stockCode,
+            @Parameter(description = "最大爬取页数", example = "1")
+            @RequestParam(defaultValue = "1") Integer maxPages) {
+
+        List<HkStockCompanyNoticeVo> result = pythonStockRpc.getCompanyNotices(stockCode, maxPages);
         return Result.success(result);
     }
 }

@@ -86,6 +86,34 @@ export const translations = {
     settings_save_btn: '保存并应用当前配置',
     settings_success: '配置已同步至本地加密存储。',
 
+    // Settings - AI Configuration
+    settings_ai_config: 'AI 模型配置',
+    settings_ai_config_desc: 'LLM 供应商和模型选择',
+    settings_llm_provider: '模型供应商',
+    settings_llm_provider_placeholder: '选择 LLM 供应商',
+    settings_llm_model: '模型名称',
+    settings_llm_model_placeholder: '选择模型',
+    settings_llm_available: '已配置 API Key',
+    settings_llm_unavailable: '未配置 API Key',
+
+    // Kline Analysis - New Fields
+    kline_trend: '趋势判断',
+    kline_uptrend: '上涨趋势',
+    kline_downtrend: '下跌趋势',
+    kline_sideways: '横盘整理',
+    kline_recommendation: '操作建议',
+    kline_strong_buy: '强烈买入',
+    kline_buy: '买入',
+    kline_hold: '持有',
+    kline_sell: '卖出',
+    kline_strong_sell: '强烈卖出',
+    kline_risk_level: '风险等级',
+    kline_risk_low: '低风险',
+    kline_risk_medium: '中等风险',
+    kline_risk_high: '高风险',
+    kline_target_price: '目标价格区间',
+    kline_technical_points: '技术点位',
+
     // Shared
     shareReport: '分享战报',
     saveImage: '保存高清海报',
@@ -107,7 +135,46 @@ export const translations = {
     hotspots_title: '热力追踪',
     mock_news_1: '全球半导体供应链出现结构性回暖。',
     mock_news_2: '美联储最新会议纪要显示通胀预期趋稳。',
-    mock_news_3: '科技龙头公司财报季前夕资金流入显著。'
+    mock_news_3: '科技龙头公司财报季前夕资金流入显著。',
+
+    // AI Market Analysis Daily
+    ai_daily_report: 'AI 分析日报',
+    ai_report_title: '港股市场 AI 分析报告',
+    ai_report_refresh: '刷新报告',
+    ai_report_generating: '生成报告中...',
+    ai_report_view_details: '查看详细报告',
+    ai_report_news_summary: '新闻摘要',
+    ai_report_important_news: '要闻',
+    ai_report_rank_news: '大行研报',
+    ai_report_company_news: '公司新闻',
+    ai_report_total_news: '总新闻数',
+    ai_report_loading: '加载分析报告...',
+    ai_report_error: '加载失败，请重试',
+    ai_report_last_updated: '更新时间',
+
+    // Refresh Confirm Modal
+    refresh_confirm_title: '刷新 AI 分析报告',
+    refresh_confirm_warning: '重新分析将调用 AI 模型',
+    refresh_confirm_time: '预计耗时',
+    refresh_confirm_token: '将消耗 AI Token',
+    refresh_confirm_data: '基于最新市场数据生成',
+    refresh_confirm_cancel: '取消',
+    refresh_confirm_confirm: '确认刷新',
+
+    // Hk Stock News Panel
+    news_panel_title: '港股新闻中心',
+    news_panel_important: '要闻速递',
+    news_panel_rank: '大行研报',
+    news_panel_company: '公司公告',
+    news_panel_all: '全部新闻',
+    news_panel_loading: '加载新闻中...',
+    news_panel_empty: '暂无新闻',
+    news_panel_error: '加载失败，请重试',
+    news_panel_source: '来源',
+    news_panel_time: '时间',
+    news_panel_view_original: '查看原文',
+    news_panel_filter_placeholder: '筛选新闻...',
+    news_panel_refresh: '刷新新闻',
   },
   en: {
     // ... existing
@@ -193,6 +260,34 @@ export const translations = {
     settings_save_btn: 'Save & Apply Config',
     settings_success: 'Configurations synced to local encrypted storage.',
 
+    // Settings - AI Configuration
+    settings_ai_config: 'AI Model Configuration',
+    settings_ai_config_desc: 'LLM Provider and Model Selection',
+    settings_llm_provider: 'LLM Provider',
+    settings_llm_provider_placeholder: 'Select LLM Provider',
+    settings_llm_model: 'Model',
+    settings_llm_model_placeholder: 'Select Model',
+    settings_llm_available: 'API Key Configured',
+    settings_llm_unavailable: 'API Key Not Configured',
+
+    // Kline Analysis - New Fields
+    kline_trend: 'Trend',
+    kline_uptrend: 'Uptrend',
+    kline_downtrend: 'Downtrend',
+    kline_sideways: 'Sideways',
+    kline_recommendation: 'Recommendation',
+    kline_strong_buy: 'Strong Buy',
+    kline_buy: 'Buy',
+    kline_hold: 'Hold',
+    kline_sell: 'Sell',
+    kline_strong_sell: 'Strong Sell',
+    kline_risk_level: 'Risk Level',
+    kline_risk_low: 'Low Risk',
+    kline_risk_medium: 'Medium Risk',
+    kline_risk_high: 'High Risk',
+    kline_target_price: 'Target Price Range',
+    kline_technical_points: 'Technical Points',
+
     // Shared
     shareReport: 'Share Report',
     saveImage: 'Save HD Poster',
@@ -214,6 +309,45 @@ export const translations = {
     hotspots_title: 'Heat Tracking',
     mock_news_1: 'Structural recovery observed in global semiconductor supply chains.',
     mock_news_2: 'Fed minutes indicate stabilizing inflation expectations.',
-    mock_news_3: 'Significant capital inflows ahead of major tech earnings.'
+    mock_news_3: 'Significant capital inflows ahead of major tech earnings.',
+
+    // AI Market Analysis Daily
+    ai_daily_report: 'AI Daily Report',
+    ai_report_title: 'HK Stock Market AI Analysis Report',
+    ai_report_refresh: 'Refresh Report',
+    ai_report_generating: 'Generating Report...',
+    ai_report_view_details: 'View Full Report',
+    ai_report_news_summary: 'News Summary',
+    ai_report_important_news: 'Important News',
+    ai_report_rank_news: 'Analyst Reports',
+    ai_report_company_news: 'Company News',
+    ai_report_total_news: 'Total News',
+    ai_report_loading: 'Loading analysis report...',
+    ai_report_error: 'Failed to load, please retry',
+    ai_report_last_updated: 'Last Updated',
+
+    // Refresh Confirm Modal
+    refresh_confirm_title: 'Refresh AI Analysis Report',
+    refresh_confirm_warning: 'Re-analysis will call AI model',
+    refresh_confirm_time: 'Estimated Time',
+    refresh_confirm_token: 'Will Consume AI Token',
+    refresh_confirm_data: 'Based on latest market data',
+    refresh_confirm_cancel: 'Cancel',
+    refresh_confirm_confirm: 'Confirm Refresh',
+
+    // Hk Stock News Panel
+    news_panel_title: 'HK Stock News Center',
+    news_panel_important: 'Important News',
+    news_panel_rank: 'Analyst Reports',
+    news_panel_company: 'Company Announcements',
+    news_panel_all: 'All News',
+    news_panel_loading: 'Loading news...',
+    news_panel_empty: 'No news available',
+    news_panel_error: 'Failed to load, please retry',
+    news_panel_source: 'Source',
+    news_panel_time: 'Time',
+    news_panel_view_original: 'View Original',
+    news_panel_filter_placeholder: 'Filter news...',
+    news_panel_refresh: 'Refresh News',
   }
 };

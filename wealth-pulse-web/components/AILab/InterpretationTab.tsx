@@ -1,16 +1,21 @@
 
-import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useContext, useEffect, useRef, useCallback } from 'react';
 import type { KLineData } from 'klinecharts';
 import { StockPrice, ChartInterpretation } from '../../types';
-import { interpretChart } from '../../services/gemini';
 import { stockApi, HotStock, EnhancedDataPoint } from '../../services/stockApi';
 import StockChart from '../StockChart';
 import StockChartWithOverlay from '../StockChartWithOverlay';
-import { aiAnalysisApi, KeyLevel, AIAnalysisRequest, TechnicalPoint } from '../../services/aiAnalysis';
+import { aiAnalysisApi, KeyLevel, AIAnalysisRequest, convertToKeyLevels } from '../../services/aiAnalysis';
 import { I18nContext } from '../../App';
 
 interface InterpretationTabProps {
   stocks: StockPrice[];
+  toast?: {
+    showSuccess: (message: string, duration?: number) => void;
+    showError: (message: string, duration?: number) => void;
+    showWarning: (message: string, duration?: number) => void;
+    showInfo: (message: string, duration?: number) => void;
+  };
 }
 
 // 将热门股票转换为 StockPrice 格式
@@ -30,24 +35,119 @@ const convertToStockPrice = (hotStock: HotStock): StockPrice => {
   };
 };
 
-const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
+/**
+ * 防抖搜索 Hook - 用于后端股票搜索
+ */
+function useDebounceStockSearch(delay: number = 300) {
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<StockPrice[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const executeSearch = useCallback((searchQuery: string) => {
+    // 清除之前的定时器
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+
+    const trimmed = searchQuery.trim();
+
+    // 空查询直接清空结果
+    if (!trimmed) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+
+    // 设置新的防抖定时器
+    timerRef.current = setTimeout(async () => {
+      try {
+        const results = await stockApi.searchStocks(trimmed);
+        setSearchResults(results.slice(0, 50).map(convertToStockPrice));
+      } catch (e: any) {
+        console.error('[useDebounceStockSearch] search error:', e);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, delay);
+  }, [delay]);
+
+  const updateQuery = useCallback((newQuery: string) => {
+    setQuery(newQuery);
+    executeSearch(newQuery);
+  }, [executeSearch]);
+
+  const clearSearch = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setQuery('');
+    setSearchResults([]);
+    setIsSearching(false);
+  }, []);
+
+  // 组件卸载时清理
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    query,
+    searchResults,
+    isSearching,
+    updateQuery,
+    clearSearch,
+  };
+}
+
+const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks, toast = {
+  showSuccess: () => {},
+  showError: () => {},
+  showWarning: () => {},
+  showInfo: () => {},
+} }) => {
   const { t, lang } = useContext(I18nContext);
 
   // 状态管理
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
   const [hotStocks, setHotStocks] = useState<StockPrice[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [interpretation, setInterpretation] = useState<ChartInterpretation | null>(null);
   const [isLoadingHotStocks, setIsLoadingHotStocks] = useState(false);
-  const [chartType, setChartType] = useState<'minute' | 'day'>('day'); // 图表类型：分钟图/日线图
-  const [keyLevels, setKeyLevels] = useState<KeyLevel[]>([]); // AI分析的关键点位
-  const [showAIOverlay, setShowAIOverlay] = useState(true); // 是否显示AI点位覆盖物
+  const [chartType, setChartType] = useState<'minute' | 'day'>('day');
+  const [keyLevels, setKeyLevels] = useState<KeyLevel[]>([]);
+  const [showAIOverlay, setShowAIOverlay] = useState(true);
+
+  // 使用防抖搜索 Hook
+  const {
+    query: searchQuery,
+    searchResults,
+    isSearching,
+    updateQuery: setSearchQuery,
+    clearSearch,
+  } = useDebounceStockSearch(300);
 
   // 保存当前图表数据
   const [currentKlineData, setCurrentKlineData] = useState<KLineData[]>([]);
   const [currentPeriod, setCurrentPeriod] = useState<'minute' | 'daily' | 'weekly' | 'monthly'>('daily');
+
+  // AI 分析结果字段
+  const [aiTrend, setAiTrend] = useState<string>('');
+  const [aiTrendDescription, setAiTrendDescription] = useState<string>('');
+  const [aiRecommendation, setAiRecommendation] = useState<string>('');
+  const [aiRecommendationReason, setAiRecommendationReason] = useState<string>('');
+  const [aiRiskLevel, setAiRiskLevel] = useState<string>('');
+  const [aiTargetPriceRange, setAiTargetPriceRange] = useState<string>('');
 
   // 用于取消请求的 AbortController
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -70,31 +170,48 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
     fetchHotStocks();
   }, []);
 
-  // 搜索逻辑 - 优先显示热门股票，搜索时显示匹配结果
-  const searchResults = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) {
-      // 无搜索时显示热门股票
-      return hotStocks.length > 0 ? hotStocks.slice(0, 6) : stocks.slice(0, 4);
+  // 搜索结果显示（使用后端搜索结果，如果为空则显示热门股票）
+  const displayResults = useMemo(() => {
+    if (searchResults.length > 0) {
+      return searchResults;
     }
-    // 搜索时从所有股票中过滤
-    return stocks.filter(s => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)).slice(0, 5);
-  }, [searchQuery, stocks, hotStocks]);
+    // 没有搜索时，显示热门股票
+    return hotStocks.length > 0 ? hotStocks.slice(0, 6) : stocks.slice(0, 4);
+  }, [searchResults, hotStocks, stocks]);
 
   // 分析逻辑
   const handleAnalyze = async () => {
-    if (!selectedStock) return;
+    console.log('[handleAnalyze] selectedStock:', selectedStock);
+    console.log('[handleAnalyze] currentKlineData.length:', currentKlineData.length);
 
-    // 检查是否有图表数据
+    if (!selectedStock) {
+      toast.showError('请先选择股票');
+      return;
+    }
+
     if (currentKlineData.length === 0) {
-      alert('请等待图表数据加载完成后再进行分析');
+      toast.showError('请等待图表数据加载完成后再进行分析');
+      return;
+    }
+
+    // 从 localStorage 获取用户配置的 LLM provider 和 model
+    const configStr = localStorage.getItem('app_config');
+    const appConfig = configStr ? JSON.parse(configStr) : null;
+    const llmProvider = appConfig?.llmProvider;
+    const llmModel = appConfig?.llmModel;
+
+    console.log('[handleAnalyze] llmProvider:', llmProvider);
+    console.log('[handleAnalyze] llmModel:', llmModel);
+
+    // 检查用户是否配置了 LLM
+    if (!llmProvider || !llmModel) {
+      toast.showWarning('请先在设置中配置 LLM 供应商和模型');
       return;
     }
 
     setIsAnalyzing(true);
-    setKeyLevels([]); // 清空之前的点位
+    setKeyLevels([]);
 
-    // 创建新的 AbortController
     abortControllerRef.current = new AbortController();
 
     try {
@@ -106,7 +223,6 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
         const dd = String(date.getDate()).padStart(2, '0');
         const dateStr = `${yyyy}-${mm}-${dd}`;
 
-        // 计算成交额（如果没有，可以用成交量 * 收盘价估算）
         const amount = item.volume && item.close ? item.volume * item.close : 0;
 
         return {
@@ -120,67 +236,68 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
         };
       });
 
-      // 构建请求参数 - 使用当前图表显示的数据
+      // 构建请求参数（包含用户配置的 LLM provider 和 model）
       const analysisRequest: AIAnalysisRequest = {
         stockCode: selectedStock.symbol,
         period: chartType === 'minute' ? 'minute' : currentPeriod,
         klineData: klineDataForAI,
         forceRefresh: false,
+        provider: llmProvider,
+        model: llmModel,
       };
 
-      // 调用 AI 分析 - 传入 signal 以支持取消
+      // 调用 AI 分析
       const aiResponse = await aiAnalysisApi.analyzeKline(analysisRequest, {
         signal: abortControllerRef.current.signal,
       });
 
-      // 将后端的 technicalPoints 转换为前端的 keyLevels 格式
-      const convertedKeyLevels: KeyLevel[] = aiResponse.technicalPoints.map((tp) => ({
-        type: tp.type === 'stop_loss' ? 'stopLoss' :
-              tp.type === 'take_profit' ? 'takeProfit' :
-              tp.type as 'support' | 'resistance',
-        price: tp.price,
-        label: tp.type === 'stop_loss' ? '风控止损' :
-                tp.type === 'take_profit' ? '止盈目标' :
-                tp.type === 'support' ? '关键支撑' : '趋势压力',
-        confidence: tp.strength / 5, // 将 1-5 转换为 0-1
-        reason: tp.description,
-      }));
+      // 转换点位格式
+      const convertedKeyLevels: KeyLevel[] = convertToKeyLevels(aiResponse.technicalPoints);
 
       // 更新关键点位
       setKeyLevels(convertedKeyLevels);
 
+      // 更新 AI 分析结果字段
+      setAiTrend(aiResponse.trend);
+      setAiTrendDescription(aiResponse.trendDescription);
+      setAiRecommendation(aiResponse.recommendation);
+      setAiRecommendationReason(aiResponse.recommendationReason);
+      setAiRiskLevel(aiResponse.riskLevel);
+      setAiTargetPriceRange(aiResponse.targetPriceRange);
+
       // 更新解读结果
       setInterpretation({
-        patterns: [], // 后端没有返回 patterns
+        patterns: [],
         support: convertedKeyLevels.find((k) => k.type === 'support')?.price,
         resistance: convertedKeyLevels.find((k) => k.type === 'resistance')?.price,
         takeProfit: convertedKeyLevels.find((k) => k.type === 'takeProfit')?.price,
         stopLoss: convertedKeyLevels.find((k) => k.type === 'stopLoss')?.price,
-        advice: aiResponse.trendDescription,
+        advice: aiResponse.recommendationReason || aiResponse.trendDescription,
       });
+
+      // 分析成功提示
+      toast.showSuccess('AI 分析完成！');
     } catch (e: any) {
       if (e.name === 'AbortError') {
-        console.log('AI分析已取消');
-        return; // 取消时不设置错误
+        toast.showInfo('AI 分析已取消');
+        return;
       }
 
-      console.error('AI分析失败:', e);
+      console.error('AI 分析失败:', e);
 
-      // Fallback: 使用原有逻辑
-      try {
-        const data = await interpretChart(selectedStock.symbol, selectedStock.history, lang);
-        setInterpretation(data);
-      } catch (e2) {
-        // Mock Fallback
-        setInterpretation({
-          patterns: lang === 'zh' ? ["底部盘整", "量价背离"] : ["Bottom Consolidation", "Divergence"],
-          support: selectedStock.price * 0.92,
-          resistance: selectedStock.price * 1.08,
-          takeProfit: selectedStock.price * 1.15,
-          stopLoss: selectedStock.price * 0.88,
-          advice: lang === 'zh' ? "当前处于筑底阶段，建议轻仓分批入场。" : "Bottoming out. Suggest light position entry."
-        });
-      }
+      // 显示错误提示，不使用 Fallback
+      const errorMessage = e.message || 'AI 分析失败，请稍后重试';
+      toast.showError(errorMessage);
+
+      // 清空分析结果
+      setKeyLevels([]);
+      setInterpretation(null);
+      setAiTrend('');
+      setAiTrendDescription('');
+      setAiRecommendation('');
+      setAiRecommendationReason('');
+      setAiRiskLevel('');
+      setAiTargetPriceRange('');
     } finally {
       setIsAnalyzing(false);
       abortControllerRef.current = null;
@@ -196,12 +313,60 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
     setIsAnalyzing(false);
   };
 
-  // 当图表类型切换或股票变化时，清空之前的点位和数据
+  // 清空数据
   useEffect(() => {
     setCurrentKlineData([]);
     setKeyLevels([]);
     setInterpretation(null);
+    setAiTrend('');
+    setAiTrendDescription('');
+    setAiRecommendation('');
+    setAiRecommendationReason('');
+    setAiRiskLevel('');
+    setAiTargetPriceRange('');
   }, [chartType, selectedStock?.symbol]);
+
+  // 获取趋势翻译
+  const getTrendLabel = (trend: string): string => {
+    const trendMap: Record<string, string> = {
+      uptrend: t.kline_uptrend || '上涨趋势',
+      downtrend: t.kline_downtrend || '下跌趋势',
+      sideways: t.kline_sideways || '横盘整理',
+    };
+    return trendMap[trend] || trend;
+  };
+
+  // 获取推荐翻译
+  const getRecommendationLabel = (rec: string): string => {
+    const recMap: Record<string, string> = {
+      strong_buy: t.kline_strong_buy || '强烈买入',
+      buy: t.kline_buy || '买入',
+      hold: t.kline_hold || '持有',
+      sell: t.kline_sell || '卖出',
+      strong_sell: t.kline_strong_sell || '强烈卖出',
+    };
+    return recMap[rec] || rec;
+  };
+
+  // 获取风险等级翻译
+  const getRiskLevelLabel = (risk: string): string => {
+    const riskMap: Record<string, string> = {
+      low: t.kline_risk_low || '低风险',
+      medium: t.kline_risk_medium || '中等风险',
+      high: t.kline_risk_high || '高风险',
+    };
+    return riskMap[risk] || risk;
+  };
+
+  // 获取风险等级颜色
+  const getRiskLevelColor = (risk: string): string => {
+    const colorMap: Record<string, string> = {
+      low: 'text-emerald-500 bg-emerald-50',
+      medium: 'text-amber-500 bg-amber-50',
+      high: 'text-rose-500 bg-rose-50',
+    };
+    return colorMap[risk] || 'text-slate-500 bg-slate-50';
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -240,12 +405,12 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
                   </div>
                 )}
                 <div className="p-2">
-                  {isLoadingHotStocks ? (
+                  {isSearching ? (
                     <div className="flex items-center justify-center py-8">
                       <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
                     </div>
-                  ) : searchResults.length > 0 ? (
-                    searchResults.map(s => (
+                  ) : displayResults.length > 0 ? (
+                    displayResults.map(s => (
                       <button
                         key={s.symbol}
                         onClick={() => { setSelectedStock(s); setSearchQuery(''); setIsSearchFocused(false); setInterpretation(null); }}
@@ -274,11 +439,10 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
 
           {/* 生成按钮 / 取消按钮 */}
           <div className="flex items-center gap-3">
-            {/* 数据状态提示 */}
             {currentKlineData.length > 0 && !isAnalyzing && (
               <div className="hidden lg:flex items-center px-3 py-2 bg-slate-50 rounded-xl text-[10px] text-slate-500 font-medium">
                 <i className="fas fa-database mr-2"></i>
-                <span>已加载 {currentKlineData.length} 条{currentPeriod === 'minute' ? '分时' : currentPeriod === 'daily' ? '日K' : '周/月K'}数据</span>
+                <span>已加载 {currentKlineData.length} 条{currentPeriod === 'minute' ? '分时' : currentPeriod === 'daily' ? '日 K' : '周/月 K'}数据</span>
               </div>
             )}
 
@@ -308,7 +472,7 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
         {/* 左侧：图表终端 */}
         <div className="lg:col-span-3 space-y-6">
-          {/* K线图容器 */}
+          {/* K 线图容器 */}
           <div className="bg-white p-6 rounded-[3.5rem] border border-slate-100 shadow-2xl relative overflow-hidden">
             {selectedStock ? (
               <>
@@ -357,15 +521,14 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                       >
-                        日K图
+                        日 K 图
                       </button>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
                     <div className="text-xs text-gray-400 font-medium">
-                      {chartType === 'minute' ? '实时分时数据 · 精确到分钟' : '专业K线分析 · 支持多周期切换'}
+                      {chartType === 'minute' ? '实时分时数据 · 精确到分钟' : '专业 K 线分析 · 支持多周期切换'}
                     </div>
-                    {/* AI点位显示开关 */}
                     {keyLevels.length > 0 && (
                       <button
                         onClick={() => setShowAIOverlay(!showAIOverlay)}
@@ -376,14 +539,14 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
                         }`}
                       >
                         <i className="fas fa-chart-line"></i>
-                        <span>AI点位</span>
+                        <span>AI 点位</span>
                         {showAIOverlay && <i className="fas fa-check-circle ml-1"></i>}
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* K线图表 */}
+                {/* K 线图表 */}
                 {chartType === 'minute' ? (
                   <StockChart
                     stockCode={selectedStock.symbol}
@@ -412,12 +575,50 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
                   <i className="fas fa-chart-line text-4xl text-slate-300"></i>
                 </div>
                 <p className="text-sm font-black text-slate-900 mb-2">请从热门股票中选择或搜索股票代码</p>
-                <p className="text-xs text-slate-400">支持分时图和日K线专业分析</p>
+                <p className="text-xs text-slate-400">支持分时图和日 K 线专业分析</p>
               </div>
             )}
           </div>
 
-          {/* AI点位说明卡片 */}
+          {/* AI 分析结果摘要 */}
+          {(aiTrend || aiRecommendation || aiRiskLevel) && (
+            <div className="bg-gradient-to-r from-violet-50 to-indigo-50 p-6 rounded-[2.5rem] border border-violet-100 shadow-lg">
+              <div className="flex items-center space-x-2 mb-4">
+                <i className="fas fa-robot text-violet-600"></i>
+                <h4 className="text-sm font-black text-slate-900">AI 分析摘要</h4>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {aiTrend && (
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-violet-100">
+                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">趋势判断</p>
+                    <p className="text-sm font-black text-slate-800">{getTrendLabel(aiTrend)}</p>
+                    {aiTrendDescription && <p className="text-[10px] text-slate-500 mt-1">{aiTrendDescription}</p>}
+                  </div>
+                )}
+                {aiRecommendation && (
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-violet-100">
+                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">操作建议</p>
+                    <p className="text-sm font-black text-indigo-600">{getRecommendationLabel(aiRecommendation)}</p>
+                    {aiRecommendationReason && <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">{aiRecommendationReason}</p>}
+                  </div>
+                )}
+                {aiRiskLevel && (
+                  <div className={`rounded-xl p-4 border ${getRiskLevelColor(aiRiskLevel)}`}>
+                    <p className="text-[9px] opacity-70 font-black uppercase tracking-widest mb-1">风险等级</p>
+                    <p className="text-sm font-black">{getRiskLevelLabel(aiRiskLevel)}</p>
+                  </div>
+                )}
+              </div>
+              {aiTargetPriceRange && (
+                <div className="mt-4 bg-white/80 backdrop-blur rounded-xl p-4 border border-violet-100">
+                  <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">目标价格区间</p>
+                  <p className="text-sm font-black text-slate-800">{aiTargetPriceRange}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI 点位说明卡片 */}
           {keyLevels.length > 0 && (
             <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-[2.5rem] border border-indigo-100 shadow-lg">
               <div className="flex items-center justify-between mb-4">
@@ -425,22 +626,22 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
                   <i className="fas fa-robot text-indigo-600"></i>
                   <span>AI 识别的关键点位</span>
                 </h4>
-                <span className="text-xs text-slate-500 font-medium">基于K线数据智能分析</span>
+                <span className="text-xs text-slate-500 font-medium">基于 K 线数据智能分析</span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {keyLevels.map((level) => {
-                  const colors = {
+                  const colors: Record<string, string> = {
                     support: 'border-emerald-300 bg-emerald-50',
                     resistance: 'border-rose-300 bg-rose-50',
                     stopLoss: 'border-amber-300 bg-amber-50',
                     takeProfit: 'border-indigo-300 bg-indigo-50',
-                  }
-                  const textColors = {
+                  };
+                  const textColors: Record<string, string> = {
                     support: 'text-emerald-700',
                     resistance: 'text-rose-700',
                     stopLoss: 'text-amber-700',
                     takeProfit: 'text-indigo-700',
-                  }
+                  };
                   return (
                     <div key={level.label} className={`p-4 rounded-2xl border-2 ${colors[level.type]} transition-all hover:shadow-md`}>
                       <div className="flex items-center justify-between mb-2">
@@ -449,12 +650,12 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
                           <span className="text-[10px] text-slate-500 font-medium">{Math.round(level.confidence * 100)}%</span>
                         )}
                       </div>
-                      <p className={`text-lg font-black ${textColors[level.type]}`}>¥{level.price.toFixed(2)}</p>
+                      <p className={`text-lg font-black ${textColors[level.type]}`}>¥{typeof level.price === 'number' ? level.price.toFixed(2) : level.price}</p>
                       {level.reason && (
                         <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">{level.reason}</p>
                       )}
                     </div>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -476,7 +677,7 @@ const InterpretationTab: React.FC<InterpretationTabProps> = ({ stocks }) => {
                 {isAnalyzing ? (
                   <div className="h-6 w-16 bg-slate-50 animate-pulse rounded"></div>
                 ) : (
-                  <h4 className="text-xl font-black text-slate-800 tracking-tighter">{p.val ? `¥${p.val.toFixed(2)}` : '--.--'}</h4>
+                  <h4 className="text-xl font-black text-slate-800 tracking-tighter">{p.val ? (typeof p.val === 'number' ? `¥${p.val.toFixed(2)}` : `¥${p.val}`) : '--.--'}</h4>
                 )}
               </div>
             ))}

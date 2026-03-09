@@ -23,6 +23,7 @@ import Modal from './components/Modal';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import TradeModal from './components/TradeModal';
+import LLMProviderModal from './components/LLMProviderModal';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -74,6 +75,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   const [sellStock, setSellStock] = useState<StockPrice | null>(null);
   const [sellMaxQuantity, setSellMaxQuantity] = useState<number>(0);
   const [isClearingPosition, setIsClearingPosition] = useState(false);
+  const [llmModalOpen, setLlmModalOpen] = useState(false);
 
   // Toast state
   const [toasts, setToasts] = useState<any[]>([]);
@@ -562,12 +564,14 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       )}
 
       <div className={`fixed inset-y-0 left-0 z-50 transform lg:relative lg:translate-x-0 transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <Sidebar 
-          activeTab={activeTab} 
-          setActiveTab={(tab) => { setActiveTab(tab); setIsSidebarOpen(false); }} 
-          totalAssets={assets.total || 0} 
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={(tab) => { setActiveTab(tab); setIsSidebarOpen(false); }}
+          totalAssets={assets.total || 0}
           assetRate={assets.rate || 0}
           user={user || undefined}
+          config={config}
+          onOpenLLMModal={() => setLlmModalOpen(true)}
         />
       </div>
 
@@ -597,7 +601,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
             </button>
           </header>
 
-          {activeTab === 'dashboard' && <Dashboard assets={assets} totalPrincipal={totalPrincipal} holdingsCount={holdings.length} stocks={stocks} holdings={holdings} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} onNavigateToAI={() => setActiveTab('ai')} aiOutlook={aiOutlook} positionsDashboard={positionsDashboardData} isRefreshing={isRefreshingDashboard} lastRefreshTime={lastRefreshTime} refreshProgress={refreshProgress} onManualRefresh={refreshDashboardData} />}
+          {activeTab === 'dashboard' && <Dashboard assets={assets} totalPrincipal={totalPrincipal} holdingsCount={holdings.length} stocks={stocks} holdings={holdings} onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} positionsDashboard={positionsDashboardData} isRefreshing={isRefreshingDashboard} lastRefreshTime={lastRefreshTime} refreshProgress={refreshProgress} onManualRefresh={refreshDashboardData} />}
           {activeTab === 'market' && <MarketSearch onTrade={(s) => { setSelectedStock(s); setTradeModalOpen(true); }} />}
           {activeTab === 'holdings' && (
             <Holdings
@@ -613,8 +617,8 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
             />
           )}
           {activeTab === 'records' && <Records transactions={transactions} capitalRefreshTrigger={capitalRefreshTrigger} />}
-          {activeTab === 'ai' && <AILab stocks={stocks} transactions={transactions} onAddTransactions={handleAddTransactions} onUpdateTransaction={handleUpdateTransaction} />}
-          {activeTab === 'settings' && <Settings config={config} onUpdateConfig={(cfg) => { const newCfg = { ...config, ...cfg }; setConfig(newCfg); apiService.saveConfig(newCfg); }} />}
+          {activeTab === 'ai' && <AILab stocks={stocks} transactions={transactions} config={config} toast={toast} onAddTransactions={handleAddTransactions} onUpdateTransaction={handleUpdateTransaction} />}
+          {activeTab === 'settings' && <Settings config={config} onUpdateConfig={(cfg) => { const newCfg = { ...config, ...cfg }; setConfig(newCfg); apiService.saveConfig(newCfg); toast.showSuccess(lang === 'zh' ? '设置已保存' : 'Settings saved'); }} toast={toast} />}
           {activeTab === 'help' && <Help />}
         </div>
 
@@ -683,6 +687,16 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
             sellStock: t.sellStock,
           }}
         />
+
+        {/* LLM 供应商配置弹窗 */}
+        <LLMProviderModal
+          isOpen={llmModalOpen}
+          onClose={() => setLlmModalOpen(false)}
+          config={config}
+          onUpdateConfig={(cfg) => { const newCfg = { ...config, ...cfg }; setConfig(newCfg); apiService.saveConfig(newCfg); }}
+          lang={lang}
+          toast={toast}
+        />
       </main>
     </div>
   );
@@ -710,10 +724,24 @@ const AppContentWrapper: React.FC = () => {
   const toast = useToast();
   const [toasts, setToasts] = useState<any[]>([]);
 
+  // 默认显示时长（毫秒）
+  const DEFAULT_DURATIONS = {
+    success: 3000,  // 成功：3 秒
+    error: 5000,    // 错误：5 秒（给用户更多时间阅读）
+    warning: 4000,  // 警告：4 秒
+    info: 3000,     // 信息：3 秒
+  };
+
   // Override toast methods to manage local state
   const showToast = (message: string, type: any, duration?: number) => {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    setToasts((prev: any[]) => [...prev, { id, type, message, duration }]);
+    const finalDuration = duration ?? DEFAULT_DURATIONS[type] ?? 3000;
+    setToasts((prev: any[]) => [...prev, { id, type, message, duration: finalDuration }]);
+
+    // 设置定时器自动移除 toast
+    setTimeout(() => {
+      setToasts((prev: any[]) => prev.filter((t) => t.id !== id));
+    }, finalDuration);
   };
 
   // Custom toast object for AppContent

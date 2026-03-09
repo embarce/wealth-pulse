@@ -98,11 +98,7 @@ public class UserAssetSummaryServiceImpl extends ServiceImpl<UserAssetSummaryMap
      * @return 最新价格，如果没有则返回 null
      */
     private BigDecimal getCurrentPrice(String stockCode) {
-        LambdaQueryWrapper<StockMarketData> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(StockMarketData::getStockCode, stockCode)
-                .orderByDesc(StockMarketData::getMarketDate)
-                .last("LIMIT 1");
-        StockMarketData marketData = stockMarketDataService.getOne(wrapper);
+        StockMarketData marketData = stockMarketDataService.getLatestMarketData(stockCode);
         if (marketData != null) {
             log.debug("获取股票 {} 最新价格: {}, 日期: {}",
                     stockCode, marketData.getLastPrice(), marketData.getMarketDate());
