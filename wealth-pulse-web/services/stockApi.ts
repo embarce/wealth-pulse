@@ -392,6 +392,30 @@ export interface StockAnalysisResult {
   confidence: string;
 }
 
+/** 港股要闻 */
+export interface HkStockImportantNews {
+  title: string;
+  url: string;
+  datasource: string;
+}
+
+/** 新闻汇总统计 */
+export interface NewsSummary {
+  importantNewsCount: number; // 要闻数量
+  rankNewsCount: number; // 大行研报数量
+  companyNewsCount: number; // 公司新闻数量
+  totalCount: number; // 总新闻数量
+}
+
+/** 港股新闻汇总结果 */
+export interface HkStockAllNews {
+  importantNews: HkStockImportantNews[]; // 要闻列表
+  rankNews: HkStockNews[]; // 大行研报列表
+  companyNews: HkStockNews[]; // 公司新闻列表
+  summary: NewsSummary; // 汇总统计信息
+  warnings: string[]; // 警告信息列表
+}
+
 const API_BASE = '/api';
 
 export const stockApi = {
@@ -705,6 +729,22 @@ export const stockApi = {
     );
     if (res?.code !== 200 || !res?.data) {
       throw new Error((res as any)?.msg || 'AI 股票分析失败');
+    }
+    return res.data;
+  },
+
+  /**
+   * 获取所有港股新闻
+   * GET /api/hkstock/news/all
+   * @returns 港股新闻汇总结果（要闻 + 大行研报 + 公司新闻）
+   */
+  getAllHkStockNews: async (): Promise<HkStockAllNews> => {
+    const res = await httpClient.get<ApiResult<HkStockAllNews>>(
+      `${API_BASE}/hkstock/news/all`,
+      defaultRequestOptions
+    );
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取港股新闻失败');
     }
     return res.data;
   },

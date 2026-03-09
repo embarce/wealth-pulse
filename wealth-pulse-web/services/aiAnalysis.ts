@@ -168,6 +168,33 @@ export interface PositionAnalysisResult {
 }
 
 /**
+ * 新闻摘要统计 - 匹配后端 HkStockMarketAnalysisVo.NewsSummary
+ */
+export interface NewsSummary {
+  importantNewsCount: number; // 要闻数量
+  rankNewsCount: number; // 大行研报数量
+  companyNewsCount: number; // 公司新闻数量
+  totalCount: number; // 总新闻数量
+}
+
+/**
+ * 港股市场分析结果 - 匹配后端 HkStockMarketAnalysisVo
+ */
+export interface HkStockMarketAnalysis {
+  report: string; // Markdown 格式的投资建议报告（已处理换行符）
+  rawReport: string; // 原始 Markdown 报告（保留完整格式，用于前端展示）
+  newsSummary: NewsSummary; // 新闻摘要统计信息
+}
+
+/**
+ * 港股市场分析请求 - 匹配后端 HkStockMarketAnalysisRequest
+ */
+export interface HkStockMarketAnalysisRequest {
+  provider?: string; // LLM 供应商
+  model?: string; // 模型名称
+}
+
+/**
  * AI 分析服务
  */
 export const aiAnalysisApi = {
@@ -236,6 +263,41 @@ export const aiAnalysisApi = {
 
     if (res?.code !== 200 || !res?.data) {
       throw new Error((res as any)?.msg || '持仓分析失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * 获取港股市场分析结果（AI 分析日报）
+   * GET /api/ai/hkstock-market-analysis
+   */
+  getHkStockMarketAnalysis: async (options?: HttpRequestOptions): Promise<HkStockMarketAnalysis> => {
+    const res = await httpClient.get<ApiResult<HkStockMarketAnalysis>>(
+      `${API_BASE}/ai/hkstock-market-analysis`,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取港股市场分析失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * 实时分析港股市场（不使用缓存）
+   * POST /api/ai/analyze-hkstock-market
+   */
+  analyzeHkStockMarketRealtime: async (request?: HkStockMarketAnalysisRequest, options?: HttpRequestOptions): Promise<HkStockMarketAnalysis> => {
+    const res = await httpClient.post<ApiResult<HkStockMarketAnalysis>>(
+      `${API_BASE}/ai/analyze-hkstock-market`,
+      request || {},
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '实时港股市场分析失败');
     }
 
     return res.data;

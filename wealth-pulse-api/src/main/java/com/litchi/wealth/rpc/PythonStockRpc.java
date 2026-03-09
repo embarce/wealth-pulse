@@ -642,7 +642,7 @@ public class PythonStockRpc {
     }
 
     /**
-     * AI 分析港股市场（需要认证）
+     * AI 分析港股市场
      *
      * @param request 港股市场分析请求
      * @return 港股市场分析结果

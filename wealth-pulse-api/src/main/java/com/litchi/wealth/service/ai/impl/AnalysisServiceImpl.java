@@ -105,24 +105,25 @@ public class AnalysisServiceImpl implements AnalysisService {
     public HkStockMarketAnalysisVo getHkStockMarketAnalysis() {
         String today = DateUtil.today();
         String redisKey = ANALYSIS_REDIS_KEY_PREFIX + today;
-        HkStockMarketAnalysisVo result = redisCache.getCacheObject(redisKey);
+        Boolean hasKey = redisCache.hasKey(redisKey);
+        if (hasKey) {
+            HkStockMarketAnalysisVo result = redisCache.getCacheObject(redisKey);
 
-        if (result == null) {
+            // 处理 Markdown 换行符，将 \n 转换为实际的换行
+            if (result.getReport() != null) {
+                result.setReport(result.getReport().replace("\\n", "\n"));
+            }
+            result.setRawReport(result.getReport());
+
+            log.info("从 Redis 获取港股市场分析成功：date={}, redisKey={}", today, redisKey);
+            return result;
+        } else {
             // Redis 中没有，尝试实时调用
             log.info("Redis 中未找到 {} 的港股市场分析，尝试实时调用", today);
             HkStockMarketAnalysisVo hkStockMarketAnalysisVo = analyzeHkStockMarketRealtime(new HkStockMarketAnalysisRequest());
-            redisCache.setCacheObject(redisKey, hkStockMarketAnalysisVo, 4 * 60 * 60, TimeUnit.SECONDS);
+            redisCache.setCacheObject(redisKey, hkStockMarketAnalysisVo, 5, TimeUnit.HOURS);
             return hkStockMarketAnalysisVo;
         }
-
-        // 处理 Markdown 换行符，将 \n 转换为实际的换行
-        if (result.getReport() != null) {
-            result.setReport(result.getReport().replace("\\n", "\n"));
-        }
-        result.setRawReport(result.getReport());
-
-        log.info("从 Redis 获取港股市场分析成功：date={}, redisKey={}", today, redisKey);
-        return result;
     }
 
     @Override
@@ -133,7 +134,9 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         try {
             HkStockMarketAnalysisVo result = pythonStockRpc.analyzeHkStockMarket(request);
-
+            String today = DateUtil.today();
+            String redisKey = ANALYSIS_REDIS_KEY_PREFIX + today;
+            redisCache.setCacheObject(redisKey, result, 5, TimeUnit.HOURS);
             // 处理 Markdown 换行符
             if (result.getReport() != null) {
                 // 保存原始报告（用于前端展示）

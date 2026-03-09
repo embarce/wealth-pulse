@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/hkstock")
+@RequestMapping("/hkstock")
 @Tag(name = "港股新闻管理", description = "提供港股新闻数据的 API 接口")
 public class HkStockNewsController {
 
