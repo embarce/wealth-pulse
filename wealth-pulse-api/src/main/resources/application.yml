@@ -111,7 +111,7 @@ email:
 
 # 系统配置
 system:
-  website-url: https://stock.embracechw.top
-  contact-url: mailto:support@girls-rating.com
-  unsubscribe-url: https://stock.embracechw.top/settings
-  version: 1.0.0
+  website-url: ${SYSTEM_WEBSITE_URL:https://stock.embracechw.top}
+  contact-url: ${SYSTEM_CONTACT_URL:mailto:support@girls-rating.com}
+  unsubscribe-url: ${SYSTEM_UNSUBSCRIBE_URL:https://stock.embracechw.top/settings}
+  version: ${SYSTEM_VERSION:1.0.0}

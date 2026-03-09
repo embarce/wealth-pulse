@@ -1105,13 +1105,9 @@ class StockAnalysisService:
             Markdown 格式的投资建议报告
         """
         import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
 
-        return loop.run_until_complete(
+        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
+        return asyncio.run(
             self.analyze_hkstock_market(news_data=news_data, provider=provider, model=model)
         )
 

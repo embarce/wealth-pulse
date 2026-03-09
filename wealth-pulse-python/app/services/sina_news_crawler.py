@@ -158,13 +158,10 @@ class SinaNewsCrawler:
         """
         import asyncio
 
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        import asyncio
 
-        return loop.run_until_complete(self.fetch_stock_news(stock_code))
+        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
+        return asyncio.run(self.fetch_stock_news(stock_code))
 
 
 # 创建全局实例
