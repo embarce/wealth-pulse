@@ -100,14 +100,14 @@ class StockAnalysisService:
 
         # 4. 获取公司信息（新浪）
         try:
-            company_info = sina_company_info_crawler.fetch_company_info_sync(stock_code)
+            company_info = await sina_company_info_crawler.fetch_company_info(stock_code)
         except Exception as e:
             logger.warning(f"[StockAnalysis] 获取公司信息失败：{e}")
             company_info = {}
 
         # 5. 获取新闻（新浪）
         try:
-            news_items = sina_news_crawler.fetch_stock_news_sync(stock_code)
+            news_items = await sina_news_crawler.fetch_stock_news(stock_code)
             # 只取最近 5 条新闻
             recent_news = news_items[:5] if news_items else []
         except Exception as e:
@@ -116,14 +116,14 @@ class StockAnalysisService:
 
         # 6. 获取财务指标（新浪）
         try:
-            financial_data = sina_finance_crawler.fetch_financial_indicators_sync(stock_code)
+            financial_data = await sina_finance_crawler.fetch_financial_indicators(stock_code)
         except Exception as e:
             logger.warning(f"[StockAnalysis] 获取财务指标失败：{e}")
             financial_data = {}
 
         # 7. 获取公告（新浪）
         try:
-            notices = sina_company_notice_crawler.fetch_company_notices_sync(stock_code, max_pages=1)
+            notices = await sina_company_notice_crawler.fetch_company_notices(stock_code, max_pages=1)
             # 只取最近 3 条公告
             recent_notices = notices[:3] if notices else []
         except Exception as e:
@@ -242,12 +242,12 @@ class StockAnalysisService:
                 company_info = {}
                 financial_data = {}
                 try:
-                    company_info = sina_company_info_crawler.fetch_company_info_sync(stock_code)
+                    company_info = await sina_company_info_crawler.fetch_company_info(stock_code)
                 except Exception:
                     pass
 
                 try:
-                    financial_data = sina_finance_crawler.fetch_financial_indicators_sync(stock_code)
+                    financial_data = await sina_finance_crawler.fetch_financial_indicators(stock_code)
                 except Exception:
                     pass
 

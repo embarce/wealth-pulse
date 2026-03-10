@@ -3,6 +3,7 @@
 """
 import sys
 import os
+import asyncio
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.services.sina_hkstock_crawler import SinaHKStockCrawler
 
 
-def test_fetch_hkstock_news():
+async def test_fetch_hkstock_news():
     """测试获取港股首页新闻"""
     print("=" * 60)
     print("测试 1: 获取港股首页新闻（要闻 + 研报 URL+ 公司新闻 URL）")
@@ -19,7 +20,7 @@ def test_fetch_hkstock_news():
     crawler = SinaHKStockCrawler()
 
     try:
-        result = crawler.fetch_hkstock_news_sync()
+        result = await crawler.fetch_hkstock_news()
 
         print(f"\n要闻数量：{len(result['important_news'])}")
         print("\n要闻列表:")
@@ -40,7 +41,7 @@ def test_fetch_hkstock_news():
         print(f"测试失败：{e}")
 
 
-def test_fetch_rank_news():
+async def test_fetch_rank_news():
     """测试获取大行研报"""
     print("\n" + "=" * 60)
     print("测试 2: 获取大行研报")
@@ -49,7 +50,7 @@ def test_fetch_rank_news():
     crawler = SinaHKStockCrawler()
 
     try:
-        result = crawler.fetch_rank_news_sync()
+        result = await crawler.fetch_rank_news()
 
         # 检查是否跳过
         if result.get('skipped'):
@@ -71,7 +72,7 @@ def test_fetch_rank_news():
         print(f"测试失败：{e}")
 
 
-def test_fetch_company_news():
+async def test_fetch_company_news():
     """测试获取公司新闻"""
     print("\n" + "=" * 60)
     print("测试 3: 获取公司新闻")
@@ -80,7 +81,7 @@ def test_fetch_company_news():
     crawler = SinaHKStockCrawler()
 
     try:
-        result = crawler.fetch_company_news_sync()
+        result = await crawler.fetch_company_news()
 
         # 检查是否跳过
         if result.get('skipped'):
@@ -102,7 +103,7 @@ def test_fetch_company_news():
         print(f"测试失败：{e}")
 
 
-def test_fetch_all_news():
+async def test_fetch_all_news():
     """测试获取所有新闻"""
     print("\n" + "=" * 60)
     print("测试 4: 获取所有港股新闻（汇总）")
@@ -111,7 +112,7 @@ def test_fetch_all_news():
     crawler = SinaHKStockCrawler()
 
     try:
-        result = crawler.fetch_all_news_sync()
+        result = await crawler.fetch_all_news()
 
         print(f"\n汇总统计:")
         print(f"  - 要闻数量：{result['summary']['important_news_count']}")
@@ -141,15 +142,19 @@ def test_fetch_all_news():
         print(f"测试失败：{e}")
 
 
-if __name__ == "__main__":
+async def main():
     print("新浪港股信息爬虫测试开始\n")
 
     # 运行所有测试
-    test_fetch_hkstock_news()
-    test_fetch_rank_news()
-    test_fetch_company_news()
-    test_fetch_all_news()
+    await test_fetch_hkstock_news()
+    await test_fetch_rank_news()
+    await test_fetch_company_news()
+    await test_fetch_all_news()
 
     print("\n" + "=" * 60)
     print("所有测试完成")
     print("=" * 60)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

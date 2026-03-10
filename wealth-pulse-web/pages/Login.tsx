@@ -2,7 +2,6 @@
 import React, { useState, useContext } from 'react';
 import { I18nContext } from '../App';
 import { httpClient } from '../services/http';
-import { useToast } from '../contexts/ToastContext';
 
 interface LoginProps {
   onLogin: () => void;
@@ -10,29 +9,53 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const { lang, t, setLang } = useContext(I18nContext);
-  const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('729374717@qq.com');
-  const [password, setPassword] = useState('13602449816');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
+
+    // 表单验证
+    if (!email.trim()) {
+      setError(lang === 'zh' ? '请输入邮箱地址' : 'Please enter email');
+      return;
+    }
+    if (!password) {
+      setError(lang === 'zh' ? '请输入密码' : 'Please enter password');
+      return;
+    }
+
+    // 清空错误信息
+    setError('');
+
     setLoading(true);
     try {
       // 调用后端真实登录接口
-      // 登录接口不自动处理 401，因为登录失败需要显示错误信息给用户
+      // 使用 skipStatusCheck: true 来直接获取响应，而不是在状态码错误时 throw error
       const res: any = await httpClient.post('/api/auth/v1/password/login', {
         email,
         password,
-      }, { autoHandleAuthError: false });
+      }, { autoHandleAuthError: false, skipStatusCheck: true });
 
       // 后端返回结构：
-      // {
-      //   "msg": "success",
-      //   "code": 200,
-      //   "data": { "accessToken": "xxx" }
-      // }
+      // 成功：{ "msg": "success", "code": 200, "data": { "accessToken": "xxx" } }
+      // 失败：{ "msg": "password or username not valid", "code": -1 }
+
+      // 检查响应码
+      if (res?.code !== 200) {
+        // 根据后端返回的错误信息显示相应提示
+        const errorMsg = res?.msg || '登录失败';
+        // 转换后端英文错误信息为中文提示
+        if (errorMsg.includes('password') || errorMsg.includes('username') || errorMsg.includes('email')) {
+          throw new Error(lang === 'zh' ? '邮箱或密码错误' : 'Email or password not valid');
+        }
+        throw new Error(errorMsg);
+      }
+
+      // 登录成功，获取 token
       const token = res?.data?.accessToken;
       if (!token) {
         throw new Error('登录返回数据不包含 accessToken');
@@ -41,10 +64,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       // 统一保存 token，并让 App 里的 isLoggedIn 生效
       httpClient.setToken(token);
       onLogin();
-      toast.showSuccess('登录成功');
     } catch (err: any) {
       console.error('登录失败', err);
-      toast.showError(err?.message || '登录失败，请检查账号或密码');
+      // 显示错误信息
+      setError(err?.message || (lang === 'zh' ? '登录失败，请检查账号或密码' : 'Login failed, please check your credentials'));
     } finally {
       setLoading(false);
     }
@@ -86,11 +109,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t.login_admin}</label>
             <div className="relative">
               <i className="fas fa-user absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 text-sm"></i>
-              <input 
-                type="text" 
+              <input
+                type="email"
+                autoComplete="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all"
+                placeholder={t.login_admin}
               />
             </div>
           </div>
@@ -98,15 +124,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t.login_pwd}</label>
             <div className="relative">
               <i className="fas fa-lock absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 text-sm"></i>
-              <input 
-                type="password" 
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all"
+                placeholder={t.login_pwd}
               />
             </div>
           </div>
-          <button 
+          <button
             type="submit"
             disabled={loading}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-600/20 transition-all flex items-center justify-center group uppercase tracking-widest text-[11px]"
@@ -117,6 +146,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <>{t.login_btn} <i className="fas fa-arrow-right ml-3 group-hover:translate-x-1 transition-transform"></i></>
             )}
           </button>
+
+          {/* 错误信息显示 */}
+          {error && (
+            <div className="mt-4 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start space-x-3">
+              <i className="fas fa-exclamation-circle text-rose-500 text-base mt-0.5"></i>
+              <span className="text-sm font-bold text-rose-700">{error}</span>
+            </div>
+          )}
         </form>
 
         <p className="text-center text-slate-300 text-[9px] font-black mt-10 uppercase tracking-[0.2em]">

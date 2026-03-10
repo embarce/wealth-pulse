@@ -73,4 +73,34 @@ public interface AnalysisService {
      * @return 分析结果
      */
     HkStockMarketAnalysisVo analyzeHkStockMarketRealtime(HkStockMarketAnalysisRequest request);
+
+    /**
+     * AI 分析贸易评分
+     *
+     * @param request 贸易评分请求
+     * @return 贸易评分结果
+     */
+    com.litchi.wealth.vo.ai.TradeScoreVo analyzeTrade(com.litchi.wealth.dto.ai.TradeScoreRequest request);
+
+    /**
+     * AI 分析券商截图
+     *
+     * @param request 券商截图识别请求
+     * @return 识别结果
+     */
+    com.litchi.wealth.vo.ai.BrokerScreenshotVo analyzeBrokerScreenshot(com.litchi.wealth.dto.ai.BrokerScreenshotRequest request);
+
+    /**
+     * 获取 AI 新闻摘要
+     *
+     * @return AI 新闻摘要列表
+     */
+    java.util.List<com.litchi.wealth.vo.ai.AINewsVo> getNewsSummary();
+
+    /**
+     * 获取 AI 热点
+     *
+     * @return AI 热点列表
+     */
+    java.util.List<com.litchi.wealth.vo.ai.AIHotspotVo> getHotspots();
 }

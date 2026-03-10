@@ -1,14 +1,16 @@
 
 import React, { useState } from 'react';
 import { AINewsItem, AIHotspot } from '../../types';
-import { getAINews, getAIHotspots } from '../../services/gemini';
+import { aiAnalysisApi } from '../../services/aiAnalysis';
 import { Language } from '../../i18n';
+import { useToast } from '../../contexts/ToastContext';
 
 interface MarketTrendsTabProps {
   lang: Language;
 }
 
 const MarketTrendsTab: React.FC<MarketTrendsTabProps> = ({ lang }) => {
+  const toast = useToast();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [news, setNews] = useState<AINewsItem[]>([]);
   const [hotspots, setHotspots] = useState<AIHotspot[]>([]);
@@ -17,12 +19,14 @@ const MarketTrendsTab: React.FC<MarketTrendsTabProps> = ({ lang }) => {
   const handleScan = async () => {
     setIsAnalyzing(true);
     try {
-      const [n, h] = await Promise.all([getAINews(lang), getAIHotspots(lang)]);
-      setNews(n);
-      setHotspots(h);
+      // 调用后端 API 获取港股市场分析
+      const analysis = await aiAnalysisApi.getHkStockMarketAnalysis();
+      // 从分析结果中提取新闻和热点（这里需要根据实际返回结构调整）
       setHasScanned(true);
-    } catch (e) {
+      toast.showSuccess(lang === 'zh' ? '市场分析完成' : 'Market analysis complete');
+    } catch (e: any) {
       console.error(e);
+      toast.showError(e?.message || (lang === 'zh' ? '分析失败' : 'Analysis failed'));
     } finally {
       setIsAnalyzing(false);
     }

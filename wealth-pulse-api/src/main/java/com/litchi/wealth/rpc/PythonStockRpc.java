@@ -29,6 +29,12 @@ import com.litchi.wealth.vo.rpc.HkStockMinuteHistoryVo;
 import com.litchi.wealth.vo.rpc.HkStockNewsVo;
 import com.litchi.wealth.vo.rpc.HkStockSecurityProfileVo;
 import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
+import com.litchi.wealth.dto.ai.TradeScoreRequest;
+import com.litchi.wealth.dto.ai.BrokerScreenshotRequest;
+import com.litchi.wealth.vo.ai.TradeScoreVo;
+import com.litchi.wealth.vo.ai.BrokerScreenshotVo;
+import com.litchi.wealth.vo.ai.AINewsVo;
+import com.litchi.wealth.vo.ai.AIHotspotVo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -707,6 +713,139 @@ public class PythonStockRpc {
             String msg = result.getStr("msg");
             log.error("获取所有港股新闻失败：code={}, msg={}", code, msg);
             throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取所有港股新闻失败");
+        }
+    }
+
+    /**
+     * AI 分析贸易评分
+     *
+     * @param request 贸易评分请求
+     * @return 贸易评分结果
+     */
+    public TradeScoreVo analyzeTrade(TradeScoreRequest request) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/analyze-trade";
+        log.info("调用 Python AI API 分析贸易：stockCode={}, transactionDate={}, instruction={}, url={}",
+                request.getStockCode(), request.getTransactionDate(), request.getInstruction(), url);
+
+        String json = JSONUtil.toJsonStr(request);
+        log.debug("请求参数：{}", json);
+
+        String resultStr = HttpRequest.post(url)
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .body(json)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, TradeScoreVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("AI 分析贸易失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "AI 分析贸易失败");
+        }
+    }
+
+    /**
+     * AI 分析券商截图
+     *
+     * @param request 券商截图识别请求
+     * @return 识别结果
+     */
+    public BrokerScreenshotVo analyzeBrokerScreenshot(BrokerScreenshotRequest request) {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/analyze-broker-screenshot";
+        log.info("调用 Python AI API 分析券商截图：url={}", url);
+
+        String json = JSONUtil.toJsonStr(request);
+        log.debug("请求参数：{}", json);
+
+        String resultStr = HttpRequest.post(url)
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .body(json)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONObject data = result.getJSONObject("data");
+            return JSONUtil.toBean(data, BrokerScreenshotVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("AI 分析券商截图失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "AI 分析券商截图失败");
+        }
+    }
+
+    /**
+     * 获取 AI 新闻摘要
+     *
+     * @return AI 新闻摘要列表
+     */
+    public List<AINewsVo> getNewsSummary() {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/news-summary";
+        log.info("调用 Python AI API 获取 AI 新闻摘要：url={}", url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONArray dataArray = result.getJSONArray("data");
+            return JSONUtil.toList(dataArray, AINewsVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取 AI 新闻摘要失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取 AI 新闻摘要失败");
+        }
+    }
+
+    /**
+     * 获取 AI 热点
+     *
+     * @return AI 热点列表
+     */
+    public List<AIHotspotVo> getHotspots() {
+        String token = createAccessToken();
+
+        String url = pythonApiUrl + "/api/ai/hotspots";
+        log.info("调用 Python AI API 获取 AI 热点：url={}", url);
+
+        String resultStr = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + token)
+                .execute()
+                .body();
+
+        log.info("Python API 返回：{}", resultStr);
+
+        JSONObject result = JSONUtil.parseObj(resultStr);
+        Integer code = result.getInt("code");
+        if (code == 200) {
+            JSONArray dataArray = result.getJSONArray("data");
+            return JSONUtil.toList(dataArray, AIHotspotVo.class);
+        } else {
+            String msg = result.getStr("msg");
+            log.error("获取 AI 热点失败：code={}, msg={}", code, msg);
+            throw new ServiceException(StrUtil.isNotBlank(msg) ? msg : "获取 AI 热点失败");
         }
     }
 

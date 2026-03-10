@@ -523,62 +523,6 @@ class SinaHKStockCrawler:
             logger.error(f"[SinaHKStockCrawler] Error fetching all news: {str(e)}")
             raise Exception(f"爬取所有新闻失败：{str(e)}")
 
-    def fetch_hkstock_news_sync(self) -> Dict:
-        """
-        同步方式爬取港股首页新闻
-
-        Returns:
-            包含要闻、研报 URL、公司新闻 URL 的字典
-        """
-        import asyncio
-
-        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
-        return asyncio.run(self.fetch_hkstock_news())
-
-    def fetch_rank_news_sync(self, url: Optional[str] = None, skip_if_url_missing: bool = False) -> Dict:
-        """
-        同步方式爬取大行研报新闻
-
-        Args:
-            url: 大行研报列表页 URL
-            skip_if_url_missing: 如果 URL 缺失是否跳过爬取
-
-        Returns:
-            包含研报新闻列表的字典
-        """
-        import asyncio
-
-        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
-        return asyncio.run(self.fetch_rank_news(url=url, skip_if_url_missing=skip_if_url_missing))
-
-    def fetch_company_news_sync(self, url: Optional[str] = None, skip_if_url_missing: bool = False) -> Dict:
-        """
-        同步方式爬取公司新闻
-
-        Args:
-            url: 公司新闻列表页 URL
-            skip_if_url_missing: 如果 URL 缺失是否跳过爬取
-
-        Returns:
-            包含公司新闻列表的字典
-        """
-        import asyncio
-
-        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
-        return asyncio.run(self.fetch_company_news(url=url, skip_if_url_missing=skip_if_url_missing))
-
-    def fetch_all_news_sync(self) -> Dict:
-        """
-        同步方式爬取所有港股新闻
-
-        Returns:
-            包含所有新闻的字典
-        """
-        import asyncio
-
-        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
-        return asyncio.run(self.fetch_all_news())
-
 
 # 创建全局实例
 sina_hkstock_crawler = SinaHKStockCrawler()

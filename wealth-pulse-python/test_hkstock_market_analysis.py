@@ -9,6 +9,7 @@
 import sys
 import os
 import logging
+import asyncio
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -23,14 +24,14 @@ from app.services.sina_hkstock_crawler import SinaHKStockCrawler
 from app.services.stock_analysis_service import StockAnalysisService
 
 
-def test_fetch_news():
+async def test_fetch_news():
     """测试新闻爬取功能"""
     print("=" * 60)
     print("测试 1: 爬取港股新闻")
     print("=" * 60)
 
     crawler = SinaHKStockCrawler()
-    news_data = crawler.fetch_all_news_sync()
+    news_data = await crawler.fetch_all_news()
 
     print(f"\n爬取结果:")
     print(f"  - 要闻数量：{news_data['summary']['important_news_count']}")
@@ -58,7 +59,7 @@ def test_fetch_news():
     return news_data
 
 
-def test_analyze_market(news_data=None):
+async def test_analyze_market(news_data=None):
     """测试 AI 分析功能"""
     print("\n" + "=" * 60)
     print("测试 2: AI 分析港股市场")
@@ -71,7 +72,7 @@ def test_analyze_market(news_data=None):
     print("(这可能需要 30-60 秒)")
 
     # 执行分析
-    report = analysis_service.analyze_hkstock_market_sync(
+    report = await analysis_service.analyze_hkstock_market(
         news_data=news_data,
         provider=None,  # 使用默认 provider
         model=None      # 使用默认 model
@@ -85,7 +86,7 @@ def test_analyze_market(news_data=None):
     return report
 
 
-def main():
+async def main():
     """主函数"""
     print("\n" + "=" * 60)
     print("港股市场 AI 分析功能测试")
@@ -93,10 +94,10 @@ def main():
 
     try:
         # 测试 1: 爬取新闻
-        news_data = test_fetch_news()
+        news_data = await test_fetch_news()
 
         # 测试 2: AI 分析
-        report = test_analyze_market(news_data=news_data)
+        report = await test_analyze_market(news_data=news_data)
 
         # 保存报告到文件
         output_file = os.path.join(os.path.dirname(__file__), "hkstock_market_report.md")
@@ -115,4 +116,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

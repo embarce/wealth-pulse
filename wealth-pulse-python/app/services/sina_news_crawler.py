@@ -25,7 +25,7 @@ class SinaNewsCrawler:
         初始化爬虫
 
         Args:
-            timeout: 请求超时时间(秒)
+            timeout: 请求超时时间 (秒)
         """
         self.timeout = timeout
         self.headers = {
@@ -43,15 +43,15 @@ class SinaNewsCrawler:
         标准化股票代码为新浪格式
 
         Args:
-            stock_code: 股票代码 (如: 0700.HK, 09868.HK)
+            stock_code: 股票代码 (如：0700.HK, 09868.HK)
 
         Returns:
-            新浪格式的股票代码 (如: 00700, 09868)
+            新浪格式的股票代码 (如：00700, 09868)
         """
         # 移除 .HK 后缀
         code = stock_code.replace('.HK', '').replace('.hk', '')
 
-        # 补齐到5位
+        # 补齐到 5 位
         if len(code) < 5:
             code = code.zfill(5)
 
@@ -62,14 +62,14 @@ class SinaNewsCrawler:
         爬取指定股票的新闻列表
 
         Args:
-            stock_code: 股票代码 (如: 0700.HK)
+            stock_code: 股票代码 (如：0700.HK)
 
         Returns:
             新闻列表，每条新闻包含:
             - title: 新闻标题
             - url: 新闻链接
-            - datasource: 数据源(固定为"新浪财经")
-            - publish_time: 发布时间(如果存在)
+            - datasource: 数据源 (固定为"新浪财经")
+            - publish_time: 发布时间 (如果存在)
 
         Raises:
             Exception: 爬取失败时抛出异常
@@ -136,32 +136,15 @@ class SinaNewsCrawler:
 
         except httpx.TimeoutException:
             logger.error(f"[SinaNewsCrawler] Timeout fetching news for {stock_code}")
-            raise Exception(f"请求超时: {url}")
+            raise Exception(f"请求超时：{url}")
 
         except httpx.HTTPStatusError as e:
             logger.error(f"[SinaNewsCrawler] HTTP error {e.response.status_code} for {stock_code}")
-            raise Exception(f"HTTP错误: {e.response.status_code}")
+            raise Exception(f"HTTP 错误：{e.response.status_code}")
 
         except Exception as e:
             logger.error(f"[SinaNewsCrawler] Error fetching news for {stock_code}: {str(e)}")
-            raise Exception(f"爬取新闻失败: {str(e)}")
-
-    def fetch_stock_news_sync(self, stock_code: str) -> List[Dict[str, str]]:
-        """
-        同步方式爬取指定股票的新闻列表
-
-        Args:
-            stock_code: 股票代码 (如: 0700.HK)
-
-        Returns:
-            新闻列表
-        """
-        import asyncio
-
-        import asyncio
-
-        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
-        return asyncio.run(self.fetch_stock_news(stock_code))
+            raise Exception(f"爬取新闻失败：{str(e)}")
 
 
 # 创建全局实例

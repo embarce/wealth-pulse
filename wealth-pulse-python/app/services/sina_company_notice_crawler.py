@@ -23,7 +23,7 @@ class SinaCompanyNoticeCrawler:
         初始化爬虫
 
         Args:
-            timeout: 请求超时时间(秒)
+            timeout: 请求超时时间 (秒)
         """
         self.timeout = timeout
         self.headers = {
@@ -41,15 +41,15 @@ class SinaCompanyNoticeCrawler:
         标准化股票代码为新浪格式
 
         Args:
-            stock_code: 股票代码 (如: 0700.HK, 09868.HK)
+            stock_code: 股票代码 (如：0700.HK, 09868.HK)
 
         Returns:
-            新浪格式的股票代码 (如: 00700, 09868)
+            新浪格式的股票代码 (如：00700, 09868)
         """
         # 移除 .HK 后缀
         code = stock_code.replace('.HK', '').replace('.hk', '')
 
-        # 补齐到5位
+        # 补齐到 5 位
         if len(code) < 5:
             code = code.zfill(5)
 
@@ -64,15 +64,15 @@ class SinaCompanyNoticeCrawler:
         爬取指定股票的公司公告列表
 
         Args:
-            stock_code: 股票代码 (如: 09868.HK)
-            max_pages: 最大爬取页数 (默认1页)
+            stock_code: 股票代码 (如：09868.HK)
+            max_pages: 最大爬取页数 (默认 1 页)
 
         Returns:
             公告列表，每条公告包含:
             - title: 公告标题
             - url: 公告链接
-            - datasource: 数据源(固定为"新浪财经")
-            - publish_time: 发布时间(如果存在)
+            - datasource: 数据源 (固定为"新浪财经")
+            - publish_time: 发布时间 (如果存在)
 
         Raises:
             Exception: 爬取失败时抛出异常
@@ -88,7 +88,7 @@ class SinaCompanyNoticeCrawler:
         try:
             async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
                 for page in range(1, max_pages + 1):
-                    # 如果是第一页，使用原始URL；否则使用分页URL
+                    # 如果是第一页，使用原始 URL；否则使用分页 URL
                     if page == 1:
                         page_url = url
                     else:
@@ -153,7 +153,7 @@ class SinaCompanyNoticeCrawler:
                     logger.info(f"[SinaCompanyNoticeCrawler] Found {len(page_notices)} notices on page {page}")
 
                     # 检查是否还有下一页
-                    # 如果页面上的公告数量明显少于30条，说明可能是最后一页
+                    # 如果页面上的公告数量明显少于 30 条，说明可能是最后一页
                     if len(page_notices) < 25:
                         break
 
@@ -163,37 +163,15 @@ class SinaCompanyNoticeCrawler:
 
         except httpx.TimeoutException:
             logger.error(f"[SinaCompanyNoticeCrawler] Timeout fetching notices for {stock_code}")
-            raise Exception(f"请求超时: {url}")
+            raise Exception(f"请求超时：{url}")
 
         except httpx.HTTPStatusError as e:
             logger.error(f"[SinaCompanyNoticeCrawler] HTTP error {e.response.status_code} for {stock_code}")
-            raise Exception(f"HTTP错误: {e.response.status_code}")
+            raise Exception(f"HTTP 错误：{e.response.status_code}")
 
         except Exception as e:
             logger.error(f"[SinaCompanyNoticeCrawler] Error fetching notices for {stock_code}: {str(e)}")
-            raise Exception(f"爬取公司公告失败: {str(e)}")
-
-    def fetch_company_notices_sync(
-        self,
-        stock_code: str,
-        max_pages: int = 1
-    ) -> List[Dict[str, str]]:
-        """
-        同步方式爬取指定股票的公司公告列表
-
-        Args:
-            stock_code: 股票代码 (如: 09868.HK)
-            max_pages: 最大爬取页数 (默认1页)
-
-        Returns:
-            公告列表
-        """
-        import asyncio
-
-        import asyncio
-
-        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
-        return asyncio.run(self.fetch_company_notices(stock_code, max_pages))
+            raise Exception(f"爬取公司公告失败：{str(e)}")
 
 
 # 创建全局实例

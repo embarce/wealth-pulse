@@ -928,7 +928,7 @@ def get_enhanced_history(
 
 
 @router.get("/{stock_code}/news", summary="Get HK stock news from Sina Finance")
-def get_stock_news(
+async def get_stock_news(
         stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 09868.HK)", example="0700.HK"),
         current_user: dict = Depends(get_current_user)
 ):
@@ -959,7 +959,7 @@ def get_stock_news(
         logger.info(f"[StockNews] Fetching news for {stock_code}")
 
         # 使用爬虫获取新闻
-        news_items = sina_news_crawler.fetch_stock_news_sync(stock_code)
+        news_items = await sina_news_crawler.fetch_stock_news(stock_code)
 
         if not news_items:
             return success_response(
@@ -985,7 +985,7 @@ def get_stock_news(
 
 
 @router.get("/{stock_code}/company-info-sina", summary="Get HK stock company info from Sina Finance")
-def get_company_info_sina(
+async def get_company_info_sina(
         stock_code: str = Path(..., description="Stock code (e.g., 01810.HK, 09868.HK)", example="01810.HK"),
         current_user: dict = Depends(get_current_user)
 ):
@@ -1033,7 +1033,7 @@ def get_company_info_sina(
         logger.info(f"[CompanyInfoSina] Fetching company info for {stock_code}")
 
         # 使用爬虫获取公司信息
-        company_info = sina_company_info_crawler.fetch_company_info_sync(stock_code)
+        company_info = await sina_company_info_crawler.fetch_company_info(stock_code)
 
         if not company_info:
             return success_response(
@@ -1059,7 +1059,7 @@ def get_company_info_sina(
 
 
 @router.get("/{stock_code}/financial-indicators-sina", summary="Get HK stock financial indicators from Sina Finance")
-def get_financial_indicators_sina(
+async def get_financial_indicators_sina(
         stock_code: str = Path(..., description="Stock code (e.g., 01810.HK, 09868.HK)", example="01810.HK"),
         current_user: dict = Depends(get_current_user)
 ):
@@ -1116,7 +1116,7 @@ def get_financial_indicators_sina(
         logger.info(f"[FinancialIndicatorsSina] Fetching financial indicators for {stock_code}")
 
         # 使用爬虫获取财务指标
-        financial_data = sina_finance_crawler.fetch_financial_indicators_sync(stock_code)
+        financial_data = await sina_finance_crawler.fetch_financial_indicators(stock_code)
 
         if not financial_data:
             return success_response(
@@ -1142,7 +1142,7 @@ def get_financial_indicators_sina(
 
 
 @router.get("/{stock_code}/company-notices", summary="Get HK stock company notices from Sina Finance")
-def get_company_notices(
+async def get_company_notices(
         stock_code: str = Path(..., description="Stock code (e.g., 01810.HK, 09868.HK)", example="09868.HK"),
         max_pages: int = Query(1, ge=1, le=10, description="Maximum number of pages to fetch (1-10, default: 1)"),
         current_user: dict = Depends(get_current_user)
@@ -1173,7 +1173,7 @@ def get_company_notices(
         logger.info(f"[CompanyNotices] Fetching notices for {stock_code}, max_pages: {max_pages}")
 
         # 使用爬虫获取公告
-        notices = sina_company_notice_crawler.fetch_company_notices_sync(stock_code, max_pages)
+        notices = await sina_company_notice_crawler.fetch_company_notices(stock_code, max_pages)
 
         if not notices:
             return success_response(

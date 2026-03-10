@@ -2,6 +2,7 @@
 import React, { useContext } from 'react';
 import { I18nContext } from '../App';
 import { AppConfig } from '../types';
+import { httpClient } from '../services/http';
 
 interface SidebarProps {
   activeTab: string;
@@ -15,9 +16,10 @@ interface SidebarProps {
   };
   config?: AppConfig | null;
   onOpenLLMModal?: () => void;
+  onLogout?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets, assetRate, user, config, onOpenLLMModal }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets, assetRate, user, config, onOpenLLMModal, onLogout }) => {
   const { lang, t, setLang } = useContext(I18nContext);
 
   const menuItems = [
@@ -114,7 +116,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, totalAssets,
             </p>
           </div>
         </div>
-          <button onClick={() => window.location.reload()} className="text-slate-600 hover:text-rose-500 transition-all">
+          <button onClick={onLogout} className="text-slate-600 hover:text-rose-500 transition-all">
             <i className="fas fa-power-off text-sm"></i>
           </button>
         </div>

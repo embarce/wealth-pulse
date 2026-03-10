@@ -2,11 +2,14 @@ package com.litchi.wealth.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.litchi.wealth.dto.UserConfigDto;
 import com.litchi.wealth.entity.StockInfo;
 import com.litchi.wealth.entity.StockMarketData;
 import com.litchi.wealth.entity.User;
 import com.litchi.wealth.entity.UserAssetSummary;
+import com.litchi.wealth.entity.UserConfig;
 import com.litchi.wealth.entity.UserPosition;
+import com.litchi.wealth.mapper.UserConfigMapper;
 import com.litchi.wealth.mapper.UserMapper;
 import com.litchi.wealth.service.StockInfoService;
 import com.litchi.wealth.service.StockMarketDataService;
@@ -16,6 +19,7 @@ import com.litchi.wealth.service.UserService;
 import com.litchi.wealth.utils.SecurityUtils;
 import com.litchi.wealth.vo.AssetDashboardVo;
 import com.litchi.wealth.vo.PositionDashboardVo;
+import com.litchi.wealth.vo.UserConfigVo;
 import com.litchi.wealth.vo.UserVo;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +53,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Resource
     private StockInfoService stockInfoService;
+
+    @Resource
+    private UserConfigMapper userConfigMapper;
 
 
     @Override
@@ -261,5 +268,103 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return profitLoss.divide(base, 4, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"))
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    @Override
+    public UserConfigVo getUserConfig() {
+        String userId = SecurityUtils.getUserId();
+
+        // 从数据库查询用户配置
+        UserConfig userConfig = userConfigMapper.selectById(userId);
+
+        if (userConfig == null) {
+            // 如果没有配置，返回默认配置
+            log.info("用户 [{}] 暂无配置，返回默认配置", userId);
+            return createDefaultConfig();
+        }
+
+        // 转换为 VO 返回
+        return convertToVo(userConfig);
+    }
+
+    @Override
+    public boolean saveUserConfig(UserConfigDto dto) {
+        String userId = SecurityUtils.getUserId();
+
+        // 先查询是否存在配置
+        UserConfig existingConfig = userConfigMapper.selectById(userId);
+
+        if (existingConfig == null) {
+            // 不存在则新建
+            UserConfig newConfig = UserConfig.builder()
+                    .userId(userId)
+                    .email(dto.getEmail())
+                    .emailEnabled(dto.getEmailEnabled() != null ? dto.getEmailEnabled() : false)
+                    .feishuWebhook(dto.getFeishuWebhook())
+                    .feishuEnabled(dto.getFeishuEnabled() != null ? dto.getFeishuEnabled() : false)
+                    .notifyReviewComplete(dto.getNotifyReviewComplete() != null ? dto.getNotifyReviewComplete() : true)
+                    .notifyVisionReady(dto.getNotifyVisionReady() != null ? dto.getNotifyVisionReady() : true)
+                    .notifyMarketAlert(dto.getNotifyMarketAlert() != null ? dto.getNotifyMarketAlert() : false)
+                    .notifyPortfolioRisk(dto.getNotifyPortfolioRisk() != null ? dto.getNotifyPortfolioRisk() : true)
+                    .llmProvider(dto.getLlmProvider())
+                    .llmModel(dto.getLlmModel())
+                    .build();
+
+            int result = userConfigMapper.insert(newConfig);
+            log.info("用户 [{}] 创建配置成功", userId);
+            return result > 0;
+        } else {
+            // 存在则更新
+            existingConfig.setEmail(dto.getEmail());
+            existingConfig.setEmailEnabled(dto.getEmailEnabled() != null ? dto.getEmailEnabled() : false);
+            existingConfig.setFeishuWebhook(dto.getFeishuWebhook());
+            existingConfig.setFeishuEnabled(dto.getFeishuEnabled() != null ? dto.getFeishuEnabled() : false);
+            existingConfig.setNotifyReviewComplete(dto.getNotifyReviewComplete() != null ? dto.getNotifyReviewComplete() : true);
+            existingConfig.setNotifyVisionReady(dto.getNotifyVisionReady() != null ? dto.getNotifyVisionReady() : true);
+            existingConfig.setNotifyMarketAlert(dto.getNotifyMarketAlert() != null ? dto.getNotifyMarketAlert() : false);
+            existingConfig.setNotifyPortfolioRisk(dto.getNotifyPortfolioRisk() != null ? dto.getNotifyPortfolioRisk() : true);
+            existingConfig.setLlmProvider(dto.getLlmProvider());
+            existingConfig.setLlmModel(dto.getLlmModel());
+
+            int result = userConfigMapper.updateById(existingConfig);
+            log.info("用户 [{}] 更新配置成功", userId);
+            return result > 0;
+        }
+    }
+
+    /**
+     * 创建默认配置
+     */
+    private UserConfigVo createDefaultConfig() {
+        return UserConfigVo.builder()
+                .email("admin@pulse.ai")
+                .emailEnabled(false)
+                .feishuWebhook("")
+                .feishuEnabled(false)
+                .notifyReviewComplete(true)
+                .notifyVisionReady(true)
+                .notifyMarketAlert(false)
+                .notifyPortfolioRisk(true)
+                .llmProvider(null)
+                .llmModel(null)
+                .build();
+    }
+
+    /**
+     * 将 Entity 转换为 VO
+     */
+    private UserConfigVo convertToVo(UserConfig config) {
+        return UserConfigVo.builder()
+                .email(config.getEmail())
+                .emailEnabled(config.getEmailEnabled() != null ? config.getEmailEnabled() : false)
+                .feishuWebhook(config.getFeishuWebhook())
+                .feishuEnabled(config.getFeishuEnabled() != null ? config.getFeishuEnabled() : false)
+                .notifyReviewComplete(config.getNotifyReviewComplete() != null ? config.getNotifyReviewComplete() : true)
+                .notifyVisionReady(config.getNotifyVisionReady() != null ? config.getNotifyVisionReady() : true)
+                .notifyMarketAlert(config.getNotifyMarketAlert() != null ? config.getNotifyMarketAlert() : false)
+                .notifyPortfolioRisk(config.getNotifyPortfolioRisk() != null ? config.getNotifyPortfolioRisk() : true)
+                .llmProvider(config.getLlmProvider())
+                .llmModel(config.getLlmModel())
+                .build();
     }
 }

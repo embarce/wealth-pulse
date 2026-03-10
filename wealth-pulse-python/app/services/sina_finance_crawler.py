@@ -24,7 +24,7 @@ class SinaFinanceCrawler:
         初始化爬虫
 
         Args:
-            timeout: 请求超时时间(秒)
+            timeout: 请求超时时间 (秒)
         """
         self.timeout = timeout
         self.headers = {
@@ -42,15 +42,15 @@ class SinaFinanceCrawler:
         标准化股票代码为新浪格式
 
         Args:
-            stock_code: 股票代码 (如: 0700.HK, 01810.HK)
+            stock_code: 股票代码 (如：0700.HK, 01810.HK)
 
         Returns:
-            新浪格式的股票代码 (如: 00700, 01810)
+            新浪格式的股票代码 (如：00700, 01810)
         """
         # 移除 .HK 后缀
         code = stock_code.replace('.HK', '').replace('.hk', '')
 
-        # 补齐到5位
+        # 补齐到 5 位
         if len(code) < 5:
             code = code.zfill(5)
 
@@ -64,7 +64,7 @@ class SinaFinanceCrawler:
             value_str: 数字字符串，可能包含负号、逗号等
 
         Returns:
-            解析后的浮点数，如果解析失败返回None
+            解析后的浮点数，如果解析失败返回 None
         """
         if not value_str or value_str.strip() in ['--', '', '-', '0']:
             return None
@@ -81,7 +81,7 @@ class SinaFinanceCrawler:
         提取重要财务指标表格数据
 
         Args:
-            soup: BeautifulSoup对象
+            soup: BeautifulSoup 对象
 
         Returns:
             财务数据列表，每个元素代表一个报告期
@@ -149,9 +149,9 @@ class SinaFinanceCrawler:
                     periods_data[i]['revenue'] = self._parse_number(value_str)
                 elif label == '损益额':
                     periods_data[i]['net_profit'] = self._parse_number(value_str)
-                elif label == '基本每股盈利(仙)':
+                elif label == '基本每股盈利 (仙)':
                     periods_data[i]['eps_basic'] = self._parse_number(value_str)
-                elif label == '摊薄每股盈利(仙)':
+                elif label == '摊薄每股盈利 (仙)':
                     periods_data[i]['eps_diluted'] = self._parse_number(value_str)
 
         # 计算毛利率和净利率（如果有营业额和毛利/损益额）
@@ -164,7 +164,7 @@ class SinaFinanceCrawler:
         提取综合损益表数据（用于计算毛利率和净利率）
 
         Args:
-            soup: BeautifulSoup对象
+            soup: BeautifulSoup 对象
 
         Returns:
             损益表数据
@@ -213,7 +213,7 @@ class SinaFinanceCrawler:
         提取资产负债表数据
 
         Args:
-            soup: BeautifulSoup对象
+            soup: BeautifulSoup 对象
 
         Returns:
             资产负债表关键数据
@@ -262,7 +262,7 @@ class SinaFinanceCrawler:
         提取现金流量表数据
 
         Args:
-            soup: BeautifulSoup对象
+            soup: BeautifulSoup 对象
 
         Returns:
             现金流量表关键数据
@@ -358,7 +358,7 @@ class SinaFinanceCrawler:
         爬取并计算财务指标
 
         Args:
-            stock_code: 股票代码 (如: 01810.HK)
+            stock_code: 股票代码 (如：01810.HK)
 
         Returns:
             财务指标字典，包含：
@@ -428,7 +428,7 @@ class SinaFinanceCrawler:
                         'current_liabilities': balance_sheet.get('current_liabilities'),  # 流动负债（百万元）
                         'total_equity': balance_sheet.get('total_equity'),  # 股东权益（百万元）
                     },
-                    # 历史数据（最近8个报告期）
+                    # 历史数据（最近 8 个报告期）
                     'historical_data': key_financials
                 }
 
@@ -438,32 +438,15 @@ class SinaFinanceCrawler:
 
         except httpx.TimeoutException:
             logger.error(f"[SinaFinanceCrawler] Timeout fetching financial indicators for {stock_code}")
-            raise Exception(f"请求超时: {url}")
+            raise Exception(f"请求超时：{url}")
 
         except httpx.HTTPStatusError as e:
             logger.error(f"[SinaFinanceCrawler] HTTP error {e.response.status_code} for {stock_code}")
-            raise Exception(f"HTTP错误: {e.response.status_code}")
+            raise Exception(f"HTTP 错误：{e.response.status_code}")
 
         except Exception as e:
             logger.error(f"[SinaFinanceCrawler] Error fetching financial indicators for {stock_code}: {str(e)}")
-            raise Exception(f"爬取财务指标失败: {str(e)}")
-
-    def fetch_financial_indicators_sync(self, stock_code: str) -> Dict[str, Any]:
-        """
-        同步方式爬取财务指标
-
-        Args:
-            stock_code: 股票代码 (如: 01810.HK)
-
-        Returns:
-            财务指标字典
-        """
-        import asyncio
-
-        import asyncio
-
-        # 使用 asyncio.run() 创建新的事件循环运行，避免与已存在的事件循环冲突
-        return asyncio.run(self.fetch_financial_indicators(stock_code))
+            raise Exception(f"爬取财务指标失败：{str(e)}")
 
 
 # 创建全局实例

@@ -1,9 +1,11 @@
 package com.litchi.wealth.controller;
 
 import com.litchi.wealth.constant.Result;
+import com.litchi.wealth.dto.UserConfigDto;
 import com.litchi.wealth.service.UserService;
 import com.litchi.wealth.vo.AssetDashboardVo;
 import com.litchi.wealth.vo.PositionDashboardVo;
+import com.litchi.wealth.vo.UserConfigVo;
 import com.litchi.wealth.vo.UserVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -12,8 +14,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -101,5 +106,50 @@ public class UserController {
     public Result getPositions() {
         PositionDashboardVo dashboard = userService.getPositionDashboard();
         return Result.success(dashboard);
+    }
+
+    @Operation(
+            summary = "获取用户配置",
+            description = "获取当前登录用户的配置信息，包括通知设置、AI 模型配置等。若用户暂无配置则返回默认配置",
+            method = "GET",
+            tags = {"用户管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "成功获取用户配置",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = Result.class)
+                    )
+            )
+    })
+    @GetMapping("/config")
+    public Result getConfig() {
+        UserConfigVo config = userService.getUserConfig();
+        return Result.success(config);
+    }
+
+    @Operation(
+            summary = "保存用户配置",
+            description = "保存当前登录用户的配置信息，包括通知设置、AI 模型配置等",
+            method = "POST",
+            tags = {"用户管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "保存成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = Result.class)
+                    )
+            )
+    })
+    @PostMapping("/config")
+    public Result saveConfig(
+            @Valid @RequestBody UserConfigDto dto) {
+        boolean success = userService.saveUserConfig(dto);
+        return success ? Result.success("配置保存成功") : Result.error("配置保存失败");
     }
 }

@@ -195,6 +195,78 @@ export interface HkStockMarketAnalysisRequest {
 }
 
 /**
+ * 贸易评分请求 - 匹配后端 TradeScoreRequest
+ */
+export interface TradeScoreRequest {
+  stockCode: string; // 股票代码
+  transactionDate: string; // 交易日期
+  instruction: 'BUY' | 'SELL'; // 买卖方向
+  price: number; // 成交价
+  quantity: number; // 成交数量
+  context?: string; // 上下文信息（可选）
+  provider?: string; // LLM 供应商
+  model?: string; // 模型名称
+}
+
+/**
+ * 贸易评分响应 - 匹配后端 TradeScoreVo
+ */
+export interface TradeScoreResponse {
+  score: number; // 评分 (0-100)
+  rationale: string; // 评分理由
+  level: 'excellent' | 'good' | 'fair' | 'poor'; // 评级
+}
+
+/**
+ * 截图识别请求 - 匹配后端 BrokerScreenshotRequest
+ */
+export interface BrokerScreenshotRequest {
+  imageBase64: string; // Base64 编码的图片数据（不含前缀）
+  provider?: string; // LLM 供应商
+  model?: string; // 模型名称
+}
+
+/**
+ * 检测到的交易记录 - 匹配后端 DetectedTrade
+ */
+export interface DetectedTrade {
+  stockCode: string; // 股票代码
+  instruction: 'BUY' | 'SELL'; // 买卖方向
+  price: number; // 成交价
+  quantity: number; // 成交数量
+  timestamp?: string; // 交易时间
+  confidence: number; // 置信度 (0-1)
+}
+
+/**
+ * 截图识别响应 - 匹配后端 BrokerScreenshotVo
+ */
+export interface BrokerScreenshotResponse {
+  trades: DetectedTrade[]; // 检测到的交易列表
+  note?: string; // 分析说明
+}
+
+/**
+ * AI 新闻摘要 - 匹配后端 AINewsItem
+ */
+export interface AINewsItem {
+  title: string;
+  summary: string;
+  impact: 'positive' | 'negative';
+  source?: string;
+  timestamp?: string;
+}
+
+/**
+ * AI 热点 - 匹配后端 AIHotspot
+ */
+export interface AIHotspot {
+  topic: string;
+  description: string;
+  heatLevel?: number;
+}
+
+/**
  * AI 分析服务
  */
 export const aiAnalysisApi = {
@@ -298,6 +370,76 @@ export const aiAnalysisApi = {
 
     if (res?.code !== 200 || !res?.data) {
       throw new Error((res as any)?.msg || '实时港股市场分析失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * AI 分析贸易评分
+   * POST /api/ai/analyze-trade
+   */
+  analyzeTrade: async (request: TradeScoreRequest, options?: HttpRequestOptions): Promise<TradeScoreResponse> => {
+    const res = await httpClient.post<ApiResult<TradeScoreResponse>>(
+      `${API_BASE}/ai/analyze-trade`,
+      request,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '贸易评分分析失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * AI 分析券商截图
+   * POST /api/ai/analyze-broker-screenshot
+   */
+  analyzeBrokerScreenshot: async (request: BrokerScreenshotRequest, options?: HttpRequestOptions): Promise<BrokerScreenshotResponse> => {
+    const res = await httpClient.post<ApiResult<BrokerScreenshotResponse>>(
+      `${API_BASE}/ai/analyze-broker-screenshot`,
+      request,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '截图识别失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * 获取 AI 新闻摘要
+   * GET /api/ai/news-summary
+   */
+  getNewsSummary: async (options?: HttpRequestOptions): Promise<AINewsItem[]> => {
+    const res = await httpClient.get<ApiResult<AINewsItem[]>>(
+      `${API_BASE}/ai/news-summary`,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取 AI 新闻摘要失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * 获取 AI 热点
+   * GET /api/ai/hotspots
+   */
+  getHotspots: async (options?: HttpRequestOptions): Promise<AIHotspot[]> => {
+    const res = await httpClient.get<ApiResult<AIHotspot[]>>(
+      `${API_BASE}/ai/hotspots`,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取 AI 热点失败');
     }
 
     return res.data;

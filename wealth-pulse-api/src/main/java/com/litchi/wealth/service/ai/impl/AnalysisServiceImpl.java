@@ -9,10 +9,9 @@ import com.litchi.wealth.dto.rpc.StockAnalysisRequestDto;
 import com.litchi.wealth.rpc.PythonStockRpc;
 import com.litchi.wealth.service.ai.AnalysisService;
 import com.litchi.wealth.utils.RedisCache;
-import com.litchi.wealth.vo.ai.HkStockMarketAnalysisVo;
-import com.litchi.wealth.vo.ai.KlineAnalysisVo;
-import com.litchi.wealth.vo.ai.PositionAnalysisVo;
-import com.litchi.wealth.vo.ai.StockAnalysisVo;
+import com.litchi.wealth.dto.ai.BrokerScreenshotRequest;
+import com.litchi.wealth.dto.ai.TradeScoreRequest;
+import com.litchi.wealth.vo.ai.*;
 import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -195,5 +194,66 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .volume(klineData.getVolume() != null ? klineData.getVolume().intValue() : null)
                 .amount(klineData.getAmount())
                 .build();
+    }
+
+    @Override
+    public TradeScoreVo analyzeTrade(TradeScoreRequest request) {
+        log.info("收到贸易评分请求：股票代码={}, 交易日期={}, 买卖方向={}, 价格={}",
+                request.getStockCode(), request.getTransactionDate(), request.getInstruction(), request.getPrice());
+
+        try {
+            // 调用 Python AI 服务分析贸易
+            TradeScoreVo result = pythonStockRpc.analyzeTrade(request);
+            log.info("贸易评分完成：股票代码={}, 评分={}, 评级={}",
+                    request.getStockCode(), result.getScore(), result.getLevel());
+            return result;
+        } catch (Exception e) {
+            log.error("贸易评分失败：股票代码={}", request.getStockCode(), e);
+            throw new RuntimeException("贸易评分失败：" + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public BrokerScreenshotVo analyzeBrokerScreenshot(BrokerScreenshotRequest request) {
+        log.info("收到券商截图识别请求：图片长度={}, provider={}, model={}",
+                request.getImageBase64() != null ? request.getImageBase64().length() : 0,
+                request.getProvider(), request.getModel());
+
+        try {
+            // 调用 Python AI 服务分析截图
+            BrokerScreenshotVo result = pythonStockRpc.analyzeBrokerScreenshot(request);
+            log.info("券商截图识别完成：检测到交易数量={}",
+                    result.getTrades() != null ? result.getTrades().size() : 0);
+            return result;
+        } catch (Exception e) {
+            log.error("券商截图识别失败", e);
+            throw new RuntimeException("券商截图识别失败：" + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public List<AINewsVo> getNewsSummary() {
+        log.info("获取 AI 新闻摘要");
+        try {
+            List<AINewsVo> newsList = pythonStockRpc.getNewsSummary();
+            log.info("获取 AI 新闻摘要成功：数量={}", newsList != null ? newsList.size() : 0);
+            return newsList;
+        } catch (Exception e) {
+            log.error("获取 AI 新闻摘要失败", e);
+            throw new RuntimeException("获取 AI 新闻摘要失败：" + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public List<AIHotspotVo> getHotspots() {
+        log.info("获取 AI 热点");
+        try {
+            List<AIHotspotVo> hotspots = pythonStockRpc.getHotspots();
+            log.info("获取 AI 热点成功：数量={}", hotspots != null ? hotspots.size() : 0);
+            return hotspots;
+        } catch (Exception e) {
+            log.error("获取 AI 热点失败", e);
+            throw new RuntimeException("获取 AI 热点失败：" + e.getMessage(), e);
+        }
     }
 }

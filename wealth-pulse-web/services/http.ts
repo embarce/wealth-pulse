@@ -3,6 +3,8 @@
 export interface HttpRequestOptions extends RequestInit {
   // 是否在 401/403 时自动处理未授权（清理本地状态并跳转登录）
   autoHandleAuthError?: boolean;
+  // 是否跳过响应状态检查（用于登录等需要获取错误响应的场景）
+  skipStatusCheck?: boolean;
 }
 
 // 默认请求选项（自动处理认证错误）
@@ -44,7 +46,7 @@ class HttpClient {
     url: string,
     options: HttpRequestOptions = {}
   ): Promise<T> {
-    const { headers, body, autoHandleAuthError = true, signal, ...rest } = options;
+    const { headers, body, autoHandleAuthError = true, skipStatusCheck = false, signal, ...rest } = options;
     const token = this.getToken();
 
     const finalHeaders: HeadersInit = {
@@ -68,6 +70,15 @@ class HttpClient {
       this.handleUnauthorized();
       // 抛出错误，防止调用方继续误用数据
       throw new Error('Unauthorized');
+    }
+
+    // 如果跳过状态检查，直接返回响应（用于登录等场景）
+    if (skipStatusCheck) {
+      try {
+        return (await resp.json()) as T;
+      } catch {
+        return (await resp.text()) as unknown as T;
+      }
     }
 
     // 根据你后端的返回格式，这里可以扩展错误处理逻辑
