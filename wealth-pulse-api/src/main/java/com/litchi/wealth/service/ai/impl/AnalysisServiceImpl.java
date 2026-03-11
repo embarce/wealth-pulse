@@ -1,16 +1,17 @@
 package com.litchi.wealth.service.ai.impl;
 
 import cn.hutool.core.date.DateUtil;
+import com.litchi.wealth.dto.ai.BrokerScreenshotRequest;
 import com.litchi.wealth.dto.ai.HkStockMarketAnalysisRequest;
 import com.litchi.wealth.dto.ai.KlineAnalysisRequest;
+import com.litchi.wealth.dto.ai.TradeScoreRequest;
 import com.litchi.wealth.dto.rpc.KlineAnalysisRequestDto;
 import com.litchi.wealth.dto.rpc.PositionAnalysisRequestDto;
 import com.litchi.wealth.dto.rpc.StockAnalysisRequestDto;
+import com.litchi.wealth.exception.ServiceException;
 import com.litchi.wealth.rpc.PythonStockRpc;
 import com.litchi.wealth.service.ai.AnalysisService;
 import com.litchi.wealth.utils.RedisCache;
-import com.litchi.wealth.dto.ai.BrokerScreenshotRequest;
-import com.litchi.wealth.dto.ai.TradeScoreRequest;
 import com.litchi.wealth.vo.ai.*;
 import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
 import lombok.extern.slf4j.Slf4j;
@@ -105,6 +106,10 @@ public class AnalysisServiceImpl implements AnalysisService {
         String today = DateUtil.today();
         String redisKey = ANALYSIS_REDIS_KEY_PREFIX + today;
         Boolean hasKey = redisCache.hasKey(redisKey);
+        String lockKey = ANALYSIS_REDIS_KEY_PREFIX + "lock";
+        if (redisCache.hasKey(lockKey)) {
+            throw new ServiceException("正在执行港股市场分析，请稍后再试...");
+        }
         if (hasKey) {
             HkStockMarketAnalysisVo result = redisCache.getCacheObject(redisKey);
 
@@ -118,9 +123,11 @@ public class AnalysisServiceImpl implements AnalysisService {
             return result;
         } else {
             // Redis 中没有，尝试实时调用
+            redisCache.setCacheObject(lockKey, true, 10, TimeUnit.MINUTES);
             log.info("Redis 中未找到 {} 的港股市场分析，尝试实时调用", today);
             HkStockMarketAnalysisVo hkStockMarketAnalysisVo = analyzeHkStockMarketRealtime(new HkStockMarketAnalysisRequest());
             redisCache.setCacheObject(redisKey, hkStockMarketAnalysisVo, 5, TimeUnit.HOURS);
+            redisCache.deleteObject(lockKey);
             return hkStockMarketAnalysisVo;
         }
     }

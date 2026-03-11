@@ -1,17 +1,14 @@
 package com.litchi.wealth.job;
 
 import cn.hutool.core.date.DateUtil;
-import cn.hutool.http.Header;
-import cn.hutool.http.HttpRequest;
-import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.litchi.wealth.dto.HolidayInfo;
 import com.litchi.wealth.entity.StockTransactionLog;
 import com.litchi.wealth.service.StockTransactionLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -32,11 +29,51 @@ public class TransactionSettleJob {
     @Autowired
     private StockTransactionLogService stockTransactionLogService;
 
-    @Value("${itick.token}")
-    private String token;
 
-    @Value("${itick.url}")
-    private String url;
+    private static final String HOLIDAY_JSON = """
+            [
+              {"date":"2026-01-01","name":"一月一日/元旦假期","market":"香港市场休市,北向互换通-休市"},
+              {"date":"2026-01-02","name":"元旦假期","market":"北向互换通-休市"},
+              {"date":"2026-01-03","name":"元旦假期","market":""},
+              {"date":"2026-02-15","name":"春节假期","market":""},
+              {"date":"2026-02-16","name":"春节假期","market":"北向互换通-休市"},
+              {"date":"2026-02-17","name":"农历年初一/春节假期","market":"香港市场休市,北向互换通-休市"},
+              {"date":"2026-02-18","name":"农历年初二/春节假期","market":"香港市场休市,北向互换通-休市"},
+              {"date":"2026-02-19","name":"农历年初三/春节假期","market":"香港市场休市,北向互换通-休市"},
+              {"date":"2026-02-20","name":"春节假期","market":"北向互换通-休市"},
+              {"date":"2026-02-21","name":"春节假期","market":""},
+              {"date":"2026-02-22","name":"春节假期","market":""},
+              {"date":"2026-02-23","name":"春节假期","market":"北向互换通-休市"},
+              {"date":"2026-04-03","name":"耶稣受难节","market":"香港市场休市"},
+              {"date":"2026-04-04","name":"耶稣受难节翌日/清明节假期","market":"香港市场休市"},
+              {"date":"2026-04-05","name":"清明节假期","market":""},
+              {"date":"2026-04-06","name":"清明节翌日/清明节假期","market":"香港市场休市,北向互换通-休市"},
+              {"date":"2026-04-07","name":"复活节星期一翌日","market":"香港市场休市"},
+              {"date":"2026-05-01","name":"劳动节/劳动节假期","market":"香港市场休市,北向互换通-休市"},
+              {"date":"2026-05-02","name":"劳动节假期","market":""},
+              {"date":"2026-05-03","name":"劳动节假期","market":""},
+              {"date":"2026-05-04","name":"劳动节假期","market":"北向互换通-休市"},
+              {"date":"2026-05-05","name":"劳动节假期","market":"北向互换通-休市"},
+              {"date":"2026-05-25","name":"佛诞翌日","market":"香港市场休市"},
+              {"date":"2026-06-19","name":"端午节/端午节假期","market":"香港市场休市,北向互换通-休市"},
+              {"date":"2026-06-20","name":"端午节假期","market":""},
+              {"date":"2026-06-21","name":"端午节假期","market":""},
+              {"date":"2026-07-01","name":"香港特别行政区成立纪念日","market":"香港市场休市"},
+              {"date":"2026-09-25","name":"中秋节假期","market":"北向互换通-休市"},
+              {"date":"2026-09-26","name":"中秋节翌日/中秋节假期","market":"香港市场休市"},
+              {"date":"2026-09-27","name":"中秋节假期","market":""},
+              {"date":"2026-10-01","name":"国庆日/国庆假期","market":"香港市场休市,北向互换通-休市"},
+              {"date":"2026-10-02","name":"国庆假期","market":"北向互换通-休市"},
+              {"date":"2026-10-03","name":"国庆假期","market":""},
+              {"date":"2026-10-04","name":"国庆假期","market":""},
+              {"date":"2026-10-05","name":"国庆假期","market":"北向互换通-休市"},
+              {"date":"2026-10-06","name":"国庆假期","market":"北向互换通-休市"},
+              {"date":"2026-10-07","name":"国庆假期","market":"北向互换通-休市"},
+              {"date":"2026-10-19","name":"重阳节翌日","market":"香港市场休市"},
+              {"date":"2026-12-25","name":"圣诞节","market":"香港市场休市"},
+              {"date":"2026-12-26","name":"圣诞节后第一个周日","market":"香港市场休市"}
+            ]
+            """;
 
     /**
      * 每日凌晨1点执行交易结算
@@ -48,39 +85,11 @@ public class TransactionSettleJob {
         try {
             // 获取当前时间
             Date date = new Date();
-            String today = DateUtil.today();
-            //确定是否为公共假期
-            boolean isHoliday = false;
-            String result = HttpRequest.get(url)
-                    .header(Header.USER_AGENT, "PostmanRuntime/7.49.1")
-                    .header(Header.ACCEPT, "application/json")
-                    .header("Token", token)
-                    .timeout(20000)//超时，毫秒
-                    .execute().body();
-            log.info("获取假期数据：{}", result);
-            JSONObject jsonObject = JSONUtil.parseObj(result);
-            Integer code = jsonObject.getInt("code");
-            if (code == 0){
-                List<JSONObject> data = jsonObject.getBeanList("data", JSONObject.class);
-                for (JSONObject item : data) {
-                    /**
-                     *"c": "HK",
-                     *"r": "Hong Kong",
-                     *"d": "2026-01-01",
-                     *"t": "09:00-09:30,09:30-12:00|13:00-16:00,16:00-16:30",
-                     *"z": "Asia/Hong_Kong",
-                     *"v": "New Year's Day"
-                     */
-                    String day = item.getStr("d");
-                    String vStr = item.getStr("v");
-                    if (day.equals(today)){
-                        isHoliday = true;
-                        log.info("今天是公共假期：{}", vStr);
-                    }
-                }
-            }
-            if (isHoliday){
-                log.info("今天是公共假期，不进行交易结算");
+            // 确定是否为公共假期
+            HolidayInfo holidayInfo = getHolidayFlag();
+            if (holidayInfo.getIsHoliday() && !holidayInfo.getNeedSettle()) {
+                log.info("今天是公共假期 [{}]，假期名称 [{}]，市场休市信息 [{}]，不进行交易结算",
+                        holidayInfo.getDate(), holidayInfo.getName(), holidayInfo.getMarket());
                 return;
             }
             // 查询所有未结算的交易
@@ -116,4 +125,66 @@ public class TransactionSettleJob {
             log.error("每日交易结算任务执行失败", e);
         }
     }
+
+
+    /**
+     * [
+     * {"date":"2026-01-01","name":"一月一日/元旦假期","market":"香港市场休市,北向互换通-休市"},
+     * {"date":"2026-01-02","name":"元旦假期","market":"北向互换通-休市"},
+     * {"date":"2026-01-03","name":"元旦假期","market":""},
+     * {"date":"2026-02-15","name":"春节假期","market":""},
+     * {"date":"2026-02-16","name":"春节假期","market":"北向互换通-休市"},
+     * {"date":"2026-02-17","name":"农历年初一/春节假期","market":"香港市场休市,北向互换通-休市"},
+     * {"date":"2026-02-18","name":"农历年初二/春节假期","market":"香港市场休市,北向互换通-休市"},
+     * {"date":"2026-02-19","name":"农历年初三/春节假期","market":"香港市场休市,北向互换通-休市"},
+     * {"date":"2026-02-20","name":"春节假期","market":"北向互换通-休市"},
+     * {"date":"2026-02-21","name":"春节假期","market":""},
+     * {"date":"2026-02-22","name":"春节假期","market":""},
+     * {"date":"2026-02-23","name":"春节假期","market":"北向互换通-休市"},
+     * {"date":"2026-04-03","name":"耶稣受难节","market":"香港市场休市"},
+     * {"date":"2026-04-04","name":"耶稣受难节翌日/清明节假期","market":"香港市场休市"},
+     * {"date":"2026-04-05","name":"清明节假期","market":""},
+     * {"date":"2026-04-06","name":"清明节翌日/清明节假期","market":"香港市场休市,北向互换通-休市"},
+     * {"date":"2026-04-07","name":"复活节星期一翌日","market":"香港市场休市"},
+     * {"date":"2026-05-01","name":"劳动节/劳动节假期","market":"香港市场休市,北向互换通-休市"},
+     * {"date":"2026-05-02","name":"劳动节假期","market":""},
+     * {"date":"2026-05-03","name":"劳动节假期","market":""},
+     * {"date":"2026-05-04","name":"劳动节假期","market":"北向互换通-休市"},
+     * {"date":"2026-05-05","name":"劳动节假期","market":"北向互换通-休市"},
+     * {"date":"2026-05-25","name":"佛诞翌日","market":"香港市场休市"},
+     * {"date":"2026-06-19","name":"端午节/端午节假期","market":"香港市场休市,北向互换通-休市"},
+     * {"date":"2026-06-20","name":"端午节假期","market":""},
+     * {"date":"2026-06-21","name":"端午节假期","market":""},
+     * {"date":"2026-07-01","name":"香港特别行政区成立纪念日","market":"香港市场休市"},
+     * {"date":"2026-09-25","name":"中秋节假期","market":"北向互换通-休市"},
+     * {"date":"2026-09-26","name":"中秋节翌日/中秋节假期","market":"香港市场休市"},
+     * {"date":"2026-09-27","name":"中秋节假期","market":""},
+     * {"date":"2026-10-01","name":"国庆日/国庆假期","market":"香港市场休市,北向互换通-休市"},
+     * {"date":"2026-10-02","name":"国庆假期","market":"北向互换通-休市"},
+     * {"date":"2026-10-03","name":"国庆假期","market":""},
+     * {"date":"2026-10-04","name":"国庆假期","market":""},
+     * {"date":"2026-10-05","name":"国庆假期","market":"北向互换通-休市"},
+     * {"date":"2026-10-06","name":"国庆假期","market":"北向互换通-休市"},
+     * {"date":"2026-10-07","name":"国庆假期","market":"北向互换通-休市"},
+     * {"date":"2026-10-19","name":"重阳节翌日","market":"香港市场休市"},
+     * {"date":"2026-12-25","name":"圣诞节","market":"香港市场休市"},
+     * {"date":"2026-12-26","name":"圣诞节后第一个周日","market":"香港市场休市"}
+     * ]
+     */
+    public static HolidayInfo getHolidayFlag() {
+        String today = DateUtil.today();
+        List<JSONObject> list = JSONUtil.toList(HOLIDAY_JSON, JSONObject.class);
+        for (JSONObject jsonObject : list) {
+            String dateStr = jsonObject.getStr("date");
+            if (dateStr.equals(today)) {
+                // 检查是否为港股休市
+                String market = jsonObject.getStr("market");
+                boolean isHongKongClosed = market != null && market.contains("香港市场休市");
+                return HolidayInfo.fromJson(jsonObject, !isHongKongClosed);
+            }
+        }
+        // 今天不是假期
+        return HolidayInfo.nonHoliday(today);
+    }
+
 }

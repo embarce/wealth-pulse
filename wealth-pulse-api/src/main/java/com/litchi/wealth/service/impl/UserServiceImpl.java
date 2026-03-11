@@ -105,7 +105,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
 
         // 实时计算持仓市值并回写数据库
-        assetSummary = userAssetSummaryService.recalculateAssetsWithRealtimePrice(userId);
+        UserAssetSummary recalculatedSummary = userAssetSummaryService.recalculateAssetsWithRealtimePrice(userId);
+
+        // 如果重新计算返回 null，使用原数据
+        if (recalculatedSummary != null) {
+            assetSummary = recalculatedSummary;
+        }
 
         // 计算今日盈亏
         BigDecimal todayProfitLoss = calculateTodayProfitLoss(assetSummary);
@@ -150,6 +155,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                     .positionCount(0)
                     .profitableCount(0)
                     .lossCount(0)
+                    .flatCount(0)
                     .positions(List.of())
                     .build();
         }
@@ -171,10 +177,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                     .last("LIMIT 1");
             StockMarketData marketData = stockMarketDataService.getOne(marketDataQuery);
 
+            // 安全获取数值，避免空指针
+            BigDecimal quantity = position.getQuantity() != null ? position.getQuantity() : BigDecimal.ZERO;
+            BigDecimal avgCost = position.getAvgCost() != null ? position.getAvgCost() : BigDecimal.ZERO;
             BigDecimal currentPrice = marketData != null && marketData.getLastPrice() != null
                     ? marketData.getLastPrice() : BigDecimal.ZERO;
-            BigDecimal marketValue = position.getQuantity().multiply(currentPrice);
-            BigDecimal costValue = position.getQuantity().multiply(position.getAvgCost());
+
+            // 计算市值和成本值
+            BigDecimal marketValue = quantity.multiply(currentPrice);
+            BigDecimal costValue = quantity.multiply(avgCost);
             BigDecimal profitLoss = marketValue.subtract(costValue);
             BigDecimal profitLossRate = calculateRate(profitLoss, costValue);
 
@@ -213,27 +224,32 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                     .build();
         }).collect(Collectors.toList());
 
-        // 计算汇总数据
+        // 计算汇总数据（指定精度避免丢失）
         BigDecimal totalPositionValue = positionItems.stream()
                 .map(PositionDashboardVo.PositionItemVo::getMarketValue)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(BigDecimal.ZERO, (v1, v2) -> v1.add(v2).setScale(2, RoundingMode.HALF_UP));
 
         BigDecimal totalCost = positionItems.stream()
                 .map(PositionDashboardVo.PositionItemVo::getCostValue)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(BigDecimal.ZERO, (v1, v2) -> v1.add(v2).setScale(2, RoundingMode.HALF_UP));
 
         BigDecimal totalProfitLoss = positionItems.stream()
                 .map(PositionDashboardVo.PositionItemVo::getProfitLoss)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(BigDecimal.ZERO, (v1, v2) -> v1.add(v2).setScale(2, RoundingMode.HALF_UP));
 
         BigDecimal totalProfitLossRate = calculateRate(totalProfitLoss, totalCost);
 
+        // 统计盈利、亏损和持平的持仓数量
         long profitableCount = positionItems.stream()
                 .filter(item -> item.getProfitLoss().compareTo(BigDecimal.ZERO) > 0)
                 .count();
 
         long lossCount = positionItems.stream()
                 .filter(item -> item.getProfitLoss().compareTo(BigDecimal.ZERO) < 0)
+                .count();
+
+        long flatCount = positionItems.stream()
+                .filter(item -> item.getProfitLoss().compareTo(BigDecimal.ZERO) == 0)
                 .count();
 
         return PositionDashboardVo.builder()
@@ -244,6 +260,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .positionCount(positionItems.size())
                 .profitableCount((int) profitableCount)
                 .lossCount((int) lossCount)
+                .flatCount((int) flatCount)
                 .positions(positionItems)
                 .build();
     }
@@ -252,16 +269,30 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
      * 计算今日盈亏
      */
     private BigDecimal calculateTodayProfitLoss(UserAssetSummary assetSummary) {
-        if (assetSummary.getYesterdayTotalAssets() == null || assetSummary.getYesterdayTotalAssets().compareTo(BigDecimal.ZERO) == 0) {
+        if (assetSummary == null) {
             return BigDecimal.ZERO;
         }
-        return assetSummary.getTotalAssets().subtract(assetSummary.getYesterdayTotalAssets());
+        BigDecimal yesterdayTotalAssets = assetSummary.getYesterdayTotalAssets();
+        BigDecimal totalAssets = assetSummary.getTotalAssets();
+
+        if (yesterdayTotalAssets == null || yesterdayTotalAssets.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        // 安全处理：如果 totalAssets 为 null，使用 0 代替
+        if (totalAssets == null) {
+            totalAssets = BigDecimal.ZERO;
+        }
+        return totalAssets.subtract(yesterdayTotalAssets);
     }
 
     /**
      * 计算百分比
      */
     private BigDecimal calculateRate(BigDecimal profitLoss, BigDecimal base) {
+        // 安全处理：如果 profitLoss 为 null，使用 0 代替
+        if (profitLoss == null) {
+            profitLoss = BigDecimal.ZERO;
+        }
         if (base == null || base.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO;
         }

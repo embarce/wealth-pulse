@@ -45,6 +45,9 @@ public class PositionDashboardVo {
     @Schema(name = "lossCount", description = "亏损数量")
     private Integer lossCount;
 
+    @Schema(name = "flatCount", description = "持平数量")
+    private Integer flatCount;
+
     @Schema(name = "positions", description = "持仓明细")
     private List<PositionItemVo> positions;
 

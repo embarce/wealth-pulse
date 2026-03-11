@@ -50,12 +50,12 @@ public class HkStockMarketAnalysisJob {
     /**
      * 固定分析模型
      */
-    private static final String MODEL = "qwen";
+    private static final String MODEL = "qwen3-max";
 
     /**
      * 固定供应商
      */
-    private static final String PROVIDER = "qwen3-max";
+    private static final String PROVIDER = "qwen";
 
 
     /**

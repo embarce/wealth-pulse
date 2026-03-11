@@ -211,7 +211,7 @@ public class HkStockFeeCalculator {
      */
     private static BigDecimal calculatePercentage(BigDecimal amount, BigDecimal rate) {
         return amount.multiply(rate)
-                .setScale(2, RoundingMode.UP); // 向上取整
+                .setScale(2, RoundingMode.HALF_UP); // 四舍五入
     }
 
     /**
