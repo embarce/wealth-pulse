@@ -178,12 +178,92 @@ export interface NewsSummary {
 }
 
 /**
- * 港股市场分析结果 - 匹配后端 HkStockMarketAnalysisVo
+ * 指数表现 - 匹配后端 HkStockMarketAnalysisVo.IndexPerformance
+ */
+export interface IndexPerformance {
+  indexName: string | null; // 指数名称
+  indexCode: string | null; // 指数代码
+  latestPrice: number | null; // 最新价
+  changeRate: number | null; // 涨跌幅
+  turnover: number | null; // 成交额
+  quoteTime: string | null; // 报价时间
+}
+
+/**
+ * 外部情绪 - 匹配后端 HkStockMarketAnalysisVo.ExternalSentiment
+ */
+export interface ExternalSentiment {
+  indexName: string | null; // 指数名称
+  latestPrice: number | null; // 最新价
+  changeRate: number | null; // 涨跌幅
+  note: string | null; // 备注说明
+}
+
+/**
+ * 货币流动性 - 匹配后端 HkStockMarketAnalysisVo.CurrencyLiquidity
+ */
+export interface CurrencyLiquidity {
+  symbol: string; // 货币代码
+  name: string; // 货币名称
+  lastPrice: number | null; // 最新价
+  change: number | null; // 涨跌额
+  changeRate: number | null; // 涨跌幅
+  open: number | null; // 开盘价
+  preClose: number | null; // 前收盘价
+  high: number | null; // 当日最高价
+  low: number | null; // 当日最低价
+  note: string | null; // 备注说明
+}
+
+/**
+ * 市场宽度 - 匹配后端 HkStockMarketAnalysisVo.MarketBreadth
+ */
+export interface MarketBreadth {
+  advancingStocks: number | null; // 上涨家数
+  decliningStocks: number | null; // 下跌家数
+  unchangedStocks: number | null; // 平盘家数
+  totalStocks: number | null; // 总股票数
+  advanceDeclineRatio: number | null; // 上涨/下跌比率
+}
+
+/**
+ * 市场快照 - 匹配后端 HkStockMarketAnalysisVo.MarketSnapshot
+ */
+export interface MarketSnapshot {
+  indexPerformance: IndexPerformance | null; // 指数表现
+  externalSentiment: ExternalSentiment | null; // 外部情绪
+  currencyLiquidity: Record<string, CurrencyLiquidity> | null; // 货币流动性
+  marketBreadth: MarketBreadth | null; // 市场宽度
+}
+
+/**
+ * LLM Token 使用情况 - 匹配后端 HkStockMarketAnalysisVo.LlmInfo.TokenUsage
+ */
+export interface TokenUsage {
+  promptTokens: number | null; // 输入 token 数
+  completionTokens: number | null; // 输出 token 数
+  totalTokens: number | null; // 总 token 数
+}
+
+/**
+ * LLM 调用信息 - 匹配后端 HkStockMarketAnalysisVo.LlmInfo
+ */
+export interface LlmInfo {
+  provider: string; // LLM 供应商
+  model: string; // 使用的模型
+  tokenUsage: TokenUsage | null; // Token 使用情况
+}
+
+/**
+ * 港股市场分析结果 - 匹配后端 HkStockMarketAnalysisVo（完整版）
  */
 export interface HkStockMarketAnalysis {
-  report: string; // Markdown 格式的投资建议报告（已处理换行符）
+  investmentReport: string; // Markdown 格式的投资建议报告（已处理换行符）
   rawReport: string; // 原始 Markdown 报告（保留完整格式，用于前端展示）
+  marketSnapshot: MarketSnapshot | null; // 市场快照数据
+  compressedNews: string; // LLM 压缩后的新闻摘要
   newsSummary: NewsSummary; // 新闻摘要统计信息
+  llmInfo: LlmInfo | null; // LLM 调用信息
 }
 
 /**

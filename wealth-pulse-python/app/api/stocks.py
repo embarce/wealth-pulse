@@ -1041,7 +1041,8 @@ async def get_company_info_sina(
                 msg=f"No company info found for stock {stock_code}"
             )
 
-        logger.info(f"[CompanyInfoSina] Successfully fetched company info for {stock_code} with {len(company_info)} fields")
+        logger.info(
+            f"[CompanyInfoSina] Successfully fetched company info for {stock_code} with {len(company_info)} fields")
 
         return success_response(
             data=company_info,
@@ -1294,5 +1295,558 @@ def get_financial_indicator_em(
         logger.error(f"Error fetching financial indicators for {stock_code}: {str(e)}")
         raise ApiException(
             msg=f"Failed to retrieve financial indicators from AkShare: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+# ==================== 港股指数相关 API ====================
+
+@router.get("/all/indices", summary="Get all HK stock market indices")
+def get_all_indices(
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all Hong Kong stock market indices (requires authentication)
+
+    多数据源自动切换：
+    1. 优先使用东方财富网 (stock_hk_index_spot_em)
+    2. 失败时自动切换到新浪财经 (stock_hk_index_spot_sina)
+
+    **Data Source:**
+    - Primary: AkShare `stock_hk_index_spot_em` API (Eastmoney)
+    - Backup: AkShare `stock_hk_index_spot_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (HK)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - pe_ratio: 市盈率
+    - pb_ratio: 市净率
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info("[API] Fetching all HK indices (multi-source)")
+
+        provider = AkShareProvider()
+        indices = provider.get_all_hk_indices()
+
+        if not indices:
+            return success_response(
+                data=[],
+                msg="No HK indices found"
+            )
+
+        logger.info(f"[API] Successfully fetched {len(indices)} HK indices")
+
+        return success_response(
+            data=indices,
+            msg=f"HK indices retrieved successfully: {len(indices)} indices"
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching all HK indices: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve HK indices: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/indices/sina", summary="Get all HK stock market indices from Sina (backup source)")
+def get_all_indices_sina(
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all Hong Kong stock market indices from Sina Finance (backup source)
+
+    当东方财富网数据源不稳定时，可使用此接口作为备选方案。
+
+    **Data Source:**
+    - AkShare `stock_hk_index_spot_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (HK)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - pe_ratio: 市盈率
+    - pb_ratio: 市净率
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源 (sina)
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info("[API] Fetching all HK indices from Sina Finance")
+
+        provider = AkShareProvider()
+        indices = provider._get_all_hk_indices_sina()
+
+        if not indices:
+            return success_response(
+                data=[],
+                msg="No HK indices found from Sina"
+            )
+
+        logger.info(f"[API] Successfully fetched {len(indices)} HK indices from Sina")
+
+        return success_response(
+            data=indices,
+            msg=f"HK indices retrieved from Sina: {len(indices)} indices"
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching HK indices from Sina: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve HK indices from Sina: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/indices/{index_code}", summary="Get HK stock market index by code")
+def get_index(
+        index_code: str = Path(..., description="Index code (e.g., HSI, HSTECH, CESHKM)", example="HSI"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get Hong Kong stock market index by code (requires authentication)
+
+    This endpoint fetches real-time data for a specific HK stock market index
+    from Eastmoney via AkShare.
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., HSI for Hang Seng Index, HSTECH for Hang Seng TECH Index)
+
+    **Data Source:**
+    - AkShare `stock_hk_index_spot_em` API
+    - Eastmoney
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (HK)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - pe_ratio: 市盈率
+    - pb_ratio: 市净率
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching HK index: {index_code}")
+
+        provider = AkShareProvider()
+        index_data = provider.get_index_spot_data(index_code)
+
+        if not index_data:
+            raise ApiException(
+                msg=f"Index {index_code} not found",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        logger.info(f"[API] Successfully fetched HK index: {index_code}")
+
+        return success_response(
+            data=index_data,
+            msg="HK index retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching HK index {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve HK index: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/indices/{index_code}/history", summary="Get HK stock market index history")
+def get_index_history(
+        index_code: str = Path(..., description="Index code (e.g., HSI, HSTECH)", example="HSI"),
+        start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+        end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+        period: str = Query("daily", description="Period: daily=日线，weekly=周线，monthly=月线",
+                            regex="^(daily|weekly|monthly)$"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get historical data for Hong Kong stock market index (requires authentication)
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., HSI, HSTECH)
+
+    **Query Parameters:**
+    - `start_date`: Start date (default: 1 year ago)
+    - `end_date`: End date (default: today)
+    - `period`: Period type (daily, weekly, monthly)
+
+    **Data Source:**
+    - AkShare `stock_hk_index_daily_em` API
+    - Eastmoney
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - period: 周期类型
+    - trade_date: 交易日期
+    - open_price: 开盘价
+    - close_price: 收盘价
+    - high_price: 最高价
+    - low_price: 最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching HK index history: {index_code}, period={period}")
+
+        provider = AkShareProvider()
+        history_data = provider.get_index_history_data(
+            index_code=index_code,
+            start_date=start_date,
+            end_date=end_date,
+            period=period
+        )
+
+        if not history_data:
+            raise ApiException(
+                msg=f"Index history data not found for {index_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # Convert to serializable format
+        serializable_data = []
+        for item in history_data:
+            serializable_item = {
+                "index_code": item["index_code"],
+                "period": item["period"],
+                "trade_date": item["trade_date"].isoformat() if isinstance(item["trade_date"], date) else str(
+                    item["trade_date"]),
+                "open_price": float(item["open_price"]) if item.get("open_price") is not None else None,
+                "close_price": float(item["close_price"]) if item.get("close_price") is not None else None,
+                "high_price": float(item["high_price"]) if item.get("high_price") is not None else None,
+                "low_price": float(item["low_price"]) if item.get("low_price") is not None else None,
+                "volume": int(item["volume"]) if item.get("volume") is not None else None,
+                "turnover": float(item["turnover"]) if item.get("turnover") is not None else None,
+                "change_number": float(item["change_number"]) if item.get("change_number") is not None else None,
+                "change_rate": float(item["change_rate"]) if item.get("change_rate") is not None else None,
+            }
+            serializable_data.append(serializable_item)
+
+        logger.info(f"[API] Successfully fetched {len(serializable_data)} history records for {index_code}")
+
+        return success_response(
+            data=serializable_data,
+            msg=f"Index history retrieved successfully: {len(serializable_data)} records"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching HK index history {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve index history: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/indices/{index_code}/constituents", summary="Get HK stock market index constituents")
+def get_index_constituents(
+        index_code: str = Path(..., description="Index code (e.g., HSI)", example="HSI"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get constituent stocks of Hong Kong stock market index (requires authentication)
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., HSI)
+
+    **Data Source:**
+    - AkShare `index_stock_cons` API
+
+    **Returned Fields:**
+    - stock_code: 股票代码
+    - stock_name: 股票名称
+    - weight: 权重 (%)
+    - industry: 行业
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching HK index constituents: {index_code}")
+
+        provider = AkShareProvider()
+        constituents = provider.get_index_constituents(index_code)
+
+        if not constituents:
+            raise ApiException(
+                msg=f"Index constituents data not found for {index_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        logger.info(f"[API] Successfully fetched {len(constituents)} constituents for {index_code}")
+
+        return success_response(
+            data=constituents,
+            msg=f"Index constituents retrieved successfully: {len(constituents)} stocks"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching HK index constituents {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve index constituents: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+# ==================== 美股指数相关 API ====================
+
+@router.get("/us-indices", summary="Get all US stock market indices")
+def get_all_us_indices(
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all US stock market indices (requires authentication)
+
+    获取主要美股指数行情，包括：
+    - .INX: 标普 500 指数 (S&P 500)
+    - .DJI: 道琼斯工业平均指数 (Dow Jones Industrial Average)
+    - .IXIC: 纳斯达克综合指数 (NASDAQ Composite)
+    - .NDX: 纳斯达克 100 指数 (NASDAQ-100)
+
+    **Data Source:**
+    - AkShare `index_us_stock_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (US)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info("[API] Fetching all US indices")
+
+        provider = AkShareProvider()
+        indices = provider.get_all_us_indices()
+
+        if not indices:
+            return success_response(
+                data=[],
+                msg="No US indices found"
+            )
+
+        logger.info(f"[API] Successfully fetched {len(indices)} US indices")
+
+        return success_response(
+            data=indices,
+            msg=f"US indices retrieved successfully: {len(indices)} indices"
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching all US indices: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve US indices: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/us-indices/{index_code}", summary="Get US stock market index by code")
+def get_us_index(
+        index_code: str = Path(..., description="Index code (e.g., .INX, .DJI, .IXIC, .NDX)", example=".INX"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get US stock market index by code (requires authentication)
+
+    支持的美股指数：
+    - .INX: 标普 500 指数 (S&P 500)
+    - .DJI: 道琼斯工业平均指数 (Dow Jones Industrial Average)
+    - .IXIC: 纳斯达克综合指数 (NASDAQ Composite)
+    - .NDX: 纳斯达克 100 指数 (NASDAQ-100)
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., .INX, .DJI, .IXIC, .NDX)
+
+    **Data Source:**
+    - AkShare `index_us_stock_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (US)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching US index: {index_code}")
+
+        provider = AkShareProvider()
+        index_data = provider.get_us_index_spot(index_code)
+
+        if not index_data:
+            raise ApiException(
+                msg=f"US Index {index_code} not found",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        logger.info(f"[API] Successfully fetched US index: {index_code}")
+
+        return success_response(
+            data=index_data,
+            msg="US index retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching US index {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve US index: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/us-indices/{index_code}/history", summary="Get US stock market index history")
+def get_us_index_history(
+        index_code: str = Path(..., description="Index code (e.g., .INX, .DJI)", example=".INX"),
+        start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+        end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get historical data for US stock market index (requires authentication)
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., .INX, .DJI, .IXIC, .NDX)
+
+    **Query Parameters:**
+    - `start_date`: Start date (default: 1 year ago)
+    - `end_date`: End date (default: today)
+
+    **Data Source:**
+    - AkShare `index_us_stock_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - trade_date: 交易日期
+    - open_price: 开盘价
+    - close_price: 收盘价
+    - high_price: 最高价
+    - low_price: 最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching US index history: {index_code}")
+
+        provider = AkShareProvider()
+        history_data = provider.get_us_index_history(
+            symbol=index_code,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        if not history_data:
+            raise ApiException(
+                msg=f"US Index history data not found for {index_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # Convert to serializable format
+        serializable_data = []
+        for item in history_data:
+            serializable_item = {
+                "index_code": item["index_code"],
+                "trade_date": item["trade_date"].isoformat() if isinstance(item["trade_date"], date) else str(
+                    item["trade_date"]),
+                "open_price": float(item["open_price"]) if item.get("open_price") is not None else None,
+                "close_price": float(item["close_price"]) if item.get("close_price") is not None else None,
+                "high_price": float(item["high_price"]) if item.get("high_price") is not None else None,
+                "low_price": float(item["low_price"]) if item.get("low_price") is not None else None,
+                "volume": int(item["volume"]) if item.get("volume") is not None else None,
+                "turnover": float(item["turnover"]) if item.get("turnover") is not None else None,
+                "change_number": float(item["change_number"]) if item.get("change_number") is not None else None,
+                "change_rate": float(item["change_rate"]) if item.get("change_rate") is not None else None,
+            }
+            serializable_data.append(serializable_item)
+
+        logger.info(f"[API] Successfully fetched {len(serializable_data)} history records for {index_code}")
+
+        return success_response(
+            data=serializable_data,
+            msg=f"US index history retrieved successfully: {len(serializable_data)} records"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching US index history {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve US index history: {str(e)}",
             code=ResponseCode.INTERNAL_ERROR
         )

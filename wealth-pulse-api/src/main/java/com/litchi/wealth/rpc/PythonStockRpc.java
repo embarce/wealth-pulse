@@ -417,7 +417,7 @@ public class PythonStockRpc {
      * 获取港股公司公告（新浪财经）
      *
      * @param stockCode 股票代码，如 09868.HK
-     * @param maxPages 最大爬取页数（1-10）
+     * @param maxPages  最大爬取页数（1-10）
      * @return 公告列表
      */
     @Cacheable(value = "getCompanyNotices", key = "#stockCode + '-' + #maxPages")

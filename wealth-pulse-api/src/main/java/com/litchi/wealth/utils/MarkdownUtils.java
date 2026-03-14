@@ -206,4 +206,31 @@ public class MarkdownUtils {
         FlexmarkHtmlConverter converter = FlexmarkHtmlConverter.builder().build();
         return converter.convert(html);
     }
+
+
+
+
+    /**
+     * 移除 Markdown 代码块标记（如 ```markdown 和 ```）
+     *
+     * @param content 原始内容
+     * @return 处理后的内容
+     */
+    public static String removeMarkdownCodeBlock(String content) {
+        if (content == null || content.isEmpty()) {
+            return content;
+        }
+        // 移除开头的 ```markdown 或 ```
+        String result = content.trim();
+        if (result.startsWith("```markdown")) {
+            result = result.substring(11);
+        } else if (result.startsWith("```")) {
+            result = result.substring(3);
+        }
+        // 移除结尾的 ```
+        if (result.endsWith("```")) {
+            result = result.substring(0, result.length() - 3);
+        }
+        return result.trim();
+    }
 }

@@ -262,7 +262,7 @@ public class AnalysisController {
             HkStockMarketAnalysisVo result = analysisService.analyzeHkStockMarketRealtime(request);
             log.info("港股市场分析完成：新闻总数={}, 报告长度={}",
                     result.getNewsSummary() != null ? result.getNewsSummary().getTotalCount() : 0,
-                    result.getReport() != null ? result.getReport().length() : 0);
+                    result.getInvestmentReport() != null ? result.getInvestmentReport().length() : 0);
             return Result.success(result);
         } catch (Exception e) {
             log.error("港股市场分析失败", e);

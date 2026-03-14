@@ -11,6 +11,7 @@ import com.litchi.wealth.dto.rpc.StockAnalysisRequestDto;
 import com.litchi.wealth.exception.ServiceException;
 import com.litchi.wealth.rpc.PythonStockRpc;
 import com.litchi.wealth.service.ai.AnalysisService;
+import com.litchi.wealth.utils.MarkdownUtils;
 import com.litchi.wealth.utils.RedisCache;
 import com.litchi.wealth.vo.ai.*;
 import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
@@ -105,19 +106,31 @@ public class AnalysisServiceImpl implements AnalysisService {
     public HkStockMarketAnalysisVo getHkStockMarketAnalysis() {
         String today = DateUtil.today();
         String redisKey = ANALYSIS_REDIS_KEY_PREFIX + today;
-        Boolean hasKey = redisCache.hasKey(redisKey);
         String lockKey = ANALYSIS_REDIS_KEY_PREFIX + "lock";
         if (redisCache.hasKey(lockKey)) {
             throw new ServiceException("正在执行港股市场分析，请稍后再试...");
         }
+        Boolean hasKey = redisCache.hasKey(redisKey);
         if (hasKey) {
             HkStockMarketAnalysisVo result = redisCache.getCacheObject(redisKey);
 
-            // 处理 Markdown 换行符，将 \n 转换为实际的换行
-            if (result.getReport() != null) {
-                result.setReport(result.getReport().replace("\\n", "\n"));
+            // 处理 Markdown 格式问题
+            if (result.getInvestmentReport() != null) {
+                // 保存原始报告（用于前端展示）
+                result.setRawReport(result.getInvestmentReport());
+                // 处理换行符，将 \n 转换为实际换行
+                String processedReport = result.getInvestmentReport().replace("\\n", "\n");
+                // 移除可能存在的 markdown 代码块标记
+                processedReport = MarkdownUtils.removeMarkdownCodeBlock(processedReport);
+                result.setInvestmentReport(processedReport);
+                result.setRawReport(result.getInvestmentReport());
             }
-            result.setRawReport(result.getReport());
+            // 同样处理 compressed_news
+            if (result.getCompressedNews() != null) {
+                String processedNews = result.getCompressedNews().replace("\\n", "\n");
+                processedNews = MarkdownUtils.removeMarkdownCodeBlock(processedNews);
+                result.setCompressedNews(processedNews);
+            }
 
             log.info("从 Redis 获取港股市场分析成功：date={}, redisKey={}", today, redisKey);
             return result;
@@ -143,12 +156,22 @@ public class AnalysisServiceImpl implements AnalysisService {
             String today = DateUtil.today();
             String redisKey = ANALYSIS_REDIS_KEY_PREFIX + today;
             redisCache.setCacheObject(redisKey, result, 5, TimeUnit.HOURS);
-            // 处理 Markdown 换行符
-            if (result.getReport() != null) {
+
+            // 处理 Markdown 格式问题
+            if (result.getInvestmentReport() != null) {
                 // 保存原始报告（用于前端展示）
-                result.setRawReport(result.getReport());
+                result.setRawReport(result.getInvestmentReport());
                 // 处理换行符，将 \n 转换为实际换行
-                result.setReport(result.getReport().replace("\\n", "\n"));
+                String processedReport = result.getInvestmentReport().replace("\\n", "\n");
+                // 移除可能存在的 markdown 代码块标记
+                processedReport = MarkdownUtils.removeMarkdownCodeBlock(processedReport);
+                result.setInvestmentReport(processedReport);
+            }
+            // 同样处理 compressed_news
+            if (result.getCompressedNews() != null) {
+                String processedNews = result.getCompressedNews().replace("\\n", "\n");
+                processedNews = MarkdownUtils.removeMarkdownCodeBlock(processedNews);
+                result.setCompressedNews(processedNews);
             }
 
             log.info("港股市场分析完成：新闻总数={}",

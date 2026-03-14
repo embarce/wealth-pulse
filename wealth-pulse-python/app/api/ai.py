@@ -16,7 +16,6 @@ from app.llm import llm_service
 from app.schemas.common import success_response, ResponseCode
 from app.schemas.hkstock_news import HKStockMarketAnalysisRequest
 from app.schemas.kline_analysis import KlineAnalysisRequest
-from app.services.sina_hkstock_crawler import SinaHKStockCrawler
 from app.services.stock_analysis_service import StockAnalysisService
 from app.services.stock_kline_analysis_service import StockKlineAnalysisService
 
@@ -473,8 +472,11 @@ async def analyze_hkstock_market(
     - `model`: 模型名称（可选）
 
     **返回内容：**
-    - `report`: Markdown 格式的投资建议报告
+    - `investment_report`: Markdown 格式的投资建议报告
+    - `market_snapshot`: 市场动态数据快照（恒指、汇率、资金流向等）
+    - `compressed_news`: LLM 压缩后的新闻摘要
     - `news_summary`: 新闻摘要统计信息（新闻数量等）
+    - `_llm`: LLM 调用信息
 
     **示例请求：**
     ```json
@@ -483,29 +485,6 @@ async def analyze_hkstock_market(
       "model": "gpt-4o-mini"
     }
     ```
-
-    **返回示例：**
-    ```markdown
-    # 港股市场投资策略报告
-
-    ## 一、市场要闻解读
-
-    当前市场关注焦点集中在以下几个方面：
-    - **政策面**：...
-    - **宏观经济**：...
-
-    ## 二、行业趋势分析
-
-    ### 热门板块
-    1. 科技股：...
-    2. 金融股：...
-
-    ## 三、投资策略建议
-
-    - **总体仓位**：建议保持 70% 左右仓位
-    - **重点配置**：...
-    - **关注时点**：...
-    ```
     """
     try:
         logger.info(f"[HKStockMarket] 收到港股市场分析请求，provider={request.provider}, model={request.model}")
@@ -513,22 +492,27 @@ async def analyze_hkstock_market(
         # 创建分析服务（需要 db 会话，但此功能不实际使用 db）
         analysis_service = StockAnalysisService(db)
 
-        # 获取新闻数据并进行分析
-        report = await analysis_service.analyze_hkstock_market(
+        # 执行分析（内部自动获取新闻数据）
+        result = await analysis_service.analyze_hkstock_market(
             news_data=None,  # None 表示自动获取
             provider=request.provider,
             model=request.model
         )
 
-        # 获取新闻统计信息（使用异步方法）
-        crawler = SinaHKStockCrawler()
-        news_data = await crawler.fetch_all_news()
-        news_summary = news_data.get('summary', {})
+        # 从 result 中获取各部分数据
+        investment_report = result.get("investment_report", "")
+        market_snapshot = result.get("market_snapshot", {})
+        compressed_news = result.get("compressed_news", "")
+        news_summary = result.get("news_summary", {})
+        llm_info = result.get("_llm", {})
 
         return success_response(
             data={
-                "report": report,
-                "news_summary": news_summary
+                "investment_report": investment_report,
+                "market_snapshot": market_snapshot,
+                "compressed_news": compressed_news,
+                "news_summary": news_summary,
+                "_llm": llm_info
             },
             msg="港股市场分析完成"
         )

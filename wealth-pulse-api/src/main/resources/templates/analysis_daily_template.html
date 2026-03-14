@@ -38,7 +38,6 @@
             overflow: hidden;
         }
 
-        /* 头部背景装饰 */
         .header::before {
             content: '';
             position: absolute;
@@ -226,7 +225,7 @@
             color: #374151;
         }
 
-        /* 报告内容中的表格样式（Markdown 转换后的 HTML） */
+        /* 报告内容中的表格样式 */
         .report-content table {
             border-collapse: collapse;
             width: 100%;
@@ -257,7 +256,6 @@
             background-color: #f9fafb;
         }
 
-        /* 报告内容中的标题样式 */
         .report-content h1 {
             font-size: 20px;
             font-weight: 700;
@@ -290,14 +288,12 @@
             color: #1f2937;
         }
 
-        /* 报告内容中的段落样式 */
         .report-content p {
             margin: 12px 0;
             line-height: 1.8;
             color: #374151;
         }
 
-        /* 报告内容中的列表样式 */
         .report-content ul,
         .report-content ol {
             padding-left: 24px;
@@ -310,7 +306,6 @@
             color: #374151;
         }
 
-        /* 报告内容中的引用块样式 */
         .report-content blockquote {
             border-left: 4px solid #e5e7eb;
             margin: 16px 0;
@@ -319,7 +314,6 @@
             color: #4b5563;
         }
 
-        /* 报告内容中的代码块样式 */
         .report-content pre {
             background-color: #f3f4f6;
             border: 1px solid #e5e7eb;
@@ -342,7 +336,6 @@
             color: #dc2626;
         }
 
-        /* 报告内容中的加粗和斜体样式 */
         .report-content strong {
             font-weight: 600;
             color: #1f2937;
@@ -352,17 +345,332 @@
             font-style: italic;
         }
 
-        /* 报告内容中的删除线样式 */
         .report-content del {
             text-decoration: line-through;
             color: #9ca3af;
         }
 
-        /* 报告内容中的水平线样式 */
         .report-content hr {
             border: none;
             border-top: 1px solid #e5e7eb;
             margin: 24px 0;
+        }
+
+        /* ==================== 市场快照 - 优化后的样式 ==================== */
+        .market-snapshot {
+            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+            border-radius: 14px;
+            border: 1px solid #bae6fd;
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+
+        .snapshot-section {
+            margin-bottom: 18px;
+        }
+
+        .snapshot-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .snapshot-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #0c4a6e;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #bae6fd;
+        }
+
+        .snapshot-title-icon {
+            width: 18px;
+            height: 18px;
+            color: #0284c7;
+        }
+
+        /* 指数表现表格 */
+        .snapshot-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #e0f2fe;
+        }
+
+        .snapshot-table thead {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+        }
+
+        .snapshot-table th {
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 600;
+            color: #ffffff;
+            font-size: 12px;
+        }
+
+        .snapshot-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #e0f2fe;
+            color: #334155;
+        }
+
+        .snapshot-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .snapshot-table tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        .snapshot-table tbody tr:hover {
+            background-color: #f0f9ff;
+        }
+
+        /* 涨跌颜色 */
+        .change-up {
+            color: #dc2626;
+            font-weight: 600;
+        }
+
+        .change-down {
+            color: #16a34a;
+            font-weight: 600;
+        }
+
+        .change-neutral {
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        /* 外部情绪卡片 */
+        .sentiment-card {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 14px;
+            border: 1px solid #e0f2fe;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sentiment-info {
+            flex: 1;
+        }
+
+        .sentiment-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+
+        .sentiment-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .sentiment-change {
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .sentiment-note {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 6px;
+        }
+
+        /* 货币流动性 */
+        .liquidity-item {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 10px;
+            border: 1px solid #e0f2fe;
+        }
+
+        .liquidity-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .liquidity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .liquidity-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .liquidity-price {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .liquidity-change {
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+
+        .liquidity-details {
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        /* 北向资金表格 */
+        .northbound-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            background: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #e0f2fe;
+        }
+
+        .northbound-table thead {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        }
+
+        .northbound-table th {
+            padding: 10px 8px;
+            text-align: center;
+            font-weight: 600;
+            color: #ffffff;
+            font-size: 11px;
+        }
+
+        .northbound-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e0f2fe;
+            text-align: center;
+            color: #334155;
+        }
+
+        .northbound-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .northbound-table tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        /* 市场宽度 */
+        .breadth-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .breadth-item {
+            flex: 1;
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 14px 10px;
+            text-align: center;
+            border: 1px solid #e0f2fe;
+        }
+
+        .breadth-value {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .breadth-label {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .breadth-up .breadth-value { color: #dc2626; }
+        .breadth-down .breadth-value { color: #16a34a; }
+        .breadth-unchanged .breadth-value { color: #64748b; }
+
+        .breadth-ratio {
+            font-size: 11px;
+            color: #64748b;
+            text-align: center;
+            padding-top: 8px;
+            border-top: 1px solid #e0f2fe;
+        }
+
+        /* 新闻统计徽章 */
+        .news-stats-badge {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 20px;
+            border: 1px solid #fcd34d;
+        }
+
+        .news-stats-row {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .news-stat-item {
+            text-align: center;
+        }
+
+        .news-stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #92400e;
+        }
+
+        .news-stat-label {
+            font-size: 10px;
+            color: #78350f;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-top: 4px;
+        }
+
+        /* 新闻摘要区域（直接展示，不可折叠） */
+        .news-section {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border-radius: 12px;
+            border: 1px solid #fcd34d;
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+
+        .news-section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #92400e;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #fcd34d;
+        }
+
+        .news-content {
+            font-size: 13px;
+            line-height: 1.7;
+            color: #78350f;
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 14px;
+            border: 1px solid #fde68a;
         }
 
         /* 系统信息 */
@@ -434,7 +742,6 @@
             margin: 0 8px;
         }
 
-        /* 装饰元素 */
         .accent-bar {
             height: 4px;
             background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7);
@@ -448,9 +755,14 @@
             .content { padding: 20px 16px; }
             .date-bar { padding: 12px 16px; flex-direction: column; gap: 8px; }
             .stat-cell { width: 50%; }
+            .snapshot-cell { width: 100%; display: block; margin-bottom: 8px; }
             .info-row { display: block; margin-bottom: 12px; }
             .info-label, .info-value { display: block; }
             .info-label { margin-bottom: 2px; }
+            .news-stats-row { flex-direction: column; gap: 12px; }
+            .news-stat-item { width: 100%; }
+            .breadth-container { flex-wrap: wrap; }
+            .breadth-item { flex: 0 0 calc(50% - 5px); }
         }
     </style>
 </head>
@@ -465,13 +777,12 @@
             <div class="header-content">
                 <div class="logo-section">
                     <div class="logo">
-                        <!-- SVG Logo 图标 -->
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </div>
                     <div>
-                        <div class="logo-text">Wealth Pulse · 财富脉搏-智投</div>
+                        <div class="logo-text">Wealth Pulse · 财富脉搏 - 智投</div>
                     </div>
                 </div>
                 <h1 class="header-title">AI 市场分析报告</h1>
@@ -482,7 +793,6 @@
         <!-- 日期信息条 -->
         <div class="date-bar">
             <div class="date-item">
-                <!-- 日历图标 -->
                 <svg class="date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
                     <line x1="16" y1="2" x2="16" y2="6"/>
@@ -492,7 +802,6 @@
                 <span>报告日期：{{reportDate}}</span>
             </div>
             <div class="date-item">
-                <!-- AI 芯片图标 -->
                 <svg class="date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="4" y="4" width="16" height="16" rx="2"/>
                     <rect x="9" y="9" width="6" height="6"/>
@@ -511,52 +820,44 @@
 
         <!-- 内容区域 -->
         <div class="content">
-            <!-- 新闻统计 -->
+            <!-- 新闻统计徽章 -->
+            <div class="news-stats-badge">
+                <div class="news-stats-row">
+                    <div class="news-stat-item">
+                        <div class="news-stat-value">{{importantNewsCount}}</div>
+                        <div class="news-stat-label">要闻</div>
+                    </div>
+                    <div class="news-stat-item">
+                        <div class="news-stat-value">{{rankNewsCount}}</div>
+                        <div class="news-stat-label">大行研报</div>
+                    </div>
+                    <div class="news-stat-item">
+                        <div class="news-stat-value">{{companyNewsCount}}</div>
+                        <div class="news-stat-label">公司新闻</div>
+                    </div>
+                    <div class="news-stat-item">
+                        <div class="news-stat-value">{{totalNewsCount}}</div>
+                        <div class="news-stat-label">总计</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 市场快照 - 移到顶部 -->
             <h2 class="section-title">
                 <span class="section-title-icon">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="16" y1="13" x2="8" y2="13"/>
-                        <line x1="16" y1="17" x2="8" y2="17"/>
-                        <polyline points="10 9 9 9 8 9"/>
+                        <path d="M3 3v18h18"/>
+                        <path d="M18 17V9"/>
+                        <path d="M13 17V5"/>
+                        <path d="M8 17v-3"/>
                     </svg>
                 </span>
-                数据概览
+                市场快照
             </h2>
 
-            <table class="stats-grid">
-                <tr>
-                    <td class="stat-cell">
-                        <div class="stat-card">
-                            <div class="stat-icon stat-icon-indigo">★</div>
-                            <div class="stat-value">{{importantNewsCount}}</div>
-                            <div class="stat-label">要闻</div>
-                        </div>
-                    </td>
-                    <td class="stat-cell">
-                        <div class="stat-card">
-                            <div class="stat-icon stat-icon-purple">📊</div>
-                            <div class="stat-value">{{rankNewsCount}}</div>
-                            <div class="stat-label">大行研报</div>
-                        </div>
-                    </td>
-                    <td class="stat-cell">
-                        <div class="stat-card">
-                            <div class="stat-icon stat-icon-pink">🏢</div>
-                            <div class="stat-value">{{companyNewsCount}}</div>
-                            <div class="stat-label">公司新闻</div>
-                        </div>
-                    </td>
-                    <td class="stat-cell">
-                        <div class="stat-card">
-                            <div class="stat-icon stat-icon-emerald">📈</div>
-                            <div class="stat-value">{{totalNewsCount}}</div>
-                            <div class="stat-label">总计</div>
-                        </div>
-                    </td>
-                </tr>
-            </table>
+            <div class="market-snapshot">
+                {{marketSnapshot}}
+            </div>
 
             <!-- AI 分析报告 -->
             <h2 class="section-title">
@@ -570,6 +871,23 @@
 
             <div class="report-section">
                 <div class="report-content">{{analysisReport}}</div>
+            </div>
+
+            <!-- 新闻摘要（直接展示，不可折叠） -->
+            <div class="news-section">
+                <div class="news-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    <span>新闻摘要</span>
+                </div>
+                <div class="report-content news-content">
+                    {{compressedNews}}
+                </div>
             </div>
 
             <!-- 系统信息 -->

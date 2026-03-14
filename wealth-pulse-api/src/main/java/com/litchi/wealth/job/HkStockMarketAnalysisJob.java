@@ -89,7 +89,7 @@ public class HkStockMarketAnalysisJob {
             log.info("========== 港股市场 AI 分析定时任务完成 ==========");
             log.info("分析日期：{}", today);
             log.info("新闻总数：{}", result.getNewsSummary() != null ? result.getNewsSummary().getTotalCount() : 0);
-            log.info("报告长度：{} 字符", result.getReport() != null ? result.getReport().length() : 0);
+            log.info("报告长度：{} 字符", result.getInvestmentReport() != null ? result.getInvestmentReport().length() : 0);
             log.info("Redis Key: {}", redisKey);
             log.info("有效期：{} 小时", CACHE_EXPIRE_HOURS);
             log.info("耗时：{} ms", duration);
