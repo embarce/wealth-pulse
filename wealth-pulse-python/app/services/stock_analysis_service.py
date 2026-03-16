@@ -27,6 +27,7 @@ from app.services.sina_finance_crawler import sina_finance_crawler
 from app.services.sina_hkstock_crawler import SinaHKStockCrawler
 from app.services.sina_news_crawler import sina_news_crawler
 from app.services.sina_forex_crawler import sina_forex_crawler
+from app.services.ubs_southbound_crawler import ubs_southbound_crawler
 from app.services.stock_service import StockService
 
 logger = logging.getLogger(__name__)
@@ -1123,66 +1124,84 @@ class StockAnalysisService:
                 logger.warning(f"[MarketSnapshot] 获取美元/人民币汇率数据失败（新浪外汇爬虫）：{e}")
                 snapshot["currency_liquidity"]["usd_cny"] = {"status": "fetch_failed"}
 
-            # 4. 資金流向：沪深港通资金流向
-            # 使用接口：stock_hsgt_fund_flow_summary_em (无参数，返回完整资金流向数据)
-            # 实际返回列名：交易日、类型、板块、资金方向、交易状态、成交净买额、资金净流入、当日资金余额、上涨数、持平数、下跌数、相关指数、指数涨跌幅
+            # 4. 資金流向：南向资金流向（使用 UBS 爬虫）
             try:
-                fund_flow_data = ak.stock_hsgt_fund_flow_summary_em()
-                if not fund_flow_data.empty:
-                    # 格式化资金流向数据为文本，供 LLM 分析使用
-                    fund_flow_lines = ["【沪深港通资金流向】"]
-                    northbound_summary = []
+                southbound_data = await ubs_southbound_crawler.fetch_southbound_flow()
 
-                    for _, row in fund_flow_data.iterrows():
-                        # 根据实际列名获取数据 - 使用 _convert_to_python_type 转换
-                        trade_date = str(row.get('交易日', 'N/A'))
-                        channel = str(row.get('类型', 'N/A'))  # 沪港通/深港通
-                        board = str(row.get('板块', 'N/A'))  # 沪股通/深股通/港股通 (沪)/港股通 (深)
-                        direction = str(row.get('资金方向', 'N/A'))  # 北向/南向
-                        net_buy = _convert_to_python_type(row.get('成交净买额'))  # 成交净买额（亿元）
-                        net_inflow = _convert_to_python_type(row.get('资金净流入'))  # 资金净流入（亿元）
-                        up_count = _convert_to_python_type(row.get('上涨数'))  # 上涨家数
-                        flat_count = _convert_to_python_type(row.get('持平数'))  # 持平家数
-                        down_count = _convert_to_python_type(row.get('下跌数'))  # 下跌家数
-                        index_name = str(row.get('相关指数', 'N/A'))
-                        index_change = _convert_to_python_type(row.get('指数涨跌幅'))
+                if southbound_data.get('success'):
+                    data = southbound_data.get('data', {})
 
-                        line = (f"  - {channel} {board} ({direction}): "
-                                f"成交净买额 {net_buy} 亿元，"
-                                f"资金净流入 {net_inflow} 亿元，"
-                                f"涨跌家数 {up_count}↑/{flat_count}平/{down_count}↓，"
-                                f"相关指数 {index_name} ({index_change}%)")
-                        fund_flow_lines.append(line)
+                    # 格式化南向资金流向数据为文本，供 LLM 分析使用
+                    fund_flow_lines = ["【南向资金流向】"]
 
-                        # 北向资金汇总
-                        if direction == '北向':
-                            northbound_summary.append({
-                                "channel": channel,
-                                "board": board,
-                                "net_buy": net_buy,
-                                "net_inflow": net_inflow,
-                                "up_count": up_count,
-                                "down_count": down_count,
-                                "index": index_name,
-                                "index_change": index_change,
-                            })
+                    # 总体统计
+                    total_inflow = data.get('total_inflow', 0)
+                    total_outflow = data.get('total_outflow', 0)
+                    net_inflow = data.get('net_inflow', 0)
 
-                    snapshot["currency_liquidity"]["fund_flow_summary"] = {
+                    fund_flow_lines.append(f"  - 总流入：{total_inflow:.2f}亿港元")
+                    fund_flow_lines.append(f"  - 总流出：{total_outflow:.2f}亿港元")
+                    fund_flow_lines.append(f"  - 净流入：{net_inflow:.2f}亿港元")
+                    fund_flow_lines.append(f"  - 数据日期：{data.get('date_from', 'N/A')} 至 {data.get('date_to', 'N/A')}")
+                    fund_flow_lines.append("")
+
+                    # 净流入前 5 名
+                    inflow_stocks = data.get('inflow_stocks', [])
+                    if inflow_stocks:
+                        fund_flow_lines.append("【南向资金净流入前 5 名】")
+                        for i, stock in enumerate(inflow_stocks[:5], 1):
+                            stock_name = stock.get('stock_name', 'N/A')
+                            stock_code = stock.get('stock_code', 'N/A')
+                            money_flow = stock.get('money_flow', 0) or 0
+                            turnover = stock.get('turnover', 0) or 0
+                            ratio = stock.get('ratio', 0) or 0
+                            price = stock.get('price', 0)
+                            change_rate = stock.get('change_rate', 0)
+                            change_text = f"+{change_rate:.2f}%" if change_rate and change_rate > 0 else f"{change_rate:.2f}%" if change_rate else "0%"
+
+                            fund_flow_lines.append(
+                                f"  {i}. {stock_name} ({stock_code}): "
+                                f"净流入 {money_flow:.2f}亿，成交额 {turnover:.2f}亿，占比 {ratio:.1f}%, "
+                                f"股价 {price:.2f}港元 ({change_text})"
+                            )
+                        fund_flow_lines.append("")
+
+                    # 净流出前 5 名
+                    outflow_stocks = data.get('outflow_stocks', [])
+                    if outflow_stocks:
+                        fund_flow_lines.append("【南向资金净流出前 5 名】")
+                        for i, stock in enumerate(outflow_stocks[:5], 1):
+                            stock_name = stock.get('stock_name', 'N/A')
+                            stock_code = stock.get('stock_code', 'N/A')
+                            money_flow = stock.get('money_flow', 0) or 0
+                            turnover = stock.get('turnover', 0) or 0
+                            ratio = stock.get('ratio', 0) or 0
+                            price = stock.get('price', 0)
+                            change_rate = stock.get('change_rate', 0)
+                            change_text = f"+{change_rate:.2f}%" if change_rate and change_rate > 0 else f"{change_rate:.2f}%" if change_rate else "0%"
+
+                            fund_flow_lines.append(
+                                f"  {i}. {stock_name} ({stock_code}): "
+                                f"净流出 {money_flow:.2f}亿，成交额 {turnover:.2f}亿，占比 {ratio:.1f}%, "
+                                f"股价 {price:.2f}港元 ({change_text})"
+                            )
+
+                    snapshot["currency_liquidity"]["southbound_flow"] = {
                         "formatted_text": "\n".join(fund_flow_lines),
-                        "date": trade_date if trade_date != 'N/A' else None
+                        "date": data.get('date_from'),
+                        "total_inflow": total_inflow,
+                        "total_outflow": total_outflow,
+                        "net_inflow": net_inflow,
+                        "inflow_top5": inflow_stocks[:5],
+                        "outflow_top5": outflow_stocks[:5],
+                        "data_source": "UBS 瑞银",
                     }
-
-                    if northbound_summary:
-                        snapshot["currency_liquidity"]["northbound_summary"] = northbound_summary
-                    else:
-                        snapshot["currency_liquidity"]["northbound_summary"] = {"status": "data_unavailable"}
                 else:
-                    snapshot["currency_liquidity"]["fund_flow_summary"] = {"status": "data_unavailable"}
-                    snapshot["currency_liquidity"]["northbound_summary"] = {"status": "data_unavailable"}
+                    snapshot["currency_liquidity"]["southbound_flow"] = {"status": "data_unavailable"}
+
             except Exception as e:
-                logger.warning(f"[MarketSnapshot] 获取沪深港通资金流向数据失败：{e}")
-                snapshot["currency_liquidity"]["fund_flow_summary"] = {"status": "fetch_failed"}
-                snapshot["currency_liquidity"]["northbound_summary"] = {"status": "fetch_failed"}
+                logger.warning(f"[MarketSnapshot] 获取南向资金流向数据失败（UBS 爬虫）：{e}")
+                snapshot["currency_liquidity"]["southbound_flow"] = {"status": "fetch_failed"}
 
             # 5. 市場寬度：港股上漲家數
             try:
@@ -1363,13 +1382,13 @@ class StockAnalysisService:
         else:
             lines.append("   - 美元/人民幣：数据暂缺")
 
-        # 沪深港通资金流向（格式化文本直接提供给 LLM）
-        fund_flow = curr.get("fund_flow_summary", {})
-        if fund_flow.get("formatted_text"):
+        # 南向资金流向（格式化文本直接提供给 LLM）
+        southbound = curr.get("southbound_flow", {})
+        if southbound.get("formatted_text"):
             # 资金流向数据已经自带【】标题，直接追加
-            lines.append(f"   {fund_flow.get('formatted_text')}")
+            lines.append(f"   {southbound.get('formatted_text')}")
         else:
-            lines.append("   - 沪深港通资金流向：数据暂缺")
+            lines.append("   - 南向资金流向：数据暂缺")
 
         # 市场宽度
         breadth = snapshot.get("market_breadth", {})

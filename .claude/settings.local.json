@@ -43,7 +43,10 @@
       "Bash(python -c \"from app.services.sina_forex_crawler import SinaForexCrawler; c = SinaForexCrawler\\(\\); print\\(''RN param test:'', [c._generate_rn_param\\(\\) for _ in range\\(5\\)]\\)\")",
       "Bash(python test_sina_forex_simple.py)",
       "Bash(python test_sina_forex_async.py)",
-      "Bash(python test_sina_forex_standalone.py)"
+      "Bash(python test_sina_forex_standalone.py)",
+      "Bash(python test_ubs_southbound.py)",
+      "Bash(python test_ubs_southbound_standalone.py)",
+      "Bash(python -c \"\nimport asyncio\nimport sys\nsys.path.insert\\(0, ''.''\\)\n\nfrom app.services.ubs_southbound_crawler import ubs_southbound_crawler\n\nasync def test\\(\\):\n    print\\(''Testing UBS date list endpoint...''\\)\n    dates = await ubs_southbound_crawler.fetch_available_dates\\(period=1\\)\n    print\\(f''Available dates: {dates}''\\)\n    \n    if dates:\n        print\\(f''Testing southbound flow with auto-fetched dates...''\\)\n        result = await ubs_southbound_crawler.fetch_southbound_flow\\(auto_fetch_dates=True\\)\n        print\\(f''Result success: {result.get\\(\"\"success\"\"\\)}''\\)\n        if result.get\\(''success''\\):\n            data = result.get\\(''data'', {}\\)\n            print\\(f''Date range: {data.get\\(\"\"date_from\"\"\\)} to {data.get\\(\"\"date_to\"\"\\)}''\\)\n            print\\(f''Total inflow: {data.get\\(\"\"total_inflow\"\"\\)} 亿''\\)\n            print\\(f''Total outflow: {data.get\\(\"\"total_outflow\"\"\\)} 亿''\\)\n            print\\(f''Net inflow: {data.get\\(\"\"net_inflow\"\"\\)} 亿''\\)\n    else:\n        print\\(''Failed to get available dates''\\)\n\nasyncio.run\\(test\\(\\)\\)\n\")"
     ]
   }
 }

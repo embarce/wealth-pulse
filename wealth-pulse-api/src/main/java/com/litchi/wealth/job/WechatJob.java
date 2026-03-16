@@ -51,7 +51,6 @@ public class WechatJob {
      * 每天 9:15、14:15、18:15 执行
      */
     @Scheduled(cron = "0 15 9,14,18 * * ?")
-    @PostConstruct
     public void publishAnalysisToWechat() {
         log.info("========== 开始执行微信发布定时任务 ==========");
         long startTime = System.currentTimeMillis();
