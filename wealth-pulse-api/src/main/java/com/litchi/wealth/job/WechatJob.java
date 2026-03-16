@@ -237,7 +237,8 @@ public class WechatJob {
         try {
             // 构建文章内容
             String now = DateUtil.now();
-            String title = "港股市场分析报告-" + now;
+            String marketStatus = getMarketStatus();
+            String title = today + "港股" + marketStatus;
             String digest = buildDigest(analysis);
             String content = buildArticleContent(analysis, today);
 
@@ -312,6 +313,31 @@ public class WechatJob {
         } catch (Exception e) {
             log.error("发布草稿失败", e);
             return null;
+        }
+    }
+
+    /**
+     * 根据当前时间判断市场状态
+     * 9:15 执行 -> 开盘速递
+     * 14:15 执行 -> 中盘追踪
+     * 18:15 执行 -> 收市点评
+     *
+     * @return 市场状态描述
+     */
+    private String getMarketStatus() {
+        int hour = DateUtil.hour(new java.util.Date(), true);
+
+        // 9:00-11:00 -> 开盘
+        if (hour >= 9 && hour < 11) {
+            return "开盘速递";
+        }
+        // 13:00-16:00 -> 中盘
+        else if (hour >= 13 && hour < 16) {
+            return "中盘追踪";
+        }
+        // 17:00 之后 -> 收盘
+        else {
+            return "收市点评";
         }
     }
 
