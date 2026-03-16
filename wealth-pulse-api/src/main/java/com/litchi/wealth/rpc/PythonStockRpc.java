@@ -29,6 +29,7 @@ import com.litchi.wealth.vo.rpc.HkStockMinuteHistoryVo;
 import com.litchi.wealth.vo.rpc.HkStockNewsVo;
 import com.litchi.wealth.vo.rpc.HkStockSecurityProfileVo;
 import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
+import com.litchi.wealth.vo.rpc.WechatImageGenerateVo;
 import com.litchi.wealth.dto.ai.TradeScoreRequest;
 import com.litchi.wealth.dto.ai.BrokerScreenshotRequest;
 import com.litchi.wealth.vo.ai.TradeScoreVo;
@@ -849,4 +850,61 @@ public class PythonStockRpc {
         }
     }
 
+    /**
+     * 生成微信分析图片
+     * 调用 Python API 生成港股市场分析图片，用于微信公众号文章封面
+     *
+     * @param markdownContent Markdown 内容
+     * @param reportDate      报告日期
+     * @return 图片生成结果，包含 image_url 和 prompt_used
+     */
+    public WechatImageGenerateVo generateWechatAnalysisImage(String markdownContent, String reportDate) {
+        log.info("调用 Python API 生成微信分析图片：reportDate={}", reportDate);
+
+        try {
+            String token = createAccessToken();
+
+            String url = pythonApiUrl + "/api/wechat/generate-analysis-image";
+
+            // 构建请求参数
+            JSONObject requestBody = new JSONObject();
+            requestBody.set("markdown_content", markdownContent);
+            requestBody.set("report_date", reportDate);
+
+            String json = JSONUtil.toJsonStr(requestBody);
+            log.debug("请求参数：{}", json);
+
+            String resultStr = HttpRequest.post(url)
+                    .header("Authorization", "Bearer " + token)
+                    .header("Content-Type", "application/json")
+                    .body(json)
+                    .execute()
+                    .body();
+
+            log.info("Python API 返回：{}", resultStr);
+
+            JSONObject result = JSONUtil.parseObj(resultStr);
+            Integer code = result.getInt("code");
+            if (code == 200) {
+                JSONObject data = result.getJSONObject("data");
+                String imageUrl = data.getStr("image_url");
+                String promptUsed = data.getStr("prompt_used");
+
+                log.info("图片生成成功，URL: {}, 提示词：{}", imageUrl, promptUsed);
+
+                return WechatImageGenerateVo.builder()
+                        .imageUrl(imageUrl)
+                        .promptUsed(promptUsed)
+                        .build();
+            } else {
+                String msg = result.getStr("msg");
+                log.error("生成图片失败：code={}, msg={}", code, msg);
+                return null;
+            }
+
+        } catch (Exception e) {
+            log.error("调用 Python API 生成图片失败", e);
+            return null;
+        }
+    }
 }

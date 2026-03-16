@@ -101,6 +101,9 @@ rpc:
     url: ${PYTHON_API_HOST:}
     clientId: ${PYTHON_CLIENT_ID:}
     clientSecret: ${PYTHON_SECRET:}
+  wechat:
+    appId: ${WECHAT_APP_ID:}
+    appSecret: ${WECHAT_APP_SECRET:}
 
 # ====================================
 # 邮件通知配置

@@ -219,4 +219,9 @@ public class Constants {
      * Redis Key analysis 前缀
      */
     public static final String ANALYSIS_REDIS_KEY_PREFIX = "hkstock:market:analysis:";
+
+    /**
+     * 微信 AccessToken
+     */
+    public static final String WECHAT_ACCESS_TOKEN_KEY = "wechat:access_token";
 }

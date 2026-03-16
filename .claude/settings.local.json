@@ -36,7 +36,14 @@
       "Bash(python -c \"\nimport akshare as ak\ntry:\n    df = ak.stock_hsgt_fund_flow_summary_em\\(\\)\n    print\\(''列名:'', df.columns.tolist\\(\\)\\)\n    print\\(\\)\n    print\\(''数据示例:''\\)\n    print\\(df.to_string\\(\\)\\)\nexcept Exception as e:\n    print\\(f''错误：{e}''\\)\n\")",
       "Bash(python -c \"import akshare as ak; df = ak.forex_spot_em\\(\\); print\\(''Columns:'', df.columns.tolist\\(\\)\\); print\\(''Sample data:''\\); print\\(df.head\\(2\\)\\)\")",
       "Bash(python -c \"import akshare as ak; df = ak.forex_spot_em\\(\\); print\\(''Columns:'', df.columns.tolist\\(\\)\\); cnhusd = df[df[''代码''] == ''CNHUSD'']; print\\(''CNHUSD row:''\\); print\\(cnhusd.iloc[0] if not cnhusd.empty else ''Not found''\\)\")",
-      "Bash(python3 -c \"\nimport akshare as ak\nimport warnings\nwarnings.filterwarnings\\(''ignore''\\)\ndf = ak.forex_spot_em\\(\\)\n# 尝试 Latin-1 编码\ncols = [c.encode\\(''utf-8''\\).decode\\(''latin-1''\\) if isinstance\\(c, str\\) else c for c in df.columns]\nprint\\(''列名:'', cols\\)\n\")"
+      "Bash(python3 -c \"\nimport akshare as ak\nimport warnings\nwarnings.filterwarnings\\(''ignore''\\)\ndf = ak.forex_spot_em\\(\\)\n# 尝试 Latin-1 编码\ncols = [c.encode\\(''utf-8''\\).decode\\(''latin-1''\\) if isinstance\\(c, str\\) else c for c in df.columns]\nprint\\(''列名:'', cols\\)\n\")",
+      "WebFetch(domain:developers.weixin.qq.com)",
+      "Bash(python test_sina_forex_crawler.py)",
+      "Bash(pip install pydantic-settings==2.5.2 -q)",
+      "Bash(python -c \"from app.services.sina_forex_crawler import SinaForexCrawler; c = SinaForexCrawler\\(\\); print\\(''RN param test:'', [c._generate_rn_param\\(\\) for _ in range\\(5\\)]\\)\")",
+      "Bash(python test_sina_forex_simple.py)",
+      "Bash(python test_sina_forex_async.py)",
+      "Bash(python test_sina_forex_standalone.py)"
     ]
   }
 }

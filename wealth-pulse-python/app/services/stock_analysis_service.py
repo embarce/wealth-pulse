@@ -26,6 +26,7 @@ from app.services.sina_company_notice_crawler import sina_company_notice_crawler
 from app.services.sina_finance_crawler import sina_finance_crawler
 from app.services.sina_hkstock_crawler import SinaHKStockCrawler
 from app.services.sina_news_crawler import sina_news_crawler
+from app.services.sina_forex_crawler import sina_forex_crawler
 from app.services.stock_service import StockService
 
 logger = logging.getLogger(__name__)
@@ -915,7 +916,7 @@ class StockAnalysisService:
 
         # 2. 获取港股市场动态数据快照
         logger.info("[HKStockMarketAnalysis] 获取市场动态数据快照")
-        market_snapshot = self._get_hk_market_snapshot()
+        market_snapshot = await self._get_hk_market_snapshot()
 
         # 3. 构建新闻文本（不限制条数，供第一阶段压缩使用）
         news_text = self._build_hkstock_news_text(news_data, max_news_per_category=50)
@@ -1039,14 +1040,14 @@ class StockAnalysisService:
 
         return "\n".join(lines)
 
-    def _get_hk_market_snapshot(self) -> Dict[str, Any]:
+    async def _get_hk_market_snapshot(self) -> Dict[str, Any]:
         """
-        获取港股市场动态数据快照
+        获取港股市场动态数据快照（异步版本 - 使用新浪外汇爬虫）
 
         包含：
         1. 指數表現：恆生指數最新價、漲跌幅、成交額
         2. 外部情緒：美股中概股表現（納斯達克中國金龍指數）
-        3. 貨幣與流動性：美元/離岸人民幣匯率、南向資金淨流入
+        3. 貨幣與流動性：美元/離岸人民幣匯率（使用新浪外汇爬虫）、南向資金淨流入
         4. 市場寬度：港股上漲家數等
 
         Returns:
@@ -1097,30 +1098,29 @@ class StockAnalysisService:
                 logger.warning(f"[MarketSnapshot] 获取美股中概股数据失败：{e}")
                 snapshot["external_sentiment"] = {"status": "fetch_failed"}
 
-            # 3. 貨幣與流動性：美元/離岸人民幣 (USD/CNY)
-            # ak.forex_spot_em() 返回列名：代码、名称、最新价、涨跌额、涨跌幅、今开、最高、最低、昨收
+            # 3. 貨幣與流動性：美元/離岸人民幣 (USD/CNY) - 使用新浪外汇爬虫
             try:
-                fx_data = ak.forex_spot_em()
-                # 查找 CNHUSD (离岸人民币兑美元) 行
-                usd_cny_row = fx_data[fx_data['代码'] == 'CNHUSD']
-                if not usd_cny_row.empty:
-                    usd_cny = usd_cny_row.iloc[0]
+                usd_cny_data = await sina_forex_crawler.fetch_usd_cny()
+                if usd_cny_data:
                     snapshot["currency_liquidity"]["usd_cny"] = {
-                        "symbol": "CNHUSD",
-                        "name": "离岸人民币兑美元",
-                        "last_price": float(usd_cny.get('最新价', 0)) if usd_cny.get('最新价') else None,
-                        "change": float(usd_cny.get('涨跌额', 0)) if usd_cny.get('涨跌额') else None,
-                        "change_rate": float(usd_cny.get('涨跌幅', 0)) if usd_cny.get('涨跌幅') else None,
-                        "high": float(usd_cny.get('最高', 0)) if usd_cny.get('最高') else None,
-                        "low": float(usd_cny.get('最低', 0)) if usd_cny.get('最低') else None,
-                        "open": float(usd_cny.get('今开', 0)) if usd_cny.get('今开') else None,
-                        "pre_close": float(usd_cny.get('昨收', 0)) if usd_cny.get('昨收') else None,
+                        "symbol": "USDCNY",
+                        "name": "美元人民币",
+                        "last_price": usd_cny_data.get("last_price"),
+                        "change": usd_cny_data.get("change_number"),
+                        "change_rate": usd_cny_data.get("change_rate"),
+                        "high": usd_cny_data.get("high_price"),
+                        "low": usd_cny_data.get("low_price"),
+                        "open": usd_cny_data.get("open_price"),
+                        "pre_close": usd_cny_data.get("pre_close"),
+                        "time": usd_cny_data.get("time"),
+                        "date": usd_cny_data.get("date"),
+                        "data_source": "新浪财经外汇",
                         "note": "人民币走势直接影响港股中的内资股估值"
                     }
                 else:
                     snapshot["currency_liquidity"]["usd_cny"] = {"status": "data_unavailable"}
             except Exception as e:
-                logger.warning(f"[MarketSnapshot] 获取美元/人民币汇率数据失败：{e}")
+                logger.warning(f"[MarketSnapshot] 获取美元/人民币汇率数据失败（新浪外汇爬虫）：{e}")
                 snapshot["currency_liquidity"]["usd_cny"] = {"status": "fetch_failed"}
 
             # 4. 資金流向：沪深港通资金流向
