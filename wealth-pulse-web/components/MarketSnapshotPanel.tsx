@@ -1,5 +1,5 @@
 import React from 'react';
-import { MarketSnapshot, CurrencyLiquidity } from '../services/aiAnalysis';
+import { MarketSnapshot, CurrencyLiquidity, HotStocks, HotStockItem } from '../services/aiAnalysis';
 
 interface MarketSnapshotPanelProps {
   snapshot: MarketSnapshot | null;
@@ -154,6 +154,48 @@ const MarketSnapshotPanel: React.FC<MarketSnapshotPanelProps> = ({ snapshot }) =
           </div>
         </div>
       )}
+
+      {/* 今日热门股票 */}
+      {marketBreadth?.hotStocks && marketBreadth.hotStocks.stocks && marketBreadth.hotStocks.stocks.length > 0 && (
+        <div>
+          <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+            <i className="fas fa-fire text-orange-400"></i>
+            今日热门股票
+          </h4>
+          <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+            {/* 头部信息 */}
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-700">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">数据来源：</span>
+                <span className="text-xs font-bold text-white">{marketBreadth.hotStocks.dataSource || 'N/A'}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-400">行情时间：</span>
+                <span className="text-xs font-bold text-white">{marketBreadth.hotStocks.hqTime || 'N/A'}</span>
+                {marketBreadth.hotStocks.hqStatus && (
+                  <span className="text-[10px] px-2 py-1 rounded-full bg-indigo-500/20 text-indigo-300 font-bold">
+                    {marketBreadth.hotStocks.hqStatus}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* 热门股票列表 */}
+            <div className="space-y-2">
+              {marketBreadth.hotStocks.stocks.slice(0, 10).map((stock, index) => (
+                <HotStockRow key={stock.symbol} stock={stock} rank={index + 1} />
+              ))}
+            </div>
+
+            {/* 更多提示 */}
+            {marketBreadth.hotStocks.count && marketBreadth.hotStocks.count > 10 && (
+              <div className="mt-3 pt-3 border-t border-slate-700 text-center">
+                <span className="text-xs text-slate-400">共 {marketBreadth.hotStocks.count} 只热门股票</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -187,6 +229,62 @@ const CurrencyCard: React.FC<CurrencyCardProps> = ({ pair }) => {
       {pair.note && (
         <p className="text-[10px] text-slate-500 mt-2">{pair.note}</p>
       )}
+    </div>
+  );
+};
+
+// 热门股票行组件
+interface HotStockRowProps {
+  stock: HotStockItem;
+  rank: number;
+}
+
+const HotStockRow: React.FC<HotStockRowProps> = ({ stock, rank }) => {
+  const getChangeColor = (value: number | null) => {
+    if (value === null) return 'text-slate-400';
+    if (value >= 0) return 'text-rose-400';
+    return 'text-emerald-400';
+  };
+
+  return (
+    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-700/30 hover:bg-slate-700/50 transition-colors">
+      <div className="flex items-center gap-3">
+        {/* 排名 */}
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${
+          rank <= 3 ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' : 'bg-slate-600 text-slate-300'
+        }`}>
+          {rank}
+        </div>
+        {/* 股票信息 */}
+        <div>
+          <div className="text-sm font-bold text-white">{stock.name}</div>
+          <div className="text-[10px] text-slate-400">{stock.symbol}</div>
+        </div>
+      </div>
+
+      {/* 价格和涨跌 */}
+      <div className="flex items-center gap-4">
+        <div className="text-right">
+          <div className="text-sm font-black text-white">
+            {stock.lasttrade !== null ? stock.lasttrade.toFixed(2) : 'N/A'}
+          </div>
+          <div className={`text-xs font-bold ${getChangeColor(stock.changePercent)}`}>
+            {stock.changePercent !== null
+              ? `${stock.changePercent >= 0 ? '+' : ''}${stock.changePercent.toFixed(2)}%`
+              : 'N/A'}
+          </div>
+        </div>
+        <div className="text-right w-24">
+          <div className="text-[10px] text-slate-400">成交额</div>
+          <div className="text-xs font-bold text-white">
+            {stock.amount !== null
+              ? stock.amount > 100000000
+                ? `${(stock.amount / 100000000).toFixed(2)} 亿`
+                : `${(stock.amount / 10000).toFixed(0)} 万`
+              : 'N/A'}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

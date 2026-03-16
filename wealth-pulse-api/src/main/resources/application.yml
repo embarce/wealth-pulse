@@ -112,6 +112,14 @@ email:
   notification:
     enabled: true
 
+# ====================================
+# 微信发布 Job 配置
+# ====================================
+wechat:
+  job:
+    # 是否启用微信自动发布 Job
+    enabled: true
+
 # 系统配置
 system:
   website-url: ${SYSTEM_WEBSITE_URL:https://stock.embracechw.top}

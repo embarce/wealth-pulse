@@ -279,8 +279,111 @@ public class HkStockMarketAnalysisVo {
         private Integer totalStocks;
 
         @Schema(description = "上涨/下跌比率", example = "2.66")
-            @Alias("advance_decline_ratio")
+        @Alias("advance_decline_ratio")
         private Double advanceDeclineRatio;
+
+        @Schema(description = "今日热门股票")
+        @Alias("hot_stocks")
+        private HotStocks hotStocks;
+    }
+
+    /**
+     * 今日热门股票
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "今日热门股票")
+    public static class HotStocks {
+        @Schema(description = "格式化文本")
+        @Alias("formatted_text")
+        private String formattedText;
+
+        @Schema(description = "热门股票列表")
+        private List<HotStockItem> stocks;
+
+        @Schema(description = "股票数量")
+        private Integer count;
+
+        @Schema(description = "行情时间")
+        @Alias("hq_time")
+        private String hqTime;
+
+        @Schema(description = "市场状态")
+        @Alias("hq_status")
+        private String hqStatus;
+
+        @Schema(description = "数据来源")
+        @Alias("data_source")
+        private String dataSource;
+    }
+
+    /**
+     * 热门股票项
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "热门股票项")
+    public static class HotStockItem {
+        @Schema(description = "股票代码", example = "001810")
+        private String symbol;
+
+        @Schema(description = "股票名称", example = "小米集团－W")
+        private String name;
+
+        @Schema(description = "英文名称", example = "XIAOMI-W")
+        private String engname;
+
+        @Schema(description = "最新价")
+        @Alias("lasttrade")
+        private Double lasttrade;
+
+        @Schema(description = "昨收价")
+        @Alias("prevclose")
+        private Double prevclose;
+
+        @Schema(description = "开盘价")
+        private Double open;
+
+        @Schema(description = "最高价")
+        private Double high;
+
+        @Schema(description = "最低价")
+        private Double low;
+
+        @Schema(description = "成交量")
+        private Long volume;
+
+        @Schema(description = "成交额")
+        private Double amount;
+
+        @Schema(description = "涨跌额")
+        @Alias("price_change")
+        private Double priceChange;
+
+        @Schema(description = "涨跌幅 (%)")
+        @Alias("change_percent")
+        private Double changePercent;
+
+        @Schema(description = "52 周最高价")
+        @Alias("high_52week")
+        private Double high52week;
+
+        @Schema(description = "52 周最低价")
+        @Alias("low_52week")
+        private Double low52week;
+
+        @Schema(description = "买入价")
+        private Double buy;
+
+        @Schema(description = "卖出价")
+        private Double sell;
+
+        @Schema(description = "报价时间")
+        private String ticktime;
     }
 
     /**

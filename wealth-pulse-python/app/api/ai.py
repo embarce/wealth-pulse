@@ -473,7 +473,11 @@ async def analyze_hkstock_market(
 
     **返回内容：**
     - `investment_report`: Markdown 格式的投资建议报告
-    - `market_snapshot`: 市场动态数据快照（恒指、汇率、资金流向等）
+    - `market_snapshot`: 市场动态数据快照
+        - `index_performance`: 指数表现（恒生指数）
+        - `external_sentiment`: 外部情绪（美股中概股）
+        - `currency_liquidity`: 货币与流动性（美元/人民币汇率、南向资金流向）
+        - `market_breadth`: 市场宽度（涨跌家数、今日热门股票）
     - `compressed_news`: LLM 压缩后的新闻摘要
     - `news_summary`: 新闻摘要统计信息（新闻数量等）
     - `_llm`: LLM 调用信息

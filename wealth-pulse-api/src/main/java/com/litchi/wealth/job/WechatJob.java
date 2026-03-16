@@ -20,6 +20,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -47,11 +48,28 @@ public class WechatJob {
     @Autowired
     private RedisCache redisCache;
 
+    @Value("${wechat.job.enabled:true}")
+    private boolean wechatJobEnabled;
+
+    /**
+     * 初始化时打印配置状态
+     */
+    @PostConstruct
+    public void init() {
+        log.info("WechatJob 初始化完成，启用状态：enabled={}", wechatJobEnabled);
+    }
+
     /**
      * 每天 9:15、14:15、18:15 执行
      */
     @Scheduled(cron = "0 15 9,14,18 * * ?")
     public void publishAnalysisToWechat() {
+        // 检查 Job 是否启用
+        if (!wechatJobEnabled) {
+            log.warn("WechatJob 当前被禁用，跳过执行。如需启用，请设置 wechat.job.enabled=true");
+            return;
+        }
+
         log.info("========== 开始执行微信发布定时任务 ==========");
         long startTime = System.currentTimeMillis();
 

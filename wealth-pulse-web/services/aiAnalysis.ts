@@ -216,6 +216,41 @@ export interface CurrencyLiquidity {
 }
 
 /**
+ * 热门股票项 - 匹配后端 HkStockMarketAnalysisVo.HotStockItem
+ */
+export interface HotStockItem {
+  symbol: string; // 股票代码
+  name: string; // 股票名称
+  engname: string; // 英文名称
+  lasttrade: number | null; // 最新价
+  prevclose: number | null; // 昨收价
+  open: number | null; // 开盘价
+  high: number | null; // 最高价
+  low: number | null; // 最低价
+  volume: number | null; // 成交量
+  amount: number | null; // 成交额
+  priceChange: number | null; // 涨跌额
+  changePercent: number | null; // 涨跌幅
+  high52week: number | null; // 52 周最高价
+  low52week: number | null; // 52 周最低价
+  buy: number | null; // 买入价
+  sell: number | null; // 卖出价
+  ticktime: string | null; // 报价时间
+}
+
+/**
+ * 热门股票列表 - 匹配后端 HkStockMarketAnalysisVo.HotStocks
+ */
+export interface HotStocks {
+  formattedText: string | null; // 格式化文本
+  stocks: HotStockItem[] | null; // 热门股票列表
+  count: number | null; // 股票数量
+  hqTime: string | null; // 行情时间
+  hqStatus: string | null; // 市场状态
+  dataSource: string | null; // 数据来源
+}
+
+/**
  * 市场宽度 - 匹配后端 HkStockMarketAnalysisVo.MarketBreadth
  */
 export interface MarketBreadth {
@@ -224,6 +259,7 @@ export interface MarketBreadth {
   unchangedStocks: number | null; // 平盘家数
   totalStocks: number | null; // 总股票数
   advanceDeclineRatio: number | null; // 上涨/下跌比率
+  hotStocks: HotStocks | null; // 今日热门股票
 }
 
 /**

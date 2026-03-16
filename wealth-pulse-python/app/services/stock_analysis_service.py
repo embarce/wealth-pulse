@@ -28,6 +28,7 @@ from app.services.sina_hkstock_crawler import SinaHKStockCrawler
 from app.services.sina_news_crawler import sina_news_crawler
 from app.services.sina_forex_crawler import sina_forex_crawler
 from app.services.ubs_southbound_crawler import ubs_southbound_crawler
+from app.services.sina_hot_stocks_crawler import sina_hot_stocks_crawler
 from app.services.stock_service import StockService
 
 logger = logging.getLogger(__name__)
@@ -883,7 +884,7 @@ class StockAnalysisService:
         1. 去除 20 条新闻限制，原始新闻全部传入第一阶段
         2. LLM 压缩新闻至 500-800 字（原来可能数千字），节省 token
         3. 第二阶段只传入压缩后的新闻，不传入原始新闻
-        4. 加入市场动态数据快照（恆生指数、美股、汇率、南向资金、涨跌比）
+        4. 加入市场动态数据快照（恆生指数、美股、汇率、南向资金、涨跌比、今日热门股票）
 
         Args:
             news_data: 新闻数据字典，包含 important_news, rank_news, company_news
@@ -894,6 +895,10 @@ class StockAnalysisService:
         Returns:
             包含以下字段的字典：
             - market_snapshot: 市场动态数据快照
+                - index_performance: 指数表现（恆生指数）
+                - external_sentiment: 外部情绪（美股中概股）
+                - currency_liquidity: 货币与流动性（美元/人民币汇率、南向资金流向）
+                - market_breadth: 市场宽度（涨跌家数、热门股票）
             - compressed_news: LLM 压缩后的新闻摘要（Markdown 格式，含分类标签）
             - investment_report: Markdown 格式的投资策略报告
             - news_summary: 新闻摘要统计信息
@@ -1050,6 +1055,7 @@ class StockAnalysisService:
         2. 外部情緒：美股中概股表現（納斯達克中國金龍指數）
         3. 貨幣與流動性：美元/離岸人民幣匯率（使用新浪外汇爬虫）、南向資金淨流入
         4. 市場寬度：港股上漲家數等
+        5. 今日熱門股票：新浪热门港股排行榜（使用新浪热门股票爬虫）
 
         Returns:
             市场快照数据字典
@@ -1227,13 +1233,66 @@ class StockAnalysisService:
                 logger.warning(f"[MarketSnapshot] 获取市場寬度数据失败：{e}")
                 snapshot["market_breadth"] = {"status": "fetch_failed"}
 
+            # 6. 今日熱門股票：新浪热门港股（使用新浪热门股票爬虫）
+            try:
+                hot_stocks_data = await sina_hot_stocks_crawler.fetch_hot_stocks(stock_type="hot_hk", limit=20)
+
+                if hot_stocks_data.get('success'):
+                    data = hot_stocks_data.get('data', {})
+                    stocks = data.get('stocks', [])
+
+                    # 格式化热门股票数据为文本，供 LLM 分析使用
+                    hot_stocks_lines = ["【今日热门港股】"]
+                    hot_stocks_lines.append(f"  数据时间：{data.get('hq_time', 'N/A')}")
+                    hot_stocks_lines.append(f"  市场状态：{data.get('hq_status', 'N/A')}")
+                    hot_stocks_lines.append("")
+
+                    for i, stock in enumerate(stocks, 1):
+                        name = stock.get('name', 'N/A')
+                        symbol = stock.get('symbol', 'N/A')
+                        lasttrade = stock.get('lasttrade', 0)
+                        price_change = stock.get('price_change', 0)
+                        change_percent = stock.get('change_percent', 0)
+                        volume = stock.get('volume', 0)
+                        amount = stock.get('amount', 0)
+                        high = stock.get('high', 0)
+                        low = stock.get('low', 0)
+                        open_price = stock.get('open', 0)
+                        prevclose = stock.get('prevclose', 0)
+
+                        # 判断涨跌颜色
+                        change_text = f"+{price_change:.2f}" if price_change > 0 else f"{price_change:.2f}"
+                        pct_text = f"+{change_percent:.2f}%" if change_percent > 0 else f"{change_percent:.2f}%"
+
+                        hot_stocks_lines.append(
+                            f"  {i}. {name} ({symbol}): {lasttrade:.2f}港元 "
+                            f"({change_text}, {pct_text}) "
+                            f"成交：{amount/10000:.2f}亿港元"
+                        )
+
+                    snapshot["market_breadth"]["hot_stocks"] = {
+                        "formatted_text": "\n".join(hot_stocks_lines),
+                        "stocks": stocks,
+                        "count": data.get('count', 0),
+                        "hq_time": data.get('hq_time'),
+                        "hq_status": data.get('hq_status'),
+                        "data_source": "Sina 新浪",
+                    }
+                else:
+                    snapshot["market_breadth"]["hot_stocks"] = {"status": "data_unavailable"}
+
+            except Exception as e:
+                logger.warning(f"[MarketSnapshot] 获取热门股票数据失败（Sina 爬虫）：{e}")
+                snapshot["market_breadth"]["hot_stocks"] = {"status": "fetch_failed"}
+
             # 检查数据状态
             available_sections = sum([
                 1 if snapshot["index_performance"].get("latest_price") else 0,
                 1 if snapshot["external_sentiment"].get("latest_price") else 0,
                 1 if snapshot["currency_liquidity"].get("usd_cny", {}).get("last_price") else 0,
-                1 if snapshot["currency_liquidity"].get("fund_flow_summary", {}).get("formatted_text") else 0,
+                1 if snapshot["currency_liquidity"].get("southbound_flow", {}).get("formatted_text") else 0,
                 1 if snapshot["market_breadth"].get("advancing_stocks") else 0,
+                1 if snapshot["market_breadth"].get("hot_stocks", {}).get("formatted_text") else 0,
             ])
 
             if available_sections >= 4:
@@ -1401,6 +1460,13 @@ class StockAnalysisService:
                 lines.append(f"   - 漲跌比：{breadth.get('advance_decline_ratio')}")
         else:
             lines.append("4. 市場寬度：数据暂缺")
+
+        # 今日热门股票
+        hot_stocks = breadth.get("hot_stocks", {})
+        if hot_stocks.get("formatted_text"):
+            lines.append(f"   {hot_stocks.get('formatted_text')}")
+        elif hot_stocks.get("status") != "data_unavailable" and hot_stocks.get("status") != "fetch_failed":
+            lines.append("   - 今日热门股票：数据暂缺")
 
         return "\n".join(lines)
 
