@@ -310,16 +310,21 @@ class SinaHKMinuteCrawler:
     @staticmethod
     def normalize_stock_code(stock_code: str) -> str:
         """
-        标准化股票代码（去除后缀，保留纯数字）
+        标准化股票代码为新浪格式（补齐到 5 位）
 
         Args:
-            stock_code: 原始股票代码 (可能是 00700.HK, 700.HK, 00700 等格式)
+            stock_code: 股票代码 (如：0700.HK, 01810.HK, 1211.HK)
 
         Returns:
-            纯数字股票代码（不带后缀）
+            新浪格式的股票代码 (如：00700, 01810, 01211)
         """
-        # 移除后缀
+        # 移除 .HK 后缀
         code = stock_code.replace('.HK', '').replace('.hk', '').replace('.Hk', '')
+
+        # 补齐到 5 位
+        if len(code) < 5:
+            code = code.zfill(5)
+
         return code
 
     def _parse_minute_data(self, symbol: str, json_data: str) -> Dict:
