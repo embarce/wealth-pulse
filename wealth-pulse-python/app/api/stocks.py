@@ -703,109 +703,83 @@ def get_financial_indicator(
         )
 
 
-@router.get("/{stock_code}/minute-history", summary="Get HK stock minute-level history")
-def get_minute_history(
+@router.get("/{stock_code}/minute-history", summary="Get HK stock minute-level history from Sina Finance")
+async def get_minute_history(
         stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 01611.HK)", example="01611.HK"),
         period: str = Query('1', description="Period: 1=1min, 5=5min, 15=15min, 30=30min, 60=60min",
                             regex="^(1|5|15|30|60)$"),
-        adjust: str = Query('', description="Adjustment type: ''=no adjust, 'hfq'=post-adjust"),
-        start_date: Optional[datetime] = Query(None, description="Start datetime (YYYY-MM-DD HH:MM:SS)"),
-        end_date: Optional[datetime] = Query(None, description="End datetime (YYYY-MM-DD HH:MM:SS)"),
         current_user: dict = Depends(get_current_user)
 ):
     """
-    Get HK stock minute-level historical data from Eastmoney (requires authentication)
+    Get HK stock minute-level historical data from Sina Finance (requires authentication)
 
-    This endpoint fetches intraday historical data with different time intervals.
+    This endpoint fetches intraday minute-level data from Sina Finance API.
+    Note: Only supports 1-minute period (real-time minute data).
 
     **Path Parameters:**
     - `stock_code`: Stock code (e.g., 0700.HK, 01611.HK)
 
     **Query Parameters:**
     - `period`: Time period ('1', '5', '15', '30', '60' for minutes)
-    - `adjust`: Adjustment type (''=none, 'hfq'=post-adjustment)
-    - `start_date`: Start datetime (default: 1 day ago)
-    - `end_date`: End datetime (default: now)
+                Note: Only '1' is supported for real-time minute data
 
     **Data Source:**
-    - AkShare `stock_hk_hist_min_em` API
-    - Eastmoney
+    - Sina Finance (stock.finance.sina.com.cn)
 
-    **Returned Fields (1-minute data):**
-    - trade_time: 交易时间
-    - open_price: 开盘价(港元)
-    - close_price: 收盘价(港元)
-    - high_price: 最高价(港元)
-    - low_price: 最低价(港元)
-    - volume: 成交量(股)
-    - turnover: 成交额(港元)
-    - latest_price: 最新价(港元)
+    **Returned Fields:**
+    - trade_time: 交易时间 (HH:MM:SS)
+    - stock_code: 股票代码
+    - period: 周期 (固定为 1)
+    - open_price: 开盘价 (港元)
+    - close_price: 收盘价 (港元)
+    - high_price: 最高价 (港元)
+    - low_price: 最低价 (港元)
+    - volume: 成交量 (股)
+    - turnover: 成交额 (港元)
+    - latest_price: 最新价 (港元)
 
-    **Returned Fields (5/15/30/60-minute data):**
-    - trade_time: 交易时间
-    - open_price: 开盘价(港元)
-    - close_price: 收盘价(港元)
-    - high_price: 最高价(港元)
-    - low_price: 最低价(港元)
-    - volume: 成交量(股)
-    - turnover: 成交额(港元)
-    - change_rate: 涨跌幅(%)
-    - change_number: 涨跌额(港元)
-    - amplitude: 振幅(%)
-    - turnover_rate: 换手率(%)
+    **Note:**
+    - 数据为当日分时数据，包含开盘后每一分钟的成交信息
+    - 股票代码会自动标准化为新浪格式
     """
     try:
-        from app.services.akshare_provider import AkShareProvider
+        from app.services.sina_hk_realtime_crawler import sina_hk_minute_crawler
 
-        logger.info(f"[MinuteHistory] Fetching minute history for {stock_code}: period={period}, adjust={adjust}")
+        logger.info(f"[MinuteHistory] Fetching minute history for {stock_code}: period={period}")
 
-        # 使用 AkShareProvider 获取数据
-        provider = AkShareProvider()
-        history_data = provider.get_stock_minute_history(
-            stock_code=stock_code,
-            period=period,
-            adjust=adjust,
-            start_date=start_date,
-            end_date=end_date
-        )
+        # 使用爬虫获取分时数据
+        result = await sina_hk_minute_crawler.fetch_minute_data(stock_code)
 
-        if not history_data:
+        if result.get('status') == 'error':
+            logger.warning(f"[MinuteHistory] Failed to fetch minute history for {stock_code}: {result.get('error')}")
             raise ApiException(
-                msg=f"Minute history data not found for stock {stock_code}",
-                code=ResponseCode.NOT_FOUND
+                msg=f"Failed to fetch minute history: {result.get('error')}",
+                code=ResponseCode.INTERNAL_ERROR
+            )
+
+        minute_data = result.get('minute_data', [])
+
+        if not minute_data:
+            return success_response(
+                data=[],
+                msg=f"No minute history found for stock {stock_code}"
             )
 
         # 转换为响应格式
         response_data = []
-        for item in history_data:
+        for record in minute_data:
             response_item = {
-                "trade_time": item['trade_time'].isoformat() if isinstance(item['trade_time'], datetime) else item[
-                    'trade_time'],
-                "stock_code": item['stock_code'],
-                "period": item['period'],
-                "open_price": float(item['open_price']) if item.get('open_price') is not None else None,
-                "close_price": float(item['close_price']) if item.get('close_price') is not None else None,
-                "high_price": float(item['high_price']) if item.get('high_price') is not None else None,
-                "low_price": float(item['low_price']) if item.get('low_price') is not None else None,
-                "volume": float(item['volume']) if item.get('volume') is not None else None,
-                "turnover": float(item['turnover']) if item.get('turnover') is not None else None,
+                "trade_time": record.get('time'),
+                "stock_code": stock_code,
+                "period": period,
+                "open_price": record.get('price'),
+                "close_price": record.get('price'),
+                "high_price": record.get('avg_price'),
+                "low_price": record.get('avg_price'),
+                "volume": record.get('volume'),
+                "turnover": record.get('turnover'),
+                "latest_price": record.get('price'),
             }
-
-            # 1分钟数据特有字段
-            if period == '1':
-                response_item['latest_price'] = float(item['latest_price']) if item.get(
-                    'latest_price') is not None else None
-
-            # 其他周期字段
-            else:
-                response_item['change_rate'] = float(item['change_rate']) if item.get(
-                    'change_rate') is not None else None
-                response_item['change_number'] = float(item['change_number']) if item.get(
-                    'change_number') is not None else None
-                response_item['amplitude'] = float(item['amplitude']) if item.get('amplitude') is not None else None
-                response_item['turnover_rate'] = float(item['turnover_rate']) if item.get(
-                    'turnover_rate') is not None else None
-
             response_data.append(response_item)
 
         logger.info(f"[MinuteHistory] Successfully fetched {len(response_data)} records for {stock_code}")
@@ -1195,6 +1169,142 @@ async def get_company_notices(
         logger.error(f"Error fetching notices for {stock_code}: {str(e)}")
         raise ApiException(
             msg=f"Failed to retrieve company notices: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/realtime-quote", summary="Get HK stock realtime quote from Sina Finance")
+async def get_realtime_quote(
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 01810.HK)", example="0700.HK"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock realtime quote from Sina Finance (requires authentication)
+
+    This endpoint fetches real-time market data from Sina Finance API.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 0700.HK, 01810.HK)
+
+    **Data Source:**
+    - Sina Finance (hq.sinajs.cn)
+
+    **Returned Fields:**
+    - symbol: 股票代码
+    - normalized_symbol: 标准化后的股票代码 (5 位数字)
+    - fetch_time: 获取时间
+    - datasource: 数据来源 (新浪财经)
+    - realtime_data: 实时行情数据
+        - english_name: 英文名
+        - chinese_name: 中文名
+        - open: 开盘价
+        - previous_close: 昨收价
+        - high: 最高价
+        - low: 最低价
+        - current: 当前价
+        - change: 涨跌额
+        - change_percent: 涨跌幅
+        - ask1: 卖一价
+        - bid1: 买一价
+        - turnover: 成交额
+        - volume: 成交量
+        - pe_ratio: 市盈率
+        - high_52w: 52 周最高
+        - low_52w: 52 周最低
+        - date: 日期
+        - time: 时间
+        - amplitude: 振幅
+
+    **Note:**
+    - 股票代码会自动标准化为新浪格式 (如 0700.HK → 00700)
+    - 数据为实时行情（港股交易时间内更新）
+    """
+    try:
+        from app.services.sina_hk_realtime_crawler import sina_hk_realtime_crawler
+
+        logger.info(f"[RealtimeQuote] Fetching realtime quote for {stock_code}")
+
+        # 使用爬虫获取实时行情
+        result = await sina_hk_realtime_crawler.fetch_realtime_quote(stock_code)
+
+        if result.get('realtime_data', {}).get('status') == 'error':
+            logger.warning(f"[RealtimeQuote] Failed to fetch realtime quote for {stock_code}: {result['realtime_data'].get('error')}")
+
+        logger.info(f"[RealtimeQuote] Successfully fetched realtime quote for {stock_code}")
+
+        return success_response(
+            data=result,
+            msg="Realtime quote retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching realtime quote for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve realtime quote: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/minute-data", summary="Get HK stock minute-level data from Sina Finance")
+async def get_minute_data(
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 01810.HK)", example="0700.HK"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock minute-level data from Sina Finance (requires authentication)
+
+    This endpoint fetches intraday minute-level data from Sina Finance API.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 0700.HK, 01810.HK)
+
+    **Data Source:**
+    - Sina Finance (stock.finance.sina.com.cn)
+
+    **Returned Fields:**
+    - symbol: 股票代码
+    - normalized_symbol: 标准化后的股票代码
+    - fetch_time: 获取时间
+    - datasource: 数据来源 (新浪财经)
+    - status: 状态 (success/error)
+    - minute_data: 分时数据列表
+        - time: 时间 (HH:MM:SS)
+        - volume: 成交量
+        - turnover: 成交额
+        - price: 价格
+        - avg_price: 均价
+        - prev_open_volume: 前开盘量（仅第一条记录）
+
+    **Note:**
+    - 数据为当日分时数据
+    - 包含开盘后每一分钟的成交和价格信息
+    """
+    try:
+        from app.services.sina_hk_realtime_crawler import sina_hk_minute_crawler
+
+        logger.info(f"[MinuteData] Fetching minute data for {stock_code}")
+
+        # 使用爬虫获取分时数据
+        result = await sina_hk_minute_crawler.fetch_minute_data(stock_code)
+
+        if result.get('status') == 'error':
+            logger.warning(f"[MinuteData] Failed to fetch minute data for {stock_code}: {result.get('error')}")
+
+        logger.info(f"[MinuteData] Successfully fetched minute data for {stock_code}")
+
+        return success_response(
+            data=result,
+            msg="Minute data retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching minute data for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve minute data: {str(e)}",
             code=ResponseCode.INTERNAL_ERROR
         )
 
