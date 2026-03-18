@@ -139,7 +139,7 @@ public class AnalysisServiceImpl implements AnalysisService {
             redisCache.setCacheObject(lockKey, true, 10, TimeUnit.MINUTES);
             log.info("Redis 中未找到 {} 的港股市场分析，尝试实时调用", today);
             HkStockMarketAnalysisVo hkStockMarketAnalysisVo = analyzeHkStockMarketRealtime(new HkStockMarketAnalysisRequest());
-            redisCache.setCacheObject(redisKey, hkStockMarketAnalysisVo, 5, TimeUnit.HOURS);
+            redisCache.setCacheObject(redisKey, hkStockMarketAnalysisVo, 12, TimeUnit.HOURS);
             redisCache.deleteObject(lockKey);
             return hkStockMarketAnalysisVo;
         }

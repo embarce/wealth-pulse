@@ -43,9 +43,9 @@ public class HkStockMarketAnalysisJob {
     private boolean emailNotificationEnabled;
 
     /**
-     * 分析结果有效期：5 小时
+     * 分析结果有效期：12 小时
      */
-    private static final int CACHE_EXPIRE_HOURS = 5;
+    private static final int CACHE_EXPIRE_HOURS = 12;
 
     /**
      * 固定分析模型
@@ -61,7 +61,7 @@ public class HkStockMarketAnalysisJob {
     /**
      * 每天9:00、14:00、18:00 执行
      */
-    @Scheduled(cron = "0 0 9,14,18 * * ?")
+    @Scheduled(cron = "0 35 9,14,18 * * ?")
     public void analyzeHkStockMarketDaily() {
         log.info("========== 开始执行港股市场 AI 分析定时任务 ==========");
         long startTime = System.currentTimeMillis();

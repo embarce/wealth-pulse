@@ -32,19 +32,89 @@ export default function StockChart({ stockCode, symbol, height = 500, onDataLoad
     // 清空容器内容，防止残留
     chartContainerRef.current.innerHTML = ''
 
-    // 初始化图表
+    // 初始化图表 - 使用浅色主题和 area 分时图配置
     const chart = init(chartContainerRef.current, {
       layout: [
         {
           type: 'candle',
-          content: ['MA', { name: 'EMA', calcParams: [10, 30] }],
+          content: ['MA'],
           options: { order: Number.MIN_SAFE_INTEGER }
         },
-        { type: 'indicator', content: ['VOL'], options: { order: 10 } },
         { type: 'xAxis', options: { order: 9 } }
       ]
     })
     chartInstanceRef.current = chart
+
+    // 设置为 area 分时图模式，并配置浅色主题样式
+    chart.setStyles({
+      candle: {
+        type: 'area',
+        area: {
+          value: 'close'  // 使用收盘价作为 area 的基准值
+        }
+      },
+      grid: {
+        horizontal: {
+          show: true,
+          color: '#E2E8F0',
+          style: 'dashed',
+          dashedValue: [4, 4]
+        },
+        vertical: {
+          show: true,
+          color: '#E2E8F0',
+          style: 'dashed',
+          dashedValue: [4, 4]
+        }
+      },
+      xAxis: {
+        axisLine: {
+          show: true,
+          color: '#94A3B8'
+        },
+        tickText: {
+          show: true,
+          color: '#64748B',
+          size: 11
+        }
+      },
+      yAxis: {
+        axisLine: {
+          show: true,
+          color: '#94A3B8'
+        },
+        tickText: {
+          show: true,
+          color: '#64748B',
+          size: 11
+        }
+      },
+      crosshair: {
+        horizontal: {
+          show: true,
+          line: {
+            show: true,
+            color: '#94A3B8',
+            style: 'dashed',
+            dashedValue: [4, 4]
+          },
+          text: {
+            show: true,
+            color: '#64748B',
+            size: 11
+          }
+        },
+        vertical: {
+          show: true,
+          line: {
+            show: true,
+            color: '#94A3B8',
+            style: 'dashed',
+            dashedValue: [4, 4]
+          }
+        }
+      }
+    })
 
     // 设置股票代码和周期
     chart.setSymbol({

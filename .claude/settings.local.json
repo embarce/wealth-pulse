@@ -70,7 +70,10 @@
       "Bash(python -c \"\nimport httpx\nimport re\n\nsymbol = ''01810''\n# 请求公司信息 - 使用 hk 前缀\nurl = f''https://hq.sinajs.cn/list=hk{symbol}_i''\nreferer = f''https://stock.finance.sina.com.cn/hkstock/quotes/{symbol}.html''\n\nheaders = {\n    ''User-Agent'': ''Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0'',\n    ''Referer'': referer\n}\n\nprint\\(f''URL: {url}''\\)\n\nwith httpx.Client\\(timeout=10, follow_redirects=True\\) as client:\n    response = client.get\\(url, headers=headers\\)\n    content = response.content.decode\\(''gbk'', errors=''ignore''\\)\n    print\\(f''Content: {content}''\\)\n\")",
       "Bash(python test_sina_hk_minute.py)",
       "Bash(python replace_api.py)",
-      "Bash(python -m py_compile app/api/stocks.py)"
+      "Bash(python -m py_compile app/api/stocks.py)",
+      "Bash(pnpm run build)",
+      "WebFetch(domain:klinecharts.com)",
+      "WebFetch(domain:www.npmjs.com)"
     ]
   }
 }
