@@ -492,6 +492,88 @@ public class MarkdownUtils {
             }
         }
 
+        // 市场宽度
+        if (snapshot.getMarketBreadth() != null) {
+            var breadth = snapshot.getMarketBreadth();
+            html.append("<div style='margin-bottom: 18px;'>");
+            html.append("<div style='font-size: 13px; font-weight: 700; color: #0c4a6e; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 2px solid #bae6fd;'>");
+            html.append("<svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='#0284c7' stroke-width='2'><path d='M18 20V10'/><path d='M12 20V4'/><path d='M6 20v-6'/></svg>");
+            html.append("市场宽度");
+            html.append("</div>");
+            html.append("<div style='display: flex; gap: 8px; margin-bottom: 10px;'>");
+            html.append("<div style='flex: 1; background: #ffffff; border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #e0f2fe;'>");
+            html.append("<div style='font-size: 18px; font-weight: 700; color: #dc2626;'>").append(breadth.getAdvancingStocks() != null ? breadth.getAdvancingStocks() : 0).append("</div>");
+            html.append("<div style='font-size: 11px; color: #64748b; margin-top: 4px;'>上涨</div>");
+            html.append("</div>");
+            html.append("<div style='flex: 1; background: #ffffff; border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #e0f2fe;'>");
+            html.append("<div style='font-size: 18px; font-weight: 700; color: #64748b;'>").append(breadth.getUnchangedStocks() != null ? breadth.getUnchangedStocks() : 0).append("</div>");
+            html.append("<div style='font-size: 11px; color: #64748b; margin-top: 4px;'>平盘</div>");
+            html.append("</div>");
+            html.append("<div style='flex: 1; background: #ffffff; border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #e0f2fe;'>");
+            html.append("<div style='font-size: 18px; font-weight: 700; color: #16a34a;'>").append(breadth.getDecliningStocks() != null ? breadth.getDecliningStocks() : 0).append("</div>");
+            html.append("<div style='font-size: 11px; color: #64748b; margin-top: 4px;'>下跌</div>");
+            html.append("</div>");
+            html.append("</div>");
+            if (breadth.getAdvanceDeclineRatio() != null) {
+                html.append("<div style='font-size: 11px; color: #64748b; text-align: center; padding-top: 8px; border-top: 1px solid #e0f2fe;'>上涨/下跌比率：").append(String.format("%.2f", breadth.getAdvanceDeclineRatio())).append("</div>");
+            }
+            html.append("</div>");
+
+            // 热门股票
+            if (breadth.getHotStocks() != null && breadth.getHotStocks().getStocks() != null && !breadth.getHotStocks().getStocks().isEmpty()) {
+                var hotStocks = breadth.getHotStocks();
+                html.append("<div style='margin-bottom: 18px;'>");
+                html.append("<div style='font-size: 13px; font-weight: 700; color: #0c4a6e; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 2px solid #bae6fd;'>");
+                html.append("<svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='#0284c7' stroke-width='2'><path d='M13 2L3 14H12L11 22L21 10H12L13 2z'/></svg>");
+                html.append("今日热门股票");
+                html.append("</div>");
+
+                html.append("<div style='font-size: 11px; color: #64748b; background: #ffffff; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; border: 1px solid #e0f2fe; display: flex; gap: 8px;'>");
+                html.append("<span>数据时间：").append(hotStocks.getHqTime() != null ? hotStocks.getHqTime() : "N/A").append("</span>");
+                html.append("<span>|</span>");
+                html.append("<span>市场状态：").append(hotStocks.getHqStatus() != null ? hotStocks.getHqStatus() : "N/A").append("</span>");
+                html.append("</div>");
+
+                html.append("<table style='width: 100%; border-collapse: collapse; font-size: 12px; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0f2fe;'>");
+                html.append("<thead style='background: linear-gradient(135deg, #f59e0b, #d97706);'>");
+                html.append("<tr>");
+                html.append("<th style='padding: 10px 8px; text-align: center; font-weight: 600; color: #ffffff; font-size: 11px;'>排名</th>");
+                html.append("<th style='padding: 10px 8px; text-align: left; font-weight: 600; color: #ffffff; font-size: 11px;'>股票名称</th>");
+                html.append("<th style='padding: 10px 8px; text-align: center; font-weight: 600; color: #ffffff; font-size: 11px;'>代码</th>");
+                html.append("<th style='padding: 10px 8px; text-align: right; font-weight: 600; color: #ffffff; font-size: 11px;'>最新价</th>");
+                html.append("<th style='padding: 10px 8px; text-align: right; font-weight: 600; color: #ffffff; font-size: 11px;'>涨跌幅</th>");
+                html.append("</tr>");
+                html.append("</thead>");
+                html.append("<tbody>");
+
+                int rank = 0;
+                for (var stock : hotStocks.getStocks()) {
+                    if (stock != null && rank < 10) {
+                        rank++;
+                        String changeColor = stock.getChangePercent() != null && stock.getChangePercent() >= 0 ? "#dc2626" : "#16a34a";
+                        html.append("<tr style='border-bottom: 1px solid #e0f2fe;'>");
+                        html.append("<td style='padding: 10px 8px; text-align: center; color: #64748b; font-size: 11px;'>").append(rank).append("</td>");
+                        html.append("<td style='padding: 10px 8px; text-align: left; color: #1e293b; font-size: 11px;'>").append(stock.getName() != null ? stock.getName() : "N/A").append("</td>");
+                        html.append("<td style='padding: 10px 8px; text-align: center; color: #64748b; font-size: 11px;'>").append(stock.getSymbol() != null ? stock.getSymbol() : "N/A").append("</td>");
+                        html.append("<td style='padding: 10px 8px; text-align: right; color: #1e293b; font-weight: 600; font-size: 12px;'>");
+                        html.append(stock.getLasttrade() != null ? String.format("%.2f", stock.getLasttrade()) : "N/A").append("</td>");
+                        html.append("<td style='padding: 10px 8px; text-align: right; font-weight: 600; color: ").append(changeColor).append("; font-size: 12px;'>");
+                        if (stock.getChangePercent() != null) {
+                            html.append(stock.getChangePercent() >= 0 ? "+" : "").append(String.format("%.2f%%", stock.getChangePercent()));
+                        } else {
+                            html.append("N/A");
+                        }
+                        html.append("</td>");
+                        html.append("</tr>");
+                    }
+                }
+
+                html.append("</tbody>");
+                html.append("</table>");
+                html.append("</div>");
+            }
+        }
+
         return cleanupHtml(html.toString());
     }
 

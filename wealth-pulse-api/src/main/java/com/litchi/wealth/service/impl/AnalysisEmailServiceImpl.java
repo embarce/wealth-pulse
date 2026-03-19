@@ -425,6 +425,66 @@ public class AnalysisEmailServiceImpl implements AnalysisEmailService {
             html.append("</div>");
         }
 
+        // 热门股票
+        if (snapshot.getMarketBreadth() != null && snapshot.getMarketBreadth().getHotStocks() != null) {
+            HkStockMarketAnalysisVo.HotStocks hotStocks = snapshot.getMarketBreadth().getHotStocks();
+            if (hotStocks.getStocks() != null && !hotStocks.getStocks().isEmpty()) {
+                html.append("<div class='snapshot-section'>");
+                html.append("<div class='snapshot-title'>");
+                html.append("<svg class='snapshot-title-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>");
+                html.append("<path d='M13 2L3 14H12L11 22L21 10H12L13 2z'/>");
+                html.append("</svg>今日热门股票</div>");
+
+                html.append("<div class='hot-stocks-note'>");
+                html.append("<span>数据时间：").append(hotStocks.getHqTime() != null ? hotStocks.getHqTime() : "N/A").append("</span>");
+                html.append("<span> | </span>");
+                html.append("<span>市场状态：").append(hotStocks.getHqStatus() != null ? hotStocks.getHqStatus() : "N/A").append("</span>");
+                html.append("</div>");
+
+                html.append("<table class='snapshot-table hot-stocks-table'>");
+                html.append("<thead><tr>");
+                html.append("<th>排名</th>");
+                html.append("<th>股票名称</th>");
+                html.append("<th>股票代码</th>");
+                html.append("<th style='text-align: right;'>最新价</th>");
+                html.append("<th style='text-align: right;'>涨跌幅</th>");
+                html.append("<th style='text-align: right;'>成交额 (亿港元)</th>");
+                html.append("</tr></thead><tbody>");
+
+                int rank = 0;
+                for (HkStockMarketAnalysisVo.HotStockItem stock : hotStocks.getStocks()) {
+                    if (stock != null && rank < 10) { // 只展示前 10 只热门股票
+                        rank++;
+                        String changeClass = stock.getChangePercent() != null && stock.getChangePercent() >= 0 ? "change-up" : "change-down";
+                        html.append("<tr>");
+                        html.append("<td style='text-align: center;'>").append(rank).append("</td>");
+                        html.append("<td>").append(stock.getName() != null ? stock.getName() : "N/A").append("</td>");
+                        html.append("<td style='text-align: center;'>").append(stock.getSymbol() != null ? stock.getSymbol() : "N/A").append("</td>");
+                        html.append("<td style='text-align: right;'>");
+                        html.append(stock.getLasttrade() != null ? String.format("%.2f", stock.getLasttrade()) : "N/A").append("</td>");
+                        html.append("<td style='text-align: right;' class='").append(changeClass).append("'>");
+                        if (stock.getChangePercent() != null) {
+                            html.append(stock.getChangePercent() >= 0 ? "+" : "").append(String.format("%.2f%%", stock.getChangePercent()));
+                        } else {
+                            html.append("N/A");
+                        }
+                        html.append("</td>");
+                        html.append("<td style='text-align: right;'>");
+                        if (stock.getAmount() != null) {
+                            html.append(String.format("%.2f", stock.getAmount() / 100000000));
+                        } else {
+                            html.append("N/A");
+                        }
+                        html.append("</td>");
+                        html.append("</tr>");
+                    }
+                }
+
+                html.append("</tbody></table>");
+                html.append("</div>");
+            }
+        }
+
         html.append("</div>");
         return html.toString();
     }
