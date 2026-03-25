@@ -60,9 +60,9 @@ public class WechatJob {
     }
 
     /**
-     * 每天 9:45、14:45、18:45 执行
+     * 每天 10:00 14:00 19:00 执行
      */
-    @Scheduled(cron = "0 45 9,14,18 * * ?")
+    @Scheduled(cron = "0 0 10,14,19 * * ?")
     public void publishAnalysisToWechat() {
         // 检查 Job 是否启用
         if (!wechatJobEnabled) {

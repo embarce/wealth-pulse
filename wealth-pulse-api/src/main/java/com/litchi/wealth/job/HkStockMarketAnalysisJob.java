@@ -59,9 +59,9 @@ public class HkStockMarketAnalysisJob {
 
 
     /**
-     * 每天9:00、14:00、18:00 执行
+     * 每天9:50、14:50、18:50 执行
      */
-    @Scheduled(cron = "0 35 9,14,18 * * ?")
+    @Scheduled(cron = "0 50 9,14,18 * * ?")
     public void analyzeHkStockMarketDaily() {
         log.info("========== 开始执行港股市场 AI 分析定时任务 ==========");
         long startTime = System.currentTimeMillis();
