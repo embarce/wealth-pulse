@@ -403,11 +403,34 @@ public class MarkdownUtils {
             html.append("</div>");
         }
 
-        // 页脚
-        html.append("<div style='background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px; text-align: center; border-radius: 0 0 16px 16px; margin-top: 20px;'>");
-        html.append("<p style='font-size: 12px; color: #9ca3af; line-height: 1.6; margin: 0 0 8px 0;'>此报告由 AI 自动生成，仅供参考，不构成投资建议。</p>");
-        html.append("<p style='font-size: 12px; color: #9ca3af; line-height: 1.6; margin: 0 0 12px 0;'>市场有风险，投资需谨慎。</p>");
-        html.append("<div style='font-size: 13px; color: #6b7280; font-weight: 600; margin-top: 12px;'>© 2026 Wealth Pulse · 荔影科技</div>");
+        // 页脚 - 引导关注
+        html.append("<div style='background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 16px; padding: 24px 20px; text-align: center; margin-top: 20px; position: relative; overflow: hidden;'>");
+        html.append("<div style='position: absolute; top: -20%; right: -10%; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%;'></div>");
+        html.append("<div style='position: absolute; bottom: -15%; left: -5%; width: 80px; height: 80px; background: rgba(255,255,255,0.08); border-radius: 50%;'></div>");
+        html.append("<div style='position: relative; z-index: 1;'>");
+        html.append("<div style='font-size: 16px; font-weight: 700; color: #ffffff; margin: 0 0 12px 0;'>📈 关注 Wealth Pulse · 财富脉搏</div>");
+        html.append("<div style='font-size: 13px; color: rgba(255,255,255,0.9); line-height: 1.6; margin: 0 0 16px 0;'>每日港股市场深度分析，AI 智能解读财经动态</div>");
+        html.append("<div style='display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;'>");
+        html.append("<div style='background: rgba(255,255,255,0.2); border-radius: 20px; padding: 6px 14px; font-size: 12px; color: #ffffff; display: flex; align-items: center; gap: 6px;'>");
+        html.append("<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'><path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/></svg>");
+        html.append("市场分析");
+        html.append("</div>");
+        html.append("<div style='background: rgba(255,255,255,0.2); border-radius: 20px; padding: 6px 14px; font-size: 12px; color: #ffffff; display: flex; align-items: center; gap: 6px;'>");
+        html.append("<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'><path d='M12 20.94c1.5 0 3-1.06 4-3C16.6 16 18 14.41 18 12c0-3.31-2.69-6-6-6s-6 2.69-6 6c0 2.22 1.21 4.15 3 5.19V22l3-1.06Z'/></svg>");
+        html.append("财经洞察");
+        html.append("</div>");
+        html.append("<div style='background: rgba(255,255,255,0.2); border-radius: 20px; padding: 6px 14px; font-size: 12px; color: #ffffff; display: flex; align-items: center; gap: 6px;'>");
+        html.append("<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'><circle cx='12' cy='12' r='10'/><path d='M12 16v-4'/><path d='M12 8h.01'/></svg>");
+        html.append("金融知识");
+        html.append("</div>");
+        html.append("</div>");
+        html.append("</div>");
+        html.append("</div>");
+
+        // 底部版权信息
+        html.append("<div style='background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px; text-align: center; margin-top: 0;'>");
+        html.append("<p style='font-size: 11px; color: #9ca3af; line-height: 1.6; margin: 0 0 6px 0;'>此报告由 AI 自动生成，仅供参考，不构成投资建议。</p>");
+        html.append("<p style='font-size: 11px; color: #9ca3af; line-height: 1.6; margin: 0;'>市场有风险，投资需谨慎。© 2026 Wealth Pulse · 荔影科技</p>");
         html.append("</div>");
 
         // 清理 HTML 中的多余换行和空白

@@ -1,9 +1,16 @@
 package com.litchi.wealth.utils;
 
+import cn.hutool.core.date.DateUtil;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
+import com.litchi.wealth.dto.HolidayInfo;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
+
+import static com.litchi.wealth.constant.Constants.HOLIDAY_JSON;
 
 /**
  * 港股交易手续费计算工具类
@@ -336,5 +343,22 @@ public class HkStockFeeCalculator {
                 "5. 交易所结算交收费：0.0042% (向上取整)\n" +
                 "6. 会财局交易征费：0.00015% (向上取整)\n\n" +
                 "印花税和平台费四舍五入，其他费用向上取整到小数点后 2 位";
+    }
+
+
+    public static HolidayInfo getHolidayFlag() {
+        String today = DateUtil.today();
+        List<JSONObject> list = JSONUtil.toList(HOLIDAY_JSON, JSONObject.class);
+        for (JSONObject jsonObject : list) {
+            String dateStr = jsonObject.getStr("date");
+            if (dateStr.equals(today)) {
+                // 检查是否为港股休市
+                String market = jsonObject.getStr("market");
+                boolean isHongKongClosed = market != null && market.contains("香港市场休市");
+                return HolidayInfo.fromJson(jsonObject, !isHongKongClosed);
+            }
+        }
+        // 今天不是假期
+        return HolidayInfo.nonHoliday(today);
     }
 }

@@ -1,6 +1,7 @@
 package com.litchi.wealth.job;
 
 import cn.hutool.core.date.DateUtil;
+import com.litchi.wealth.dto.HolidayInfo;
 import com.litchi.wealth.dto.ai.HkStockMarketAnalysisRequest;
 import com.litchi.wealth.rpc.PythonStockRpc;
 import com.litchi.wealth.service.AnalysisEmailService;
@@ -12,9 +13,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 import static com.litchi.wealth.constant.Constants.ANALYSIS_REDIS_KEY_PREFIX;
+import static com.litchi.wealth.utils.HkStockFeeCalculator.getHolidayFlag;
 
 /**
  * 港股市场 AI 分析定时任务
@@ -61,7 +64,7 @@ public class HkStockMarketAnalysisJob {
     /**
      * 每天9:50、14:50、18:50 执行
      */
-    @Scheduled(cron = "0 50 9,14,18 * * ?")
+    @Scheduled(cron = "0 50 9,14,18 * * MON-FRI")
     public void analyzeHkStockMarketDaily() {
         log.info("========== 开始执行港股市场 AI 分析定时任务 ==========");
         long startTime = System.currentTimeMillis();
@@ -69,6 +72,13 @@ public class HkStockMarketAnalysisJob {
         try {
             // 获取今天日期
             String today = DateUtil.today();
+            // 确定是否为公共假期
+            HolidayInfo holidayInfo = getHolidayFlag();
+            if (holidayInfo.getIsHoliday() && !holidayInfo.getNeedSettle()) {
+                log.info("今天是公共假期 [{}]，假期名称 [{}]，市场休市信息 [{}]，不进行分析",
+                        holidayInfo.getDate(), holidayInfo.getName(), holidayInfo.getMarket());
+                return;
+            }
             String redisKey = ANALYSIS_REDIS_KEY_PREFIX + today;
 
             log.info("开始调用 Python AI 服务分析港股市场...");

@@ -4,6 +4,7 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.http.HttpUtil;
 import com.litchi.wealth.constant.Constants;
+import com.litchi.wealth.dto.HolidayInfo;
 import com.litchi.wealth.dto.rpc.WechatDraftAddRequest;
 import com.litchi.wealth.dto.rpc.WechatFreePublishSubmitRequest;
 import com.litchi.wealth.dto.rpc.WechatUploadMaterialRequest;
@@ -26,6 +27,8 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.util.Collections;
+
+import static com.litchi.wealth.utils.HkStockFeeCalculator.getHolidayFlag;
 
 /**
  * 微信发布定时任务
@@ -60,9 +63,9 @@ public class WechatJob {
     }
 
     /**
-     * 每天 10:00 14:00 19:00 执行
+     * 周一到周五 10:00 19:00 执行
      */
-    @Scheduled(cron = "0 0 10,14,19 * * ?")
+    @Scheduled(cron = "0 0 10,19 * * MON-FRI")
     public void publishAnalysisToWechat() {
         // 检查 Job 是否启用
         if (!wechatJobEnabled) {
@@ -74,6 +77,13 @@ public class WechatJob {
         long startTime = System.currentTimeMillis();
 
         try {
+            // 确定是否为公共假期
+            HolidayInfo holidayInfo = getHolidayFlag();
+            if (holidayInfo.getIsHoliday() && !holidayInfo.getNeedSettle()) {
+                log.info("今天是公共假期 [{}]，假期名称 [{}]，市场休市信息 [{}]，不进行分析",
+                        holidayInfo.getDate(), holidayInfo.getName(), holidayInfo.getMarket());
+                return;
+            }
             // 获取今天日期
             String today = DateUtil.today();
             String redisKey = Constants.ANALYSIS_REDIS_KEY_PREFIX + today;
@@ -236,7 +246,6 @@ public class WechatJob {
 
         try {
             // 构建文章内容
-            String now = DateUtil.now();
             String marketStatus = getMarketStatus();
             String title = today + "港股" + marketStatus;
             String digest = buildDigest(analysis);
