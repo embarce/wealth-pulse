@@ -7,25 +7,58 @@
 2. analyze_position - 持仓组合 AI 分析（多只股票综合评估）
 3. analyze_hkstock_market - 港股市场新闻分析（基于新浪财经新闻给出投资建议）
 """
-import logging
-from typing import Dict, Any, Optional, List
-from datetime import date, datetime, timedelta
-from sqlalchemy.orm import Session
 import json
+import logging
+from datetime import date, timedelta
+from typing import Dict, Any, Optional, List
 
+import akshare as ak
+import numpy as np
+from sqlalchemy.orm import Session
+
+from app.llm import llm_service
 from app.models.stock_info import StockInfo
 from app.models.stock_market_data import StockMarketData
 from app.models.stock_market_history import StockMarketHistory
-from app.llm import llm_service
-from app.services.stock_service import StockService
-from app.services.sina_company_info_crawler import sina_company_info_crawler
-from app.services.sina_news_crawler import sina_news_crawler
-from app.services.sina_finance_crawler import sina_finance_crawler
-from app.services.sina_company_notice_crawler import sina_company_notice_crawler
 from app.services.akshare_provider import AkShareProvider
+from app.services.sina_company_info_crawler import sina_company_info_crawler
+from app.services.sina_company_notice_crawler import sina_company_notice_crawler
+from app.services.sina_finance_crawler import sina_finance_crawler
 from app.services.sina_hkstock_crawler import SinaHKStockCrawler
+from app.services.sina_news_crawler import sina_news_crawler
+from app.services.sina_forex_crawler import sina_forex_crawler
+from app.services.ubs_southbound_crawler import ubs_southbound_crawler
+from app.services.sina_hot_stocks_crawler import sina_hot_stocks_crawler
+from app.services.stock_service import StockService
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_to_python_type(value: Any) -> Any:
+    """
+    将 numpy/pandas 类型转换为 Python 原生类型
+
+    Args:
+        value: 任意值
+
+    Returns:
+        转换后的 Python 原生类型值
+    """
+    if value is None:
+        return None
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.floating):
+        return float(value)
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.bool_):
+        return bool(value)
+    # pandas 类型
+    import pandas as pd
+    if pd.isna(value):
+        return None
+    return value
 
 
 class StockAnalysisService:
@@ -48,13 +81,13 @@ class StockAnalysisService:
         self.akshare_provider = AkShareProvider()
 
     async def analyze_stock(
-        self,
-        stock_code: str,
-        period: str = "daily",
-        days: int = 60,
-        force_refresh: bool = False,
-        provider: Optional[str] = None,
-        model: Optional[str] = None
+            self,
+            stock_code: str,
+            period: str = "daily",
+            days: int = 60,
+            force_refresh: bool = False,
+            provider: Optional[str] = None,
+            model: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         AI 分析股票
@@ -100,14 +133,14 @@ class StockAnalysisService:
 
         # 4. 获取公司信息（新浪）
         try:
-            company_info = sina_company_info_crawler.fetch_company_info_sync(stock_code)
+            company_info = await sina_company_info_crawler.fetch_company_info(stock_code)
         except Exception as e:
             logger.warning(f"[StockAnalysis] 获取公司信息失败：{e}")
             company_info = {}
 
         # 5. 获取新闻（新浪）
         try:
-            news_items = sina_news_crawler.fetch_stock_news_sync(stock_code)
+            news_items = await sina_news_crawler.fetch_stock_news(stock_code)
             # 只取最近 5 条新闻
             recent_news = news_items[:5] if news_items else []
         except Exception as e:
@@ -116,14 +149,14 @@ class StockAnalysisService:
 
         # 6. 获取财务指标（新浪）
         try:
-            financial_data = sina_finance_crawler.fetch_financial_indicators_sync(stock_code)
+            financial_data = await sina_finance_crawler.fetch_financial_indicators(stock_code)
         except Exception as e:
             logger.warning(f"[StockAnalysis] 获取财务指标失败：{e}")
             financial_data = {}
 
         # 7. 获取公告（新浪）
         try:
-            notices = sina_company_notice_crawler.fetch_company_notices_sync(stock_code, max_pages=1)
+            notices = await sina_company_notice_crawler.fetch_company_notices(stock_code, max_pages=1)
             # 只取最近 3 条公告
             recent_notices = notices[:3] if notices else []
         except Exception as e:
@@ -171,11 +204,11 @@ class StockAnalysisService:
             raise
 
     async def analyze_position(
-        self,
-        positions: List[Dict[str, Any]],
-        analysis_depth: str = "standard",
-        provider: Optional[str] = None,
-        model: Optional[str] = None
+            self,
+            positions: List[Dict[str, Any]],
+            analysis_depth: str = "standard",
+            provider: Optional[str] = None,
+            model: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         AI 分析持仓
@@ -242,12 +275,12 @@ class StockAnalysisService:
                 company_info = {}
                 financial_data = {}
                 try:
-                    company_info = sina_company_info_crawler.fetch_company_info_sync(stock_code)
+                    company_info = await sina_company_info_crawler.fetch_company_info(stock_code)
                 except Exception:
                     pass
 
                 try:
-                    financial_data = sina_finance_crawler.fetch_financial_indicators_sync(stock_code)
+                    financial_data = await sina_finance_crawler.fetch_financial_indicators(stock_code)
                 except Exception:
                     pass
 
@@ -329,11 +362,11 @@ class StockAnalysisService:
             raise
 
     def _get_history_data_with_fallback(
-        self,
-        stock_code: str,
-        start_date: date,
-        end_date: date,
-        limit: int = 100
+            self,
+            stock_code: str,
+            start_date: date,
+            end_date: date,
+            limit: int = 100
     ) -> List[StockMarketHistory]:
         """
         获取历史数据，带有 fallback 机制
@@ -394,9 +427,9 @@ class StockAnalysisService:
         return []
 
     def _convert_to_history(
-        self,
-        ak_data: List[Dict[str, Any]],
-        stock_code: str
+            self,
+            ak_data: List[Dict[str, Any]],
+            stock_code: str
     ) -> List[StockMarketHistory]:
         """
         将 akshare 返回的数据转换为 StockMarketHistory 对象列表
@@ -461,15 +494,15 @@ class StockAnalysisService:
         }
 
     def _build_analysis_prompt(
-        self,
-        stock_code: str,
-        stock_info: StockInfo,
-        market_data: StockMarketData,
-        history_data: List[StockMarketHistory],
-        company_info: Dict[str, Any],
-        recent_news: List[Dict[str, Any]],
-        financial_data: Dict[str, Any],
-        recent_notices: List[Dict[str, Any]]
+            self,
+            stock_code: str,
+            stock_info: StockInfo,
+            market_data: StockMarketData,
+            history_data: List[StockMarketHistory],
+            company_info: Dict[str, Any],
+            recent_news: List[Dict[str, Any]],
+            financial_data: Dict[str, Any],
+            recent_notices: List[Dict[str, Any]]
     ) -> str:
         """构建 LLM 分析 Prompt"""
 
@@ -655,10 +688,10 @@ class StockAnalysisService:
             }
 
     def _build_position_analysis_prompt(
-        self,
-        stocks_data: List[Dict[str, Any]],
-        portfolio_stats: Dict[str, Any],
-        analysis_depth: str
+            self,
+            stocks_data: List[Dict[str, Any]],
+            portfolio_stats: Dict[str, Any],
+            analysis_depth: str
     ) -> str:
         """构建持仓分析 Prompt"""
 
@@ -686,7 +719,7 @@ class StockAnalysisService:
   - 数据点数：{stock['history_summary'].get('data_points', 0)}
   - 期间最高：{stock['history_summary'].get('highest', 'N/A')}
   - 期间最低：{stock['history_summary'].get('lowest', 'N/A')}
-  - 期间均价：{stock['history_summary'].get('average', 'N/A') }
+  - 期间均价：{stock['history_summary'].get('average', 'N/A')}
 - **公司信息**: {stock['company_info'].get('business', 'N/A')[:150]}
 - **财务摘要**: PE={stock['financial_summary'].get('pe_ratio', 'N/A')}, PB={stock['financial_summary'].get('pb_ratio', 'N/A')}, ROE={stock['financial_summary'].get('roe', 'N/A')}
 
@@ -774,10 +807,10 @@ class StockAnalysisService:
         return prompt
 
     def _parse_position_analysis_result(
-        self,
-        llm_output: str,
-        stocks_data: List[Dict[str, Any]],
-        portfolio_stats: Dict[str, Any]
+            self,
+            llm_output: str,
+            stocks_data: List[Dict[str, Any]],
+            portfolio_stats: Dict[str, Any]
     ) -> Dict[str, Any]:
         """解析持仓分析结果"""
 
@@ -819,11 +852,13 @@ class StockAnalysisService:
                     "investment_style": "未知"
                 },
                 "position_scores": [
-                    {"stock_code": s["stock_code"], "score": 0, "grade": "N/A", "holding_quality": "未知", "profit_prospect": "未知", "risk_warning": "解析失败"}
+                    {"stock_code": s["stock_code"], "score": 0, "grade": "N/A", "holding_quality": "未知",
+                     "profit_prospect": "未知", "risk_warning": "解析失败"}
                     for s in stocks_data
                 ],
                 "position_recommendations": [
-                    {"stock_code": s["stock_code"], "action": "持有", "reason": "解析失败，建议手动分析", "confidence": "low"}
+                    {"stock_code": s["stock_code"], "action": "持有", "reason": "解析失败，建议手动分析",
+                     "confidence": "low"}
                     for s in stocks_data
                 ],
                 "portfolio_stats": portfolio_stats,
@@ -832,17 +867,24 @@ class StockAnalysisService:
             }
 
     async def analyze_hkstock_market(
-        self,
-        news_data: Optional[Dict[str, Any]] = None,
-        provider: Optional[str] = None,
-        model: Optional[str] = None
-    ) -> str:
+            self,
+            news_data: Optional[Dict[str, Any]] = None,
+            provider: Optional[str] = None,
+            model: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
-        AI 分析港股市场新闻，给出投资建议
+        AI 分析港股市场新闻，给出投资建议（优化版 - 两阶段压缩分析）
 
         基于新浪财经爬取的港股新闻（要闻 + 大行研报 + 公司新闻），
-        通过 LLM 分析最近的投资方向、政策变动、经济状况等，
-        并提供投资策略建议
+        通过 LLM 两阶段分析：
+        - 第一阶段：压缩提炼新闻，提取重要信息并分类标签
+        - 第二阶段：基于压缩后的新闻和市场快照生成投资策略报告
+
+        优化亮点：
+        1. 去除 20 条新闻限制，原始新闻全部传入第一阶段
+        2. LLM 压缩新闻至 500-800 字（原来可能数千字），节省 token
+        3. 第二阶段只传入压缩后的新闻，不传入原始新闻
+        4. 加入市场动态数据快照（恆生指数、美股、汇率、南向资金、涨跌比、今日热门股票）
 
         Args:
             news_data: 新闻数据字典，包含 important_news, rank_news, company_news
@@ -851,57 +893,120 @@ class StockAnalysisService:
             model: 模型名称
 
         Returns:
-            Markdown 格式的投资建议报告
+            包含以下字段的字典：
+            - market_snapshot: 市场动态数据快照
+                - index_performance: 指数表现（恆生指数）
+                - external_sentiment: 外部情绪（美股中概股）
+                - currency_liquidity: 货币与流动性（美元/人民币汇率、南向资金流向）
+                - market_breadth: 市场宽度（涨跌家数、热门股票）
+            - compressed_news: LLM 压缩后的新闻摘要（Markdown 格式，含分类标签）
+            - investment_report: Markdown 格式的投资策略报告
+            - news_summary: 新闻摘要统计信息
+            - _llm: LLM 调用信息（provider, model）
         """
-        logger.info("[HKStockMarketAnalysis] 开始分析港股市场新闻")
+        logger.info("[HKStockMarketAnalysis] 开始分析港股市场新闻（优化版）")
 
         # 1. 获取新闻数据
         if news_data is None:
             logger.info("[HKStockMarketAnalysis] 自动获取新闻数据")
             try:
                 crawler = SinaHKStockCrawler()
-                news_data = crawler.fetch_all_news_sync()
+                news_data = await crawler.fetch_all_news()
                 logger.info(f"[HKStockMarketAnalysis] 获取到 {news_data['summary']['total_count']} 条新闻")
             except Exception as e:
                 logger.error(f"[HKStockMarketAnalysis] 获取新闻数据失败：{e}")
                 raise ValueError(f"无法获取港股新闻数据：{e}")
 
-        # 2. 构建新闻文本
-        news_text = self._build_hkstock_news_text(news_data)
+        # 保存新闻摘要统计信息
+        news_summary = news_data.get('summary', {})
 
-        # 3. 构建分析 Prompt
-        prompt = self._build_hkstock_market_analysis_prompt(news_text)
+        # 2. 获取港股市场动态数据快照
+        logger.info("[HKStockMarketAnalysis] 获取市场动态数据快照")
+        market_snapshot = await self._get_hk_market_snapshot()
 
-        # 4. 调用 LLM 分析（使用流式调用，收集完整文本）
+        # 3. 构建新闻文本（不限制条数，供第一阶段压缩使用）
+        news_text = self._build_hkstock_news_text(news_data, max_news_per_category=50)
+
+        # 4. 第一阶段：LLM 压缩总结新闻（流式返回）
+        # 目标：从大量新闻中提取重要信息，输出压缩后的新闻内容（而非仅仅 JSON）
+        logger.info("[HKStockMarketAnalysis] 第一阶段：LLM 压缩总结新闻（流式）")
+        news_compress_prompt = self._build_news_compress_prompt(news_text, market_snapshot)
+
         try:
             content_parts = []
             async for chunk in llm_service.chat_stream(
-                messages=[{"role": "user", "content": prompt}],
-                provider=provider,
-                model=model,
-                temperature=0.5,  # 降低温度，使分析更稳定
-                max_tokens=8000
+                    messages=[{"role": "user", "content": news_compress_prompt}],
+                    provider=provider,
+                    model=model,
+                    temperature=0.3,  # 较低温度，使总结更稳定
+                    max_tokens=3000
             ):
                 if chunk.content:
                     content_parts.append(chunk.content)
 
-            result = "".join(content_parts)
-            logger.info("[HKStockMarketAnalysis] 分析完成")
-            return result
+            compressed_news = "".join(content_parts)
+            logger.info("[HKStockMarketAnalysis] 新闻压缩完成")
+        except Exception as e:
+            logger.error(f"[HKStockMarketAnalysis] 新闻压缩失败：{e}")
+            # 如果压缩失败，使用原始新闻（会警告）
+            compressed_news = news_text
+            logger.warning("[HKStockMarketAnalysis] 新闻压缩失败，使用原始新闻")
+
+        # 5. 第二阶段：基于压缩后的新闻 + 市场快照生成分析报告
+        # 注意：只传入压缩后的新闻，不传入原始新闻，节省 token
+        logger.info("[HKStockMarketAnalysis] 第二阶段：生成投资分析报告")
+        analysis_prompt = self._build_hkstock_market_analysis_prompt_v2(
+            compressed_news=compressed_news,
+            market_snapshot=market_snapshot
+        )
+        print(analysis_prompt)
+        try:
+            content_parts = []
+            async for chunk in llm_service.chat_stream(
+                    messages=[{"role": "user", "content": analysis_prompt}],
+                    provider=provider,
+                    model=model,
+                    temperature=0.5,
+                    max_tokens=6000
+            ):
+                if chunk.content:
+                    content_parts.append(chunk.content)
+
+            investment_report = "".join(content_parts)
+            logger.info("[HKStockMarketAnalysis] 分析报告生成完成")
+
+            # market_snapshot 在构建时已经转换为 Python 原生类型，无需额外处理
+
+            return {
+                "market_snapshot": market_snapshot,
+                "compressed_news": compressed_news,  # 压缩后的新闻
+                "investment_report": investment_report,
+                "news_summary": news_summary,  # 新闻摘要统计
+                "_llm": {
+                    "provider": provider or llm_service.get_provider_info().name,
+                    "model": model or llm_service.get_provider_info(provider).model,
+                }
+            }
 
         except Exception as e:
-            logger.error(f"[HKStockMarketAnalysis] LLM 分析失败：{e}")
+            logger.error(f"[HKStockMarketAnalysis] 分析报告生成失败：{e}")
             raise
 
-    def _build_hkstock_news_text(self, news_data: Dict[str, Any]) -> str:
-        """构建新闻文本"""
+    def _build_hkstock_news_text(self, news_data: Dict[str, Any], max_news_per_category: int = 60) -> str:
+        """
+        构建新闻文本
+
+        Args:
+            news_data: 新闻数据字典
+            max_news_per_category: 每个类别最大新闻数量，默认 50 条（原来限制 20 条）
+        """
         lines = []
 
         # 要闻
         important_news = news_data.get('important_news', [])
         if important_news:
             lines.append("【要闻】")
-            for i, news in enumerate(important_news[:20], 1):
+            for i, news in enumerate(important_news[:max_news_per_category], 1):
                 title = news.get('title', '')
                 lines.append(f"  {i}. {title}")
             lines.append("")
@@ -910,7 +1015,7 @@ class StockAnalysisService:
         rank_news = news_data.get('rank_news', [])
         if rank_news:
             lines.append("【大行研报】")
-            for i, news in enumerate(rank_news[:20], 1):
+            for i, news in enumerate(rank_news[:max_news_per_category], 1):
                 title = news.get('title', '')
                 publish_time = news.get('publish_time', '')
                 line = f"  {i}. {title}"
@@ -923,7 +1028,7 @@ class StockAnalysisService:
         company_news = news_data.get('company_news', [])
         if company_news:
             lines.append("【公司新闻】")
-            for i, news in enumerate(company_news[:20], 1):
+            for i, news in enumerate(company_news[:max_news_per_category], 1):
                 title = news.get('title', '')
                 publish_time = news.get('publish_time', '')
                 line = f"  {i}. {title}"
@@ -940,6 +1045,597 @@ class StockAnalysisService:
         lines.append(f"  - 公司新闻：{summary.get('company_news_count', 0)} 条")
 
         return "\n".join(lines)
+
+    async def _get_hk_market_snapshot(self) -> Dict[str, Any]:
+        """
+        获取港股市场动态数据快照（异步版本 - 使用新浪外汇爬虫）
+
+        包含：
+        1. 指數表現：恆生指數最新價、漲跌幅、成交額
+        2. 外部情緒：美股中概股表現（納斯達克中國金龍指數）
+        3. 貨幣與流動性：美元/離岸人民幣匯率（使用新浪外汇爬虫）、南向資金淨流入
+        4. 市場寬度：港股上漲家數等
+        5. 今日熱門股票：新浪热门港股排行榜（使用新浪热门股票爬虫）
+
+        Returns:
+            市场快照数据字典
+        """
+        snapshot = {
+            "index_performance": {},  # 指數表現
+            "external_sentiment": {},  # 外部情緒（美股中概股）
+            "currency_liquidity": {},  # 貨幣與流動性
+            "market_breadth": {},  # 市場寬度
+            "data_status": "partial"  # 数据状态：complete/partial/failed
+        }
+
+        try:
+            # 1. 港股大盤：恆生指數 (HSI)
+            try:
+                hsi_data = self.akshare_provider.get_index_spot_data("HSI")
+                if hsi_data:
+                    snapshot["index_performance"] = {
+                        "index_name": "恆生指數",
+                        "index_code": "HSI",
+                        "latest_price": hsi_data.get("last_price"),
+                        "change_rate": hsi_data.get("change_rate"),
+                        "turnover": hsi_data.get("turnover"),  # 成交額
+                        "quote_time": hsi_data.get("quote_time")
+                    }
+                else:
+                    snapshot["index_performance"] = {"index_name": "恆生指數", "status": "data_unavailable"}
+            except Exception as e:
+                logger.warning(f"[MarketSnapshot] 获取恆生指數数据失败：{e}")
+                snapshot["index_performance"] = {"index_name": "恆生指數", "status": "fetch_failed"}
+
+            # 2. 外部環境：美股中概股 (納斯達克中國金龍指數 .HXC)
+            try:
+                # 获取美股指数数据
+                nasdaq_data = self.akshare_provider.get_us_index_spot(".HXC")
+                # 注意：.HXC (纳斯达克中国金龙指数) 可能不在标准美股指数列表中
+                if nasdaq_data:
+                    snapshot["external_sentiment"] = {
+                        "index_name": "納斯達克中國金龍指數",
+                        "latest_price": nasdaq_data.get("last_price"),
+                        "change_rate": nasdaq_data.get("change_rate"),
+                        "note": "美股昨收，反映昨日情緒"
+                    }
+                else:
+                    snapshot["external_sentiment"] = {"status": "data_unavailable"}
+            except Exception as e:
+                logger.warning(f"[MarketSnapshot] 获取美股中概股数据失败：{e}")
+                snapshot["external_sentiment"] = {"status": "fetch_failed"}
+
+            # 3. 貨幣與流動性：美元/離岸人民幣 (USD/CNY) - 使用新浪外汇爬虫
+            try:
+                usd_cny_data = await sina_forex_crawler.fetch_usd_cny()
+                if usd_cny_data:
+                    snapshot["currency_liquidity"]["usd_cny"] = {
+                        "symbol": "USDCNY",
+                        "name": "美元人民币",
+                        "last_price": usd_cny_data.get("last_price"),
+                        "change": usd_cny_data.get("change_number"),
+                        "change_rate": usd_cny_data.get("change_rate"),
+                        "high": usd_cny_data.get("high_price"),
+                        "low": usd_cny_data.get("low_price"),
+                        "open": usd_cny_data.get("open_price"),
+                        "pre_close": usd_cny_data.get("pre_close"),
+                        "time": usd_cny_data.get("time"),
+                        "date": usd_cny_data.get("date"),
+                        "data_source": "新浪财经外汇",
+                        "note": "人民币走势直接影响港股中的内资股估值"
+                    }
+                else:
+                    snapshot["currency_liquidity"]["usd_cny"] = {"status": "data_unavailable"}
+            except Exception as e:
+                logger.warning(f"[MarketSnapshot] 获取美元/人民币汇率数据失败（新浪外汇爬虫）：{e}")
+                snapshot["currency_liquidity"]["usd_cny"] = {"status": "fetch_failed"}
+
+            # 4. 資金流向：南向资金流向（使用 UBS 爬虫）
+            try:
+                southbound_data = await ubs_southbound_crawler.fetch_southbound_flow()
+
+                if southbound_data.get('success'):
+                    data = southbound_data.get('data', {})
+
+                    # 格式化南向资金流向数据为文本，供 LLM 分析使用
+                    fund_flow_lines = ["【南向资金流向】"]
+
+                    # 总体统计
+                    total_inflow = data.get('total_inflow', 0)
+                    total_outflow = data.get('total_outflow', 0)
+                    net_inflow = data.get('net_inflow', 0)
+
+                    fund_flow_lines.append(f"  - 总流入：{total_inflow:.2f}亿港元")
+                    fund_flow_lines.append(f"  - 总流出：{total_outflow:.2f}亿港元")
+                    fund_flow_lines.append(f"  - 净流入：{net_inflow:.2f}亿港元")
+                    fund_flow_lines.append(f"  - 数据日期：{data.get('date_from', 'N/A')} 至 {data.get('date_to', 'N/A')}")
+                    fund_flow_lines.append("")
+
+                    # 净流入前 5 名
+                    inflow_stocks = data.get('inflow_stocks', [])
+                    if inflow_stocks:
+                        fund_flow_lines.append("【南向资金净流入前 5 名】")
+                        for i, stock in enumerate(inflow_stocks[:5], 1):
+                            stock_name = stock.get('stock_name', 'N/A')
+                            stock_code = stock.get('stock_code', 'N/A')
+                            money_flow = stock.get('money_flow', 0) or 0
+                            turnover = stock.get('turnover', 0) or 0
+                            ratio = stock.get('ratio', 0) or 0
+                            price = stock.get('price', 0)
+                            change_rate = stock.get('change_rate', 0)
+                            change_text = f"+{change_rate:.2f}%" if change_rate and change_rate > 0 else f"{change_rate:.2f}%" if change_rate else "0%"
+
+                            fund_flow_lines.append(
+                                f"  {i}. {stock_name} ({stock_code}): "
+                                f"净流入 {money_flow:.2f}亿，成交额 {turnover:.2f}亿，占比 {ratio:.1f}%, "
+                                f"股价 {price:.2f}港元 ({change_text})"
+                            )
+                        fund_flow_lines.append("")
+
+                    # 净流出前 5 名
+                    outflow_stocks = data.get('outflow_stocks', [])
+                    if outflow_stocks:
+                        fund_flow_lines.append("【南向资金净流出前 5 名】")
+                        for i, stock in enumerate(outflow_stocks[:5], 1):
+                            stock_name = stock.get('stock_name', 'N/A')
+                            stock_code = stock.get('stock_code', 'N/A')
+                            money_flow = stock.get('money_flow', 0) or 0
+                            turnover = stock.get('turnover', 0) or 0
+                            ratio = stock.get('ratio', 0) or 0
+                            price = stock.get('price', 0)
+                            change_rate = stock.get('change_rate', 0)
+                            change_text = f"+{change_rate:.2f}%" if change_rate and change_rate > 0 else f"{change_rate:.2f}%" if change_rate else "0%"
+
+                            fund_flow_lines.append(
+                                f"  {i}. {stock_name} ({stock_code}): "
+                                f"净流出 {money_flow:.2f}亿，成交额 {turnover:.2f}亿，占比 {ratio:.1f}%, "
+                                f"股价 {price:.2f}港元 ({change_text})"
+                            )
+
+                    snapshot["currency_liquidity"]["southbound_flow"] = {
+                        "formatted_text": "\n".join(fund_flow_lines),
+                        "date": data.get('date_from'),
+                        "total_inflow": total_inflow,
+                        "total_outflow": total_outflow,
+                        "net_inflow": net_inflow,
+                        "inflow_top5": inflow_stocks[:5],
+                        "outflow_top5": outflow_stocks[:5],
+                        "data_source": "UBS 瑞银",
+                    }
+                else:
+                    snapshot["currency_liquidity"]["southbound_flow"] = {"status": "data_unavailable"}
+
+            except Exception as e:
+                logger.warning(f"[MarketSnapshot] 获取南向资金流向数据失败（UBS 爬虫）：{e}")
+                snapshot["currency_liquidity"]["southbound_flow"] = {"status": "fetch_failed"}
+
+            # 5. 市場寬度：港股上漲家數
+            try:
+                # 获取所有港股实时行情
+                hk_market_data = ak.stock_hk_spot()
+                if hk_market_data is not None and not hk_market_data.empty:
+                    # 计算上涨家数 - 使用 int() 确保转换为 Python 原生类型
+                    positive_count = int(len(hk_market_data[hk_market_data['涨跌幅'] > 0]))
+                    negative_count = int(len(hk_market_data[hk_market_data['涨跌幅'] < 0]))
+                    unchanged_count = int(len(hk_market_data[hk_market_data['涨跌幅'] == 0]))
+
+                    snapshot["market_breadth"] = {
+                        "advancing_stocks": positive_count,  # 上漲家數
+                        "declining_stocks": negative_count,  # 下跌家數
+                        "unchanged_stocks": unchanged_count,  # 平盘家數
+                        "total_stocks": len(hk_market_data),
+                        "advance_decline_ratio": round(positive_count / negative_count,
+                                                       2) if negative_count > 0 else None
+                    }
+                else:
+                    snapshot["market_breadth"] = {"status": "data_unavailable"}
+            except Exception as e:
+                logger.warning(f"[MarketSnapshot] 获取市場寬度数据失败：{e}")
+                snapshot["market_breadth"] = {"status": "fetch_failed"}
+
+            # 6. 今日熱門股票：新浪热门港股（使用新浪热门股票爬虫）
+            try:
+                hot_stocks_data = await sina_hot_stocks_crawler.fetch_hot_stocks(stock_type="hot_hk", limit=20)
+
+                if hot_stocks_data.get('success'):
+                    data = hot_stocks_data.get('data', {})
+                    stocks = data.get('stocks', [])
+
+                    # 格式化热门股票数据为文本，供 LLM 分析使用
+                    hot_stocks_lines = ["【今日热门港股】"]
+                    hot_stocks_lines.append(f"  数据时间：{data.get('hq_time', 'N/A')}")
+                    hot_stocks_lines.append(f"  市场状态：{data.get('hq_status', 'N/A')}")
+                    hot_stocks_lines.append("")
+
+                    for i, stock in enumerate(stocks, 1):
+                        name = stock.get('name', 'N/A')
+                        symbol = stock.get('symbol', 'N/A')
+                        lasttrade = stock.get('lasttrade', 0)
+                        price_change = stock.get('price_change', 0)
+                        change_percent = stock.get('change_percent', 0)
+                        volume = stock.get('volume', 0)
+                        amount = stock.get('amount', 0)
+                        high = stock.get('high', 0)
+                        low = stock.get('low', 0)
+                        open_price = stock.get('open', 0)
+                        prevclose = stock.get('prevclose', 0)
+
+                        # 判断涨跌颜色
+                        change_text = f"+{price_change:.2f}" if price_change > 0 else f"{price_change:.2f}"
+                        pct_text = f"+{change_percent:.2f}%" if change_percent > 0 else f"{change_percent:.2f}%"
+
+                        hot_stocks_lines.append(
+                            f"  {i}. {name} ({symbol}): {lasttrade:.2f}港元 "
+                            f"({change_text}, {pct_text}) "
+                            f"成交：{amount/10000:.2f}亿港元"
+                        )
+
+                    snapshot["market_breadth"]["hot_stocks"] = {
+                        "formatted_text": "\n".join(hot_stocks_lines),
+                        "stocks": stocks,
+                        "count": data.get('count', 0),
+                        "hq_time": data.get('hq_time'),
+                        "hq_status": data.get('hq_status'),
+                        "data_source": "Sina 新浪",
+                    }
+                else:
+                    snapshot["market_breadth"]["hot_stocks"] = {"status": "data_unavailable"}
+
+            except Exception as e:
+                logger.warning(f"[MarketSnapshot] 获取热门股票数据失败（Sina 爬虫）：{e}")
+                snapshot["market_breadth"]["hot_stocks"] = {"status": "fetch_failed"}
+
+            # 检查数据状态
+            available_sections = sum([
+                1 if snapshot["index_performance"].get("latest_price") else 0,
+                1 if snapshot["external_sentiment"].get("latest_price") else 0,
+                1 if snapshot["currency_liquidity"].get("usd_cny", {}).get("last_price") else 0,
+                1 if snapshot["currency_liquidity"].get("southbound_flow", {}).get("formatted_text") else 0,
+                1 if snapshot["market_breadth"].get("advancing_stocks") else 0,
+                1 if snapshot["market_breadth"].get("hot_stocks", {}).get("formatted_text") else 0,
+            ])
+
+            if available_sections >= 4:
+                snapshot["data_status"] = "complete"
+            elif available_sections >= 2:
+                snapshot["data_status"] = "partial"
+            else:
+                snapshot["data_status"] = "limited"
+
+            logger.info(f"[MarketSnapshot] 获取完成，数据状态：{snapshot['data_status']}")
+
+        except Exception as e:
+            logger.error(f"[MarketSnapshot] 获取市场快照数据失败：{e}")
+            snapshot["data_status"] = "failed"
+            snapshot["error"] = str(e)
+
+        return snapshot
+
+    def _build_news_compress_prompt(self, news_text: str, market_snapshot: Dict[str, Any]) -> str:
+        """
+        构建新闻压缩 Prompt（第一阶段）
+
+        目标：从大量原始新闻中压缩提取重要信息，输出结构化的压缩新闻内容
+        输出格式：Markdown 格式，包含分类标签，便于第二阶段分析使用
+        """
+        snapshot_text = self._format_market_snapshot_for_prompt(market_snapshot)
+
+        prompt = f"""你是一位专业的港股市场分析师。请根据以下市场新闻和市场动态数据，进行**压缩提炼**。
+
+## 市场动态数据快照
+
+{snapshot_text}
+
+## 原始新闻汇总（待压缩）
+
+{news_text}
+
+---
+
+## 压缩任务要求
+
+请从以上原始新闻中**压缩提炼**出有价值的内容，按以下结构输出：
+
+### 【政策与宏观】
+筛选标准：重大政策变动、经济数据、国际形势等宏观信息
+格式：`[标签] 新闻标题 - 一句话摘要（20 字内）`
+
+### 【行业热点】
+筛选标准：行业趋势、产业链动态、机构关注度高的板块
+格式：`[标签] 新闻标题 - 一句话摘要（20 字内）`
+
+### 【龙头公司动向】
+筛选标准：龙头企业重大消息、业绩公告、资本运作
+格式：`[标签] 新闻标题 - 一句话摘要（20 字内）`
+
+### 【大行观点】
+筛选标准：主流投行评级、目标价预测、重点推荐
+格式：`[机构] 推荐板块/个股 - 核心观点（20 字内）`
+
+### 【市场情绪】（1-2 条）
+筛选标准：资金流向、投资者情绪、市场共识
+格式：`[标签] 新闻标题 - 情绪影响（20 字内）`
+
+---
+
+## 输出格式要求
+
+1. 使用 Markdown 格式
+2. 每个分类下用无序列表展示
+3. 标签示例：【政策利好】【业绩超预期】【监管收紧】【机构看好】【回购增持】等
+4. 每条新闻严格控制在 30 字以内（标题 + 摘要）
+5. 总体长度控制在 500-800 字
+
+---
+
+## 输出示例
+
+```markdown
+### 【政策与宏观】
+- 【政策利好】央行降准 0.25 个百分点 - 释放长期流动性约 5000 亿元
+- 【经济数据】10 月 PMI 50.2% - 连续 3 个月位于扩张区间
+
+### 【行业热点】
+- 【AI 热潮】微软加大 AI 投资 - 云业务增长超预期
+- 【新能源】欧盟 2035 禁售燃油车 - 利好电动车产业链
+
+### 【龙头公司动向】
+- 【业绩超预期】腾讯 Q3 营收 1546 亿元 - Non-IFRS 净利增长 39%
+- 【回购增持】阿里巴巴回购 10 亿美元 - 支撑股价信心
+
+### 【大行观点】
+- 【高盛】首选互联网龙头 - 目标价上调 20%
+- 【摩根士丹利】看好新能源 - 宁德时代增持评级
+
+### 【市场情绪】
+- 【南向资金】今日净流入 85 亿港元 - 连续 5 日净买入
+- 【市场情绪】港股成交量放大 - 投资者信心回升
+```
+
+---
+
+请按照上述格式，基于实际新闻内容输出压缩后的新闻摘要：
+"""
+        return prompt
+
+    def _format_market_snapshot_for_prompt(self, snapshot: Dict[str, Any]) -> str:
+        """将市场快照数据格式化为 prompt 文本"""
+        lines = []
+
+        # 指数表现
+        idx = snapshot.get("index_performance", {})
+        if idx.get("latest_price"):
+            lines.append(f"1. 指數表現：")
+            lines.append(f"   - 恆生指數：{idx.get('latest_price')} 點 (漲跌幅：{idx.get('change_rate')}%)")
+            if idx.get("turnover"):
+                lines.append(f"   - 成交額：{idx.get('turnover')} 港元")
+        else:
+            lines.append("1. 指數表現：数据暂缺")
+
+        # 外部情绪
+        ext = snapshot.get("external_sentiment", {})
+        if ext.get("latest_price"):
+            lines.append(f"2. 外部情緒 (美股中概股昨晚表現)：")
+            lines.append(
+                f"   - {ext.get('index_name', '納斯達克指數')}: {ext.get('latest_price')} (漲跌：{ext.get('change_rate')}%)")
+            lines.append(f"   - 說明：{ext.get('note', '引导今日开盘情绪')}")
+        else:
+            lines.append("2. 外部情緒：数据暂缺")
+
+        # 货币与流动性
+        curr = snapshot.get("currency_liquidity", {})
+        lines.append("3. 貨幣與流動性：")
+
+        # USD/CNY 汇率
+        usd_cny = curr.get("usd_cny", {})
+        if usd_cny.get("last_price"):
+            line = f"   - 美元/人民幣 (USD/CNY): {usd_cny.get('last_price')}"
+            if usd_cny.get("change") or usd_cny.get("change_rate"):
+                parts = []
+                if usd_cny.get("change"):
+                    parts.append(f"涨跌额：{usd_cny.get('change')}")
+                if usd_cny.get("change_rate"):
+                    parts.append(f"涨跌幅：{usd_cny.get('change_rate')}%")
+                line += f" ({', '.join(parts)})"
+            lines.append(line)
+        else:
+            lines.append("   - 美元/人民幣：数据暂缺")
+
+        # 南向资金流向（格式化文本直接提供给 LLM）
+        southbound = curr.get("southbound_flow", {})
+        if southbound.get("formatted_text"):
+            # 资金流向数据已经自带【】标题，直接追加
+            lines.append(f"   {southbound.get('formatted_text')}")
+        else:
+            lines.append("   - 南向资金流向：数据暂缺")
+
+        # 市场宽度
+        breadth = snapshot.get("market_breadth", {})
+        if breadth.get("advancing_stocks") is not None:
+            lines.append("4. 市場寬度：")
+            lines.append(f"   - 港股上漲家數：{breadth.get('advancing_stocks')} 家")
+            lines.append(f"   - 港股下跌家數：{breadth.get('declining_stocks')} 家")
+            lines.append(f"   - 平盘家數：{breadth.get('unchanged_stocks')} 家")
+            if breadth.get("advance_decline_ratio"):
+                lines.append(f"   - 漲跌比：{breadth.get('advance_decline_ratio')}")
+        else:
+            lines.append("4. 市場寬度：数据暂缺")
+
+        # 今日热门股票
+        hot_stocks = breadth.get("hot_stocks", {})
+        if hot_stocks.get("formatted_text"):
+            lines.append(f"   {hot_stocks.get('formatted_text')}")
+        elif hot_stocks.get("status") != "data_unavailable" and hot_stocks.get("status") != "fetch_failed":
+            lines.append("   - 今日热门股票：数据暂缺")
+
+        return "\n".join(lines)
+
+    def _build_hkstock_market_analysis_prompt_v2(
+            self,
+            compressed_news: str,
+            market_snapshot: Dict[str, Any]
+    ) -> str:
+        """
+        构建港股市场分析 Prompt（第二版 - 综合分析报告）
+
+        基于压缩后的新闻和市场快照数据，生成完整的投资策略报告
+        注意：只传入压缩后的新闻，不传入原始新闻，节省 token
+        """
+        snapshot_text = self._format_market_snapshot_for_prompt(market_snapshot)
+
+        prompt = f"""你是一位专业的港股投资顾问，拥有丰富的港股市场经验。请基于以下**压缩后的新闻摘要**和**市场动态数据**，进行全面的分析并给出投资建议。
+
+## 市场动态数据快照
+
+{snapshot_text}
+
+## 压缩后的新闻摘要（已由 AI 提炼）
+
+{compressed_news}
+
+---
+
+## 分析要求
+
+请从以下几个维度进行深度分析，并以 **Markdown 格式** 返回报告：
+
+### 1. 市场要闻解读
+- 识别当前市场最关注的热点话题
+- 分析重大政策变动及其影响
+- 解读宏观经济信号
+
+### 2. 行业趋势分析
+- 哪些行业受到机构关注
+- 行业政策环境变化
+- 产业链上下游动态
+
+### 3. 大行观点汇总
+- 主流投行的评级倾向（看好/谨慎/中性）
+- 重点推荐板块和个股
+- 目标价预测区间
+
+### 4. 公司动态分析
+- 龙头企业最新动向
+- 业绩披露情况
+- 重大资本运作（并购、分拆、回购等）
+
+### 5. 风险因素识别
+- 政策风险
+- 市场风险
+- 汇率风险
+- 地缘政治风险
+
+### 6. 投资策略建议
+- **总体仓位建议**：高仓位/中等仓位/低仓位
+- **配置方向**：推荐关注的板块和主题
+- **操作策略**：逢低吸纳/逢高减仓/观望等待
+- **关注时点**：需要重点关注的经济数据发布时间、政策窗口期等
+
+---
+
+## 输出格式要求
+
+1. **标题层级**：使用一级标题 (#) 作为报告主标题，二级标题 (##) 作为各章节标题
+2. **重点突出**：关键信息使用 **加粗** 标记
+3. **列表格式**：使用无序列表 (-) 或有序列表 (1. 2. 3.) 展示要点
+4. **引用强调**：重要提示使用引用块 (> )
+5. **表格呈现**：如有数据对比，优先使用表格格式
+6. **篇幅控制**：报告总长度控制在 1200-2000 字
+7. **语言风格**：专业但不晦涩，适合中等投资经验的读者
+8. **数据引用**：在分析中引用市场快照中的具体数据（如恆指点位、南向资金等）
+
+---
+
+## Markdown 输出模板
+
+```markdown
+# 港股市场投资策略报告
+
+> 报告日期：YYYY-MM-DD
+>
+> **市场快照**：
+> - 恆生指數：xxx 點 (漲跌：x.xx%)
+> - 成交額：xxx 億港元
+> - 南向資金：xxx 億元
+> - 漲跌比：x.xx
+
+## 一、市场要闻解读
+
+（此处撰写市场要闻解读，约 200-300 字）
+
+**核心观点**：
+- 观点一
+- 观点二
+- 观点三
+
+## 二、行业趋势分析
+
+### 热门板块
+
+| 板块名称 | 关注热度 | 主要驱动因素 |
+|---------|---------|-------------|
+| xxx     | 高/中/低 | xxx         |
+
+### 行业政策动态
+
+- **政策一**：影响分析
+- **政策二**：影响分析
+
+## 三、大行观点汇总
+
+**整体评级倾向**：看好 / 中性 / 谨慎
+
+**重点推荐**：
+- 板块/个股 1：目标价 xxx
+- 板块/个股 2：目标价 xxx
+
+## 四、公司动态分析
+
+- **公司名称 1**：重要事件及点评
+- **公司名称 2**：重要事件及点评
+
+## 五、风险因素
+
+| 风险类型 | 风险等级 | 说明 |
+|---------|---------|------|
+| 政策风险 | 高/中/低 | xxx  |
+| 市场风险 | 高/中/低 | xxx  |
+| 汇率风险 | 高/中/低 | xxx  |
+
+## 六、投资策略建议
+
+> 核心策略：XXXXXX
+
+### 仓位建议
+
+建议保持 **XX%** 左右仓位
+
+### 配置方向
+
+1. **首选板块**：xxx
+2. **次选板块**：xxx
+
+### 操作策略
+
+- 逢低吸纳：xxx
+- 逢高减仓：xxx
+- 观望等待：xxx
+
+### 近期关注时点
+
+- **日期/時段**：事件名称
+- **日期/時段**：事件名称
+
+---
+
+> **免责声明**：以上分析仅供参考，不构成投资建议。投资有风险，决策需谨慎。
+```
+
+---
+
+请根据压缩后的新闻摘要和市场数据，按照上述模板格式输出专业的分析报告：
+"""
+        return prompt
 
     def _build_hkstock_market_analysis_prompt(self, news_text: str) -> str:
         """构建港股市场分析 Prompt"""
@@ -1086,35 +1782,6 @@ class StockAnalysisService:
 请根据实际新闻内容，按照上述模板格式输出专业的分析报告：
 """
         return prompt
-
-    def analyze_hkstock_market_sync(
-        self,
-        news_data: Optional[Dict[str, Any]] = None,
-        provider: Optional[str] = None,
-        model: Optional[str] = None
-    ) -> str:
-        """
-        同步版本：AI 分析港股市场新闻，给出投资建议
-
-        Args:
-            news_data: 新闻数据字典，包含 important_news, rank_news, company_news
-            provider: LLM 供应商名称
-            model: 模型名称
-
-        Returns:
-            Markdown 格式的投资建议报告
-        """
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(
-            self.analyze_hkstock_market(news_data=news_data, provider=provider, model=model)
-        )
-
 
 # 创建全局单例（需要 db 会话的实例在使用时创建）
 # stock_analysis_service = StockAnalysisService(db=None)  # type: ignore

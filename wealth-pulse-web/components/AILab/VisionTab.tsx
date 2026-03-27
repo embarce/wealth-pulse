@@ -1,8 +1,9 @@
 
 import React, { useState, useRef } from 'react';
 import { DetectedRecord, Transaction, TransactionType } from '../../types';
-import { analyzeBrokerScreenshot } from '../../services/gemini';
+import { aiAnalysisApi } from '../../services/aiAnalysis';
 import { Language } from '../../i18n';
+import { useToast } from '../../contexts/ToastContext';
 
 interface VisionTabProps {
   onAddTransactions?: (newTxs: Transaction[]) => void;
@@ -10,6 +11,7 @@ interface VisionTabProps {
 }
 
 const VisionTab: React.FC<VisionTabProps> = ({ onAddTransactions, lang }) => {
+  const toast = useToast();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detected, setDetected] = useState<DetectedRecord[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -21,10 +23,25 @@ const VisionTab: React.FC<VisionTabProps> = ({ onAddTransactions, lang }) => {
       reader.onloadend = async () => {
         setIsAnalyzing(true);
         try {
-          const records = await analyzeBrokerScreenshot((reader.result as string).split(',')[1], lang);
+          const base64Data = (reader.result as string).split(',')[1];
+          // 调用后端 API 分析券商截图
+          const result = await aiAnalysisApi.analyzeBrokerScreenshot({
+            imageBase64: base64Data,
+          });
+          // 将后端返回的 DetectedTrade 转换为前端 DetectedRecord 格式
+          const records: DetectedRecord[] = result.trades.map(trade => ({
+            symbol: trade.stockCode,
+            type: trade.instruction === 'BUY' ? TransactionType.BUY : TransactionType.SELL,
+            price: trade.price,
+            quantity: trade.quantity,
+            date: trade.timestamp || new Date().toISOString(),
+            confidence: trade.confidence,
+          }));
           setDetected(records);
-        } catch (err) {
+          toast.showSuccess(lang === 'zh' ? `识别成功，发现 ${records.length} 条交易记录` : `Recognition complete, found ${records.length} trades`);
+        } catch (err: any) {
           console.error(err);
+          toast.showError(err?.message || (lang === 'zh' ? '识别失败' : 'Recognition failed'));
         } finally {
           setIsAnalyzing(false);
         }

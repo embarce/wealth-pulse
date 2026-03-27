@@ -23,7 +23,7 @@ class SinaCompanyInfoCrawler:
         初始化爬虫
 
         Args:
-            timeout: 请求超时时间(秒)
+            timeout: 请求超时时间 (秒)
         """
         self.timeout = timeout
         self.headers = {
@@ -41,15 +41,15 @@ class SinaCompanyInfoCrawler:
         标准化股票代码为新浪格式
 
         Args:
-            stock_code: 股票代码 (如: 0700.HK, 01810.HK)
+            stock_code: 股票代码 (如：0700.HK, 01810.HK)
 
         Returns:
-            新浪格式的股票代码 (如: 00700, 01810)
+            新浪格式的股票代码 (如：00700, 01810)
         """
         # 移除 .HK 后缀
         code = stock_code.replace('.HK', '').replace('.hk', '')
 
-        # 补齐到5位
+        # 补齐到 5 位
         if len(code) < 5:
             code = code.zfill(5)
 
@@ -57,10 +57,10 @@ class SinaCompanyInfoCrawler:
 
     def _extract_table_data(self, soup: BeautifulSoup) -> Dict[str, str]:
         """
-        从HTML中提取表格数据
+        从 HTML 中提取表格数据
 
         Args:
-            soup: BeautifulSoup对象
+            soup: BeautifulSoup 对象
 
         Returns:
             提取的公司信息字典
@@ -92,8 +92,8 @@ class SinaCompanyInfoCrawler:
                 # 映射到标准字段名
                 field_mapping = {
                     '证劵代码': 'security_code',
-                    '公司名称(中文)': 'company_name_cn',
-                    '公司名称(英文)': 'company_name_en',
+                    '公司名称 (中文)': 'company_name_cn',
+                    '公司名称 (英文)': 'company_name_en',
                     '公司业务': 'business_description',
                     '所属行业': 'industry',
                     '港股股份数目': 'total_shares',
@@ -125,13 +125,13 @@ class SinaCompanyInfoCrawler:
         爬取指定股票的公司信息
 
         Args:
-            stock_code: 股票代码 (如: 01810.HK)
+            stock_code: 股票代码 (如：01810.HK)
 
         Returns:
             公司信息字典，包含以下字段:
             - security_code: 证券代码
-            - company_name_cn: 公司名称(中文)
-            - company_name_en: 公司名称(英文)
+            - company_name_cn: 公司名称 (中文)
+            - company_name_en: 公司名称 (英文)
             - business_description: 公司业务
             - industry: 所属行业
             - total_shares: 港股股份数目
@@ -149,7 +149,7 @@ class SinaCompanyInfoCrawler:
             - email: 电邮地址
             - phone: 电话号码
             - fax: 传真号码
-            - datasource: 数据源(固定为"新浪财经")
+            - datasource: 数据源 (固定为"新浪财经")
 
         Raises:
             Exception: 爬取失败时抛出异常
@@ -180,7 +180,7 @@ class SinaCompanyInfoCrawler:
                 # 添加原始股票代码
                 company_info['stock_code'] = stock_code
 
-                if not company_info or len(company_info) <= 2:  # 只有datasource和stock_code
+                if not company_info or len(company_info) <= 2:  # 只有 datasource 和 stock_code
                     logger.warning(f"[SinaCompanyInfoCrawler] No company info found for {stock_code}")
                     return {}
 
@@ -190,35 +190,15 @@ class SinaCompanyInfoCrawler:
 
         except httpx.TimeoutException:
             logger.error(f"[SinaCompanyInfoCrawler] Timeout fetching company info for {stock_code}")
-            raise Exception(f"请求超时: {url}")
+            raise Exception(f"请求超时：{url}")
 
         except httpx.HTTPStatusError as e:
             logger.error(f"[SinaCompanyInfoCrawler] HTTP error {e.response.status_code} for {stock_code}")
-            raise Exception(f"HTTP错误: {e.response.status_code}")
+            raise Exception(f"HTTP 错误：{e.response.status_code}")
 
         except Exception as e:
             logger.error(f"[SinaCompanyInfoCrawler] Error fetching company info for {stock_code}: {str(e)}")
-            raise Exception(f"爬取公司信息失败: {str(e)}")
-
-    def fetch_company_info_sync(self, stock_code: str) -> Dict[str, Optional[str]]:
-        """
-        同步方式爬取指定股票的公司信息
-
-        Args:
-            stock_code: 股票代码 (如: 01810.HK)
-
-        Returns:
-            公司信息字典
-        """
-        import asyncio
-
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(self.fetch_company_info(stock_code))
+            raise Exception(f"爬取公司信息失败：{str(e)}")
 
 
 # 创建全局实例

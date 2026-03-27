@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional, AsyncIterator
 from volcenginesdkarkruntime import AsyncArk
 
 from app.llm.base import BaseLLMProvider, ChatResponse, StreamChunk
+from app.services.image_generation_service import DoubaoImageService
 
 
 class DoubaoProvider(BaseLLMProvider):

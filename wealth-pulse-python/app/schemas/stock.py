@@ -327,3 +327,81 @@ class StockFinancialIndicatorEmResponse(StockFinancialIndicatorEmBase):
     """港股财务指标响应模型（AkShare东方财富）"""
     class Config:
         from_attributes = True
+
+
+# ==================== 港股指数数据相关 Schema ====================
+
+class StockIndexMarketDataBase(BaseModel):
+    """股票市场指数行情数据"""
+    index_code: str = Field(..., description="指数代码 (如：HSI, HSTECH)")
+    index_name: Optional[str] = Field(None, description="指数名称")
+    index_type: str = Field(default="HK", description="指数类型：HK=港股指数")
+
+    # 行情数据
+    last_price: Optional[float] = Field(None, description="最新价")
+    change_number: Optional[float] = Field(None, description="涨跌额")
+    change_rate: Optional[float] = Field(None, description="涨跌幅 (%)")
+    open_price: Optional[float] = Field(None, description="开盘价")
+    pre_close: Optional[float] = Field(None, description="前收盘价")
+    high_price: Optional[float] = Field(None, description="当日最高价")
+    low_price: Optional[float] = Field(None, description="当日最低价")
+    volume: Optional[int] = Field(None, description="成交量 (股/手)")
+    turnover: Optional[float] = Field(None, description="成交额")
+
+    # 扩展数据
+    pe_ratio: Optional[float] = Field(None, description="市盈率")
+    pb_ratio: Optional[float] = Field(None, description="市净率")
+    dividend_yield: Optional[float] = Field(None, description="股息率 (%)")
+
+    # 时间信息
+    quote_time: datetime = Field(..., description="行情时间")
+    market_date: date = Field(..., description="交易日")
+
+    # 数据来源
+    data_source: Optional[str] = Field(None, description="数据来源")
+    index_str: Optional[dict] = Field(None, description="扩展指标 (JSON 格式)")
+
+
+class StockIndexMarketDataResponse(StockIndexMarketDataBase):
+    """股票市场指数行情数据响应"""
+    class Config:
+        from_attributes = True
+
+
+class StockIndexHistoryBase(BaseModel):
+    """港股市场指数历史行情数据"""
+    index_code: str = Field(..., description="指数代码")
+    period: str = Field(default="daily", description="周期类型：daily=日线，weekly=周线，monthly=月线")
+    trade_date: date = Field(..., description="交易日期")
+
+    # 行情数据
+    open_price: Optional[float] = Field(None, description="开盘价")
+    high_price: Optional[float] = Field(None, description="最高价")
+    low_price: Optional[float] = Field(None, description="最低价")
+    close_price: Optional[float] = Field(None, description="收盘价")
+    volume: Optional[int] = Field(None, description="成交量")
+    turnover: Optional[float] = Field(None, description="成交额")
+
+    # 涨跌幅相关
+    change_number: Optional[float] = Field(None, description="涨跌额")
+    change_rate: Optional[float] = Field(None, description="涨跌幅 (%)")
+
+
+class StockIndexHistoryResponse(StockIndexHistoryBase):
+    """股票市场指数历史行情数据响应"""
+    class Config:
+        from_attributes = True
+
+
+class StockIndexConstituentBase(BaseModel):
+    """指数成分股"""
+    stock_code: str = Field(..., description="股票代码")
+    stock_name: Optional[str] = Field(None, description="股票名称")
+    weight: Optional[float] = Field(None, description="权重 (%)")
+    industry: Optional[str] = Field(None, description="行业")
+
+
+class StockIndexConstituentResponse(StockIndexConstituentBase):
+    """指数成分股响应"""
+    class Config:
+        from_attributes = True

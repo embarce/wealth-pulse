@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import stocks, health, auth, ai, hkstock
+from app.api import stocks, health, auth, ai, hkstock, market_data, wechat
 from app.core.config import settings
 from app.core.exceptions import (
     ApiException,
@@ -127,7 +127,9 @@ app.include_router(auth.router)
 app.include_router(stocks.router)
 app.include_router(ai.router)
 app.include_router(hkstock.router)
+app.include_router(market_data.router)
 app.include_router(health.router)
+app.include_router(wechat.router)
 
 
 @app.get("/", summary="Root endpoint")

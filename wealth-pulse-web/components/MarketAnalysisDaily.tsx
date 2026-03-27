@@ -3,6 +3,7 @@ import { I18nContext } from '../App';
 import { aiAnalysisApi, HkStockMarketAnalysis } from '../services/aiAnalysis';
 import MarkdownViewer from './MarkdownViewer';
 import NewsPanelModal from './NewsPanelModal';
+import MarketSnapshotPanel from './MarketSnapshotPanel';
 
 interface MarketAnalysisDailyProps {
   onViewNews?: () => void;
@@ -16,6 +17,7 @@ const MarketAnalysisDaily: React.FC<MarketAnalysisDailyProps> = ({ onViewNews })
   const [error, setError] = useState<string | null>(null);
   const [showFullReport, setShowFullReport] = useState(false);
   const [showNewsPanel, setShowNewsPanel] = useState(false);
+  const [showSnapshot, setShowSnapshot] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -212,8 +214,8 @@ const MarketAnalysisDaily: React.FC<MarketAnalysisDailyProps> = ({ onViewNews })
                     <div
                       className="text-slate-300 text-[13px] leading-loose line-clamp-4 font-light pl-4 border-l-2 border-indigo-500/50"
                       dangerouslySetInnerHTML={{
-                        __html: analysis.report
-                          ? analysis.report.replace(/\n/g, '<br/>')
+                        __html: analysis.investmentReport
+                          ? analysis.investmentReport.replace(/\n/g, '<br/>')
                           : ''
                       }}
                     />
@@ -257,6 +259,30 @@ const MarketAnalysisDaily: React.FC<MarketAnalysisDailyProps> = ({ onViewNews })
                 </div>
               )}
 
+              {/* 市场快照按钮 */}
+              {analysis?.marketSnapshot && (
+                <div className="mb-10">
+                  <button
+                    onClick={() => setShowSnapshot(true)}
+                    className="w-full group relative bg-gradient-to-r from-indigo-600/20 to-purple-600/20 hover:from-indigo-600/30 hover:to-purple-600/30 text-white px-6 py-5 rounded-2xl font-black text-[9px] uppercase tracking-widest transition-all duration-500 border border-indigo-500/30 hover:border-indigo-500/50 overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+                    <div className="flex items-center justify-between relative z-10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                          <i className="fas fa-chart-bar text-white text-sm"></i>
+                        </div>
+                        <div className="text-left">
+                          <div className="text-xs font-bold mb-0.5">市场快照</div>
+                          <div className="text-[9px] text-slate-400">查看实时市场数据、指数表现、资金流向</div>
+                        </div>
+                      </div>
+                      <i className="fas fa-chevron-right text-slate-400 group-hover:text-white transition-colors"></i>
+                    </div>
+                  </button>
+                </div>
+              )}
+
               {/* 底部操作栏 - 分离式设计 */}
               <div className="flex items-center justify-between pt-8 border-t border-white/5">
                 {/* 更新时间 */}
@@ -297,9 +323,49 @@ const MarketAnalysisDaily: React.FC<MarketAnalysisDailyProps> = ({ onViewNews })
       <MarkdownViewer
         isOpen={showFullReport}
         onClose={() => setShowFullReport(false)}
-        content={analysis?.rawReport || analysis?.report || ''}
+        content={analysis?.investmentReport || analysis?.rawReport || ''}
         title={t.ai_report_title}
       />
+
+      {/* Market Snapshot Modal */}
+      {showSnapshot && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-[9998] bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300"
+            onClick={() => setShowSnapshot(false)}
+          />
+
+          {/* Modal Content */}
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
+            <div className="bg-gradient-to-br from-slate-900 via-[#1a1d2d] to-[#0f172a] w-full max-w-4xl max-h-[85vh] rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 pointer-events-auto border border-white/10">
+              {/* Header */}
+              <div className="relative h-24 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 overflow-hidden">
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                <div className="absolute inset-0 flex items-center px-8">
+                  <div>
+                    <h3 className="text-2xl font-black text-white mb-1">市场快照</h3>
+                    <p className="text-xs text-white/80">实时市场数据监控</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSnapshot(false)}
+                  className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                >
+                  <i className="fas fa-times text-white"></i>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 overflow-y-auto max-h-[calc(85vh-6rem)]">
+                <MarketSnapshotPanel snapshot={analysis?.marketSnapshot || null} />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* News Panel Modal */}
       <NewsPanelModal

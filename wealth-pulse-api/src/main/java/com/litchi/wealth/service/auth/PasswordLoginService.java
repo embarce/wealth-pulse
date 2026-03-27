@@ -142,22 +142,22 @@ public class PasswordLoginService {
     }
 
 
-    @PostConstruct
-    public void init() {
-        String admin = "729374717@qq.com";
-        String password = "13602449816";
-        User user = userService.getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, admin));
-        if (user == null) {
-            BCryptPasswordEncoder bCryptPasswordEncoder = new BCryptPasswordEncoder();
-            log.info("try to init admin:{}", admin);
-            User adminUser = User.builder()
-                    .email(admin)
-                    .nickName("admin")
-                    .avatar("https://www.embracechw.top/img/embraceqaq_avatar.png")
-                    .password(bCryptPasswordEncoder.encode(password))
-                    .role(USER_ROLE)
-                    .build();
-            userService.saveUser(adminUser);
-        }
-    }
+    // @PostConstruct
+    // public void init() {
+    //     String admin = "17802003940@163.com";
+    //     String password = "****168888";
+    //     User user = userService.getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, admin));
+    //     if (user == null) {
+    //         BCryptPasswordEncoder bCryptPasswordEncoder = new BCryptPasswordEncoder();
+    //         log.info("try to init admin:{}", admin);
+    //         User adminUser = User.builder()
+    //                 .email(admin)
+    //                 .nickName("IN")
+    //                 .avatar("https://image.embracechw.top/feng.jpg")
+    //                 .password(bCryptPasswordEncoder.encode(password))
+    //                 .role(USER_ROLE)
+    //                 .build();
+    //         userService.saveUser(adminUser);
+    //     }
+    // }
 }

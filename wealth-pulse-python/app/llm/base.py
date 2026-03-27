@@ -175,3 +175,26 @@ class BaseLLMProvider(ABC):
             available=self.is_available(),
             base_url=self.base_url
         )
+
+    async def generate_image(
+        self,
+        prompt: str,
+        negative_prompt: Optional[str] = None,
+        size: str = "1024x1024",
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        生成图片（可选功能）
+
+        Args:
+            prompt: 图片生成提示词
+            negative_prompt: 负面提示词
+            size: 图片尺寸
+
+        Returns:
+            包含图片 URL 或 Base64 数据的字典
+
+        Note:
+            不是所有 LLM 提供者都支持图片生成功能
+        """
+        raise NotImplementedError(f"{self.provider_name} 不支持图片生成功能")

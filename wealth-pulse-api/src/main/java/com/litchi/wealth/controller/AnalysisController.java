@@ -1,15 +1,14 @@
 package com.litchi.wealth.controller;
 
 import com.litchi.wealth.constant.Result;
+import com.litchi.wealth.dto.ai.BrokerScreenshotRequest;
 import com.litchi.wealth.dto.ai.HkStockMarketAnalysisRequest;
 import com.litchi.wealth.dto.ai.KlineAnalysisRequest;
+import com.litchi.wealth.dto.ai.TradeScoreRequest;
 import com.litchi.wealth.dto.rpc.PositionAnalysisRequestDto;
 import com.litchi.wealth.dto.rpc.StockAnalysisRequestDto;
 import com.litchi.wealth.service.ai.AnalysisService;
-import com.litchi.wealth.vo.ai.HkStockMarketAnalysisVo;
-import com.litchi.wealth.vo.ai.KlineAnalysisVo;
-import com.litchi.wealth.vo.ai.PositionAnalysisVo;
-import com.litchi.wealth.vo.ai.StockAnalysisVo;
+import com.litchi.wealth.vo.ai.*;
 import com.litchi.wealth.vo.rpc.LLMProviderInfoVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -263,11 +262,139 @@ public class AnalysisController {
             HkStockMarketAnalysisVo result = analysisService.analyzeHkStockMarketRealtime(request);
             log.info("港股市场分析完成：新闻总数={}, 报告长度={}",
                     result.getNewsSummary() != null ? result.getNewsSummary().getTotalCount() : 0,
-                    result.getReport() != null ? result.getReport().length() : 0);
+                    result.getInvestmentReport() != null ? result.getInvestmentReport().length() : 0);
             return Result.success(result);
         } catch (Exception e) {
             log.error("港股市场分析失败", e);
             return Result.error("港股市场分析失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(
+            summary = "AI 分析贸易评分",
+            description = "AI 分析贸易评分（给出评分和理由）",
+            method = "POST",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "分析成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = TradeScoreVo.class)
+                    )
+            )
+    })
+    @PostMapping("/analyze-trade")
+    public Result analyzeTrade(
+            @Parameter(description = "贸易评分请求参数", required = true)
+            @Valid @RequestBody TradeScoreRequest request) {
+
+        log.info("收到贸易评分请求：股票代码={}, 交易日期={}, 买卖方向={}",
+                request.getStockCode(), request.getTransactionDate(), request.getInstruction());
+
+        try {
+            TradeScoreVo result = analysisService.analyzeTrade(request);
+            log.info("贸易评分完成：股票代码={}, 评分={}, 评级={}",
+                    request.getStockCode(), result.getScore(), result.getLevel());
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("贸易评分失败：股票代码={}", request.getStockCode(), e);
+            return Result.error("贸易评分失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(
+            summary = "AI 分析券商截图",
+            description = "AI 识别券商截图中的交易记录",
+            method = "POST",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "识别成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = BrokerScreenshotVo.class)
+                    )
+            )
+    })
+    @PostMapping("/analyze-broker-screenshot")
+    public Result analyzeBrokerScreenshot(
+            @Parameter(description = "券商截图识别请求参数", required = true)
+            @Valid @RequestBody BrokerScreenshotRequest request) {
+
+        log.info("收到券商截图识别请求：图片长度={}",
+                request.getImageBase64() != null ? request.getImageBase64().length() : 0);
+
+        try {
+            BrokerScreenshotVo result = analysisService.analyzeBrokerScreenshot(request);
+            log.info("券商截图识别完成：检测到交易数量={}",
+                    result.getTrades() != null ? result.getTrades().size() : 0);
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("券商截图识别失败", e);
+            return Result.error("券商截图识别失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(
+            summary = "获取 AI 新闻摘要",
+            description = "获取 AI 生成的新闻摘要列表",
+            method = "GET",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "获取成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(
+                                    schema = @Schema(implementation = AINewsVo.class)
+                            )
+                    )
+            )
+    })
+    @GetMapping("/news-summary")
+    public Result getNewsSummary() {
+        try {
+            List<AINewsVo> newsList = analysisService.getNewsSummary();
+            return Result.success(newsList);
+        } catch (Exception e) {
+            log.error("获取 AI 新闻摘要失败", e);
+            return Result.error("获取 AI 新闻摘要失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(
+            summary = "获取 AI 热点",
+            description = "获取 AI 识别的市场热点列表",
+            method = "GET",
+            tags = {"AI 分析管理"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "获取成功",
+                    content = @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(
+                                    schema = @Schema(implementation = AIHotspotVo.class)
+                            )
+                    )
+            )
+    })
+    @GetMapping("/hotspots")
+    public Result getHotspots() {
+        try {
+            List<AIHotspotVo> hotspots = analysisService.getHotspots();
+            return Result.success(hotspots);
+        } catch (Exception e) {
+            log.error("获取 AI 热点失败", e);
+            return Result.error("获取 AI 热点失败：" + e.getMessage());
         }
     }
 }

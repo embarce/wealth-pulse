@@ -280,8 +280,11 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
 
         Date now = new Date();
 
-        if (position == null) {
-            // 新建持仓
+        if (position == null || position.getPositionStatus() != null && position.getPositionStatus() == 2) {
+            // 新建持仓（包括已清仓的持仓重新买入）
+            // 如果存在已清仓的旧持仓，先删除再创建新的
+            userPositionService.remove(queryWrapper);
+            log.info("删除已清仓的旧持仓，userId={}, stockCode={}", userId, request.getStockCode());
             position = new UserPosition();
             position.setUserId(userId);
             position.setStockCode(request.getStockCode());
@@ -326,7 +329,8 @@ public class StockTransactionLogServiceImpl extends ServiceImpl<StockTransaction
         Date now = new Date();
 
         if (newQuantity.compareTo(BigDecimal.ZERO) == 0) {
-            // 全部卖出，更新状态为已清仓
+            // 全部卖出，更新状态为已清仓，数量设为 0
+            position.setQuantity(BigDecimal.ZERO);
             position.setPositionStatus(2); // 已清仓
             position.setLastSellDate(now);
             position.setUpdatedAt(now);

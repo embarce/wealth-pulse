@@ -118,7 +118,6 @@ const Settings: React.FC<SettingsProps> = ({ config, onUpdateConfig, toast = {
     doubao: { name: 'Doubao', nameCn: '豆包', desc: lang === 'zh' ? '火山引擎，性价比高，推荐' : 'Volcengine, cost-effective, recommended', color: 'bg-blue-50 border-blue-200', iconColor: 'text-blue-500' },
     openai: { name: 'OpenAI', nameCn: '', desc: lang === 'zh' ? '分析质量高，理解能力强' : 'High quality analysis, strong understanding', color: 'bg-emerald-50 border-emerald-200', iconColor: 'text-emerald-500' },
     qwen: { name: 'Qwen', nameCn: '通义千问', desc: lang === 'zh' ? '阿里达摩院，中文理解好' : 'Alibaba DAMO, good Chinese understanding', color: 'bg-purple-50 border-purple-200', iconColor: 'text-purple-500' },
-    gemini: { name: 'Gemini', nameCn: '', desc: lang === 'zh' ? 'Google 模型，多语言支持' : 'Google model, multi-language support', color: 'bg-indigo-50 border-indigo-200', iconColor: 'text-indigo-500' },
     gitee: { name: 'GiteeAI', nameCn: '魔力方舟', desc: lang === 'zh' ? 'Gitee AI，国产算力平台' : 'Gitee AI, domestic computing platform', color: 'bg-red-50 border-red-200', iconColor: 'text-red-500' },
     anthropic: { name: 'Anthropic', nameCn: '', desc: lang === 'zh' ? 'Claude 系列模型' : 'Claude AI models', color: 'bg-orange-50 border-orange-200', iconColor: 'text-orange-500' },
     deepseek: { name: 'DeepSeek', nameCn: '深度求索', desc: lang === 'zh' ? '国产大模型' : 'Chinese LLM models', color: 'bg-cyan-50 border-cyan-200', iconColor: 'text-cyan-500' },

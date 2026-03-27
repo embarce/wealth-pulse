@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/hkstock", tags=["hkstock"])
 
 
 @router.get("/news/home", summary="Get HK stock homepage news")
-def get_homepage_news(
+async def get_homepage_news(
         current_user: dict = Depends(get_current_user)
 ):
     """
@@ -45,7 +45,7 @@ def get_homepage_news(
     """
     try:
         crawler = SinaHKStockCrawler()
-        result = crawler.fetch_hkstock_news_sync()
+        result = await crawler.fetch_hkstock_news()
 
         logger.info(f"[HKStockNews] Successfully fetched homepage news: {len(result['important_news'])} items")
 
@@ -63,7 +63,7 @@ def get_homepage_news(
 
 
 @router.get("/news/rank", summary="Get HK stock analyst reports")
-def get_rank_news(
+async def get_rank_news(
         url: Optional[str] = Query(None, description="自定义研报列表页 URL"),
         skip_if_url_missing: bool = Query(False, description="如果 URL 缺失是否跳过爬取"),
         current_user: dict = Depends(get_current_user)
@@ -94,7 +94,7 @@ def get_rank_news(
     """
     try:
         crawler = SinaHKStockCrawler()
-        result = crawler.fetch_rank_news_sync(url=url, skip_if_url_missing=skip_if_url_missing)
+        result = await crawler.fetch_rank_news(url=url, skip_if_url_missing=skip_if_url_missing)
 
         logger.info(f"[HKStockNews] Successfully fetched rank news: {len(result['news'])} items")
 
@@ -112,7 +112,7 @@ def get_rank_news(
 
 
 @router.get("/news/company", summary="Get HK stock company news")
-def get_company_news(
+async def get_company_news(
         url: Optional[str] = Query(None, description="自定义公司新闻列表页 URL"),
         skip_if_url_missing: bool = Query(False, description="如果 URL 缺失是否跳过爬取"),
         current_user: dict = Depends(get_current_user)
@@ -143,7 +143,7 @@ def get_company_news(
     """
     try:
         crawler = SinaHKStockCrawler()
-        result = crawler.fetch_company_news_sync(url=url, skip_if_url_missing=skip_if_url_missing)
+        result = await crawler.fetch_company_news(url=url, skip_if_url_missing=skip_if_url_missing)
 
         logger.info(f"[HKStockNews] Successfully fetched company news: {len(result['news'])} items")
 
@@ -161,7 +161,7 @@ def get_company_news(
 
 
 @router.get("/news/all", summary="Get all HK stock news")
-def get_all_news(
+async def get_all_news(
         current_user: dict = Depends(get_current_user)
 ):
     """
@@ -192,7 +192,7 @@ def get_all_news(
     """
     try:
         crawler = SinaHKStockCrawler()
-        result = crawler.fetch_all_news_sync()
+        result = await crawler.fetch_all_news()
 
         logger.info(f"[HKStockNews] Successfully fetched all news: {result['summary']['total_count']} items")
 
@@ -210,7 +210,7 @@ def get_all_news(
 
 
 @router.get("/news/all-raw", summary="Get all HK stock news")
-def get_all_news_raw():
+async def get_all_news_raw():
     """
     获取所有港股新闻（原始数据，无需认证）
 
@@ -241,7 +241,7 @@ def get_all_news_raw():
     """
     try:
         crawler = SinaHKStockCrawler()
-        result = crawler.fetch_all_news_sync()
+        result = await crawler.fetch_all_news()
 
         logger.info(f"[HKStockNews] Successfully fetched all news: {result['summary']['total_count']} items")
 

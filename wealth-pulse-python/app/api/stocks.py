@@ -703,109 +703,83 @@ def get_financial_indicator(
         )
 
 
-@router.get("/{stock_code}/minute-history", summary="Get HK stock minute-level history")
-def get_minute_history(
+@router.get("/{stock_code}/minute-history", summary="Get HK stock minute-level history from Sina Finance")
+async def get_minute_history(
         stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 01611.HK)", example="01611.HK"),
         period: str = Query('1', description="Period: 1=1min, 5=5min, 15=15min, 30=30min, 60=60min",
                             regex="^(1|5|15|30|60)$"),
-        adjust: str = Query('', description="Adjustment type: ''=no adjust, 'hfq'=post-adjust"),
-        start_date: Optional[datetime] = Query(None, description="Start datetime (YYYY-MM-DD HH:MM:SS)"),
-        end_date: Optional[datetime] = Query(None, description="End datetime (YYYY-MM-DD HH:MM:SS)"),
         current_user: dict = Depends(get_current_user)
 ):
     """
-    Get HK stock minute-level historical data from Eastmoney (requires authentication)
+    Get HK stock minute-level historical data from Sina Finance (requires authentication)
 
-    This endpoint fetches intraday historical data with different time intervals.
+    This endpoint fetches intraday minute-level data from Sina Finance API.
+    Note: Only supports 1-minute period (real-time minute data).
 
     **Path Parameters:**
     - `stock_code`: Stock code (e.g., 0700.HK, 01611.HK)
 
     **Query Parameters:**
     - `period`: Time period ('1', '5', '15', '30', '60' for minutes)
-    - `adjust`: Adjustment type (''=none, 'hfq'=post-adjustment)
-    - `start_date`: Start datetime (default: 1 day ago)
-    - `end_date`: End datetime (default: now)
+                Note: Only '1' is supported for real-time minute data
 
     **Data Source:**
-    - AkShare `stock_hk_hist_min_em` API
-    - Eastmoney
+    - Sina Finance (stock.finance.sina.com.cn)
 
-    **Returned Fields (1-minute data):**
-    - trade_time: 交易时间
-    - open_price: 开盘价(港元)
-    - close_price: 收盘价(港元)
-    - high_price: 最高价(港元)
-    - low_price: 最低价(港元)
-    - volume: 成交量(股)
-    - turnover: 成交额(港元)
-    - latest_price: 最新价(港元)
+    **Returned Fields:**
+    - trade_time: 交易时间 (HH:MM:SS)
+    - stock_code: 股票代码
+    - period: 周期 (固定为 1)
+    - open_price: 开盘价 (港元)
+    - close_price: 收盘价 (港元)
+    - high_price: 最高价 (港元)
+    - low_price: 最低价 (港元)
+    - volume: 成交量 (股)
+    - turnover: 成交额 (港元)
+    - latest_price: 最新价 (港元)
 
-    **Returned Fields (5/15/30/60-minute data):**
-    - trade_time: 交易时间
-    - open_price: 开盘价(港元)
-    - close_price: 收盘价(港元)
-    - high_price: 最高价(港元)
-    - low_price: 最低价(港元)
-    - volume: 成交量(股)
-    - turnover: 成交额(港元)
-    - change_rate: 涨跌幅(%)
-    - change_number: 涨跌额(港元)
-    - amplitude: 振幅(%)
-    - turnover_rate: 换手率(%)
+    **Note:**
+    - 数据为当日分时数据，包含开盘后每一分钟的成交信息
+    - 股票代码会自动标准化为新浪格式
     """
     try:
-        from app.services.akshare_provider import AkShareProvider
+        from app.services.sina_hk_realtime_crawler import sina_hk_minute_crawler
 
-        logger.info(f"[MinuteHistory] Fetching minute history for {stock_code}: period={period}, adjust={adjust}")
+        logger.info(f"[MinuteHistory] Fetching minute history for {stock_code}: period={period}")
 
-        # 使用 AkShareProvider 获取数据
-        provider = AkShareProvider()
-        history_data = provider.get_stock_minute_history(
-            stock_code=stock_code,
-            period=period,
-            adjust=adjust,
-            start_date=start_date,
-            end_date=end_date
-        )
+        # 使用爬虫获取分时数据
+        result = await sina_hk_minute_crawler.fetch_minute_data(stock_code)
 
-        if not history_data:
+        if result.get('status') == 'error':
+            logger.warning(f"[MinuteHistory] Failed to fetch minute history for {stock_code}: {result.get('error')}")
             raise ApiException(
-                msg=f"Minute history data not found for stock {stock_code}",
-                code=ResponseCode.NOT_FOUND
+                msg=f"Failed to fetch minute history: {result.get('error')}",
+                code=ResponseCode.INTERNAL_ERROR
+            )
+
+        minute_data = result.get('minute_data', [])
+
+        if not minute_data:
+            return success_response(
+                data=[],
+                msg=f"No minute history found for stock {stock_code}"
             )
 
         # 转换为响应格式
         response_data = []
-        for item in history_data:
+        for record in minute_data:
             response_item = {
-                "trade_time": item['trade_time'].isoformat() if isinstance(item['trade_time'], datetime) else item[
-                    'trade_time'],
-                "stock_code": item['stock_code'],
-                "period": item['period'],
-                "open_price": float(item['open_price']) if item.get('open_price') is not None else None,
-                "close_price": float(item['close_price']) if item.get('close_price') is not None else None,
-                "high_price": float(item['high_price']) if item.get('high_price') is not None else None,
-                "low_price": float(item['low_price']) if item.get('low_price') is not None else None,
-                "volume": float(item['volume']) if item.get('volume') is not None else None,
-                "turnover": float(item['turnover']) if item.get('turnover') is not None else None,
+                "trade_time": record.get('time'),
+                "stock_code": stock_code,
+                "period": period,
+                "open_price": record.get('price'),
+                "close_price": record.get('price'),
+                "high_price": record.get('avg_price'),
+                "low_price": record.get('avg_price'),
+                "volume": record.get('volume'),
+                "turnover": record.get('turnover'),
+                "latest_price": record.get('price'),
             }
-
-            # 1分钟数据特有字段
-            if period == '1':
-                response_item['latest_price'] = float(item['latest_price']) if item.get(
-                    'latest_price') is not None else None
-
-            # 其他周期字段
-            else:
-                response_item['change_rate'] = float(item['change_rate']) if item.get(
-                    'change_rate') is not None else None
-                response_item['change_number'] = float(item['change_number']) if item.get(
-                    'change_number') is not None else None
-                response_item['amplitude'] = float(item['amplitude']) if item.get('amplitude') is not None else None
-                response_item['turnover_rate'] = float(item['turnover_rate']) if item.get(
-                    'turnover_rate') is not None else None
-
             response_data.append(response_item)
 
         logger.info(f"[MinuteHistory] Successfully fetched {len(response_data)} records for {stock_code}")
@@ -928,7 +902,7 @@ def get_enhanced_history(
 
 
 @router.get("/{stock_code}/news", summary="Get HK stock news from Sina Finance")
-def get_stock_news(
+async def get_stock_news(
         stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 09868.HK)", example="0700.HK"),
         current_user: dict = Depends(get_current_user)
 ):
@@ -959,7 +933,7 @@ def get_stock_news(
         logger.info(f"[StockNews] Fetching news for {stock_code}")
 
         # 使用爬虫获取新闻
-        news_items = sina_news_crawler.fetch_stock_news_sync(stock_code)
+        news_items = await sina_news_crawler.fetch_stock_news(stock_code)
 
         if not news_items:
             return success_response(
@@ -985,7 +959,7 @@ def get_stock_news(
 
 
 @router.get("/{stock_code}/company-info-sina", summary="Get HK stock company info from Sina Finance")
-def get_company_info_sina(
+async def get_company_info_sina(
         stock_code: str = Path(..., description="Stock code (e.g., 01810.HK, 09868.HK)", example="01810.HK"),
         current_user: dict = Depends(get_current_user)
 ):
@@ -1033,7 +1007,7 @@ def get_company_info_sina(
         logger.info(f"[CompanyInfoSina] Fetching company info for {stock_code}")
 
         # 使用爬虫获取公司信息
-        company_info = sina_company_info_crawler.fetch_company_info_sync(stock_code)
+        company_info = await sina_company_info_crawler.fetch_company_info(stock_code)
 
         if not company_info:
             return success_response(
@@ -1041,7 +1015,8 @@ def get_company_info_sina(
                 msg=f"No company info found for stock {stock_code}"
             )
 
-        logger.info(f"[CompanyInfoSina] Successfully fetched company info for {stock_code} with {len(company_info)} fields")
+        logger.info(
+            f"[CompanyInfoSina] Successfully fetched company info for {stock_code} with {len(company_info)} fields")
 
         return success_response(
             data=company_info,
@@ -1059,7 +1034,7 @@ def get_company_info_sina(
 
 
 @router.get("/{stock_code}/financial-indicators-sina", summary="Get HK stock financial indicators from Sina Finance")
-def get_financial_indicators_sina(
+async def get_financial_indicators_sina(
         stock_code: str = Path(..., description="Stock code (e.g., 01810.HK, 09868.HK)", example="01810.HK"),
         current_user: dict = Depends(get_current_user)
 ):
@@ -1116,7 +1091,7 @@ def get_financial_indicators_sina(
         logger.info(f"[FinancialIndicatorsSina] Fetching financial indicators for {stock_code}")
 
         # 使用爬虫获取财务指标
-        financial_data = sina_finance_crawler.fetch_financial_indicators_sync(stock_code)
+        financial_data = await sina_finance_crawler.fetch_financial_indicators(stock_code)
 
         if not financial_data:
             return success_response(
@@ -1142,7 +1117,7 @@ def get_financial_indicators_sina(
 
 
 @router.get("/{stock_code}/company-notices", summary="Get HK stock company notices from Sina Finance")
-def get_company_notices(
+async def get_company_notices(
         stock_code: str = Path(..., description="Stock code (e.g., 01810.HK, 09868.HK)", example="09868.HK"),
         max_pages: int = Query(1, ge=1, le=10, description="Maximum number of pages to fetch (1-10, default: 1)"),
         current_user: dict = Depends(get_current_user)
@@ -1173,7 +1148,7 @@ def get_company_notices(
         logger.info(f"[CompanyNotices] Fetching notices for {stock_code}, max_pages: {max_pages}")
 
         # 使用爬虫获取公告
-        notices = sina_company_notice_crawler.fetch_company_notices_sync(stock_code, max_pages)
+        notices = await sina_company_notice_crawler.fetch_company_notices(stock_code, max_pages)
 
         if not notices:
             return success_response(
@@ -1194,6 +1169,142 @@ def get_company_notices(
         logger.error(f"Error fetching notices for {stock_code}: {str(e)}")
         raise ApiException(
             msg=f"Failed to retrieve company notices: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/realtime-quote", summary="Get HK stock realtime quote from Sina Finance")
+async def get_realtime_quote(
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 01810.HK)", example="0700.HK"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock realtime quote from Sina Finance (requires authentication)
+
+    This endpoint fetches real-time market data from Sina Finance API.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 0700.HK, 01810.HK)
+
+    **Data Source:**
+    - Sina Finance (hq.sinajs.cn)
+
+    **Returned Fields:**
+    - symbol: 股票代码
+    - normalized_symbol: 标准化后的股票代码 (5 位数字)
+    - fetch_time: 获取时间
+    - datasource: 数据来源 (新浪财经)
+    - realtime_data: 实时行情数据
+        - english_name: 英文名
+        - chinese_name: 中文名
+        - open: 开盘价
+        - previous_close: 昨收价
+        - high: 最高价
+        - low: 最低价
+        - current: 当前价
+        - change: 涨跌额
+        - change_percent: 涨跌幅
+        - ask1: 卖一价
+        - bid1: 买一价
+        - turnover: 成交额
+        - volume: 成交量
+        - pe_ratio: 市盈率
+        - high_52w: 52 周最高
+        - low_52w: 52 周最低
+        - date: 日期
+        - time: 时间
+        - amplitude: 振幅
+
+    **Note:**
+    - 股票代码会自动标准化为新浪格式 (如 0700.HK → 00700)
+    - 数据为实时行情（港股交易时间内更新）
+    """
+    try:
+        from app.services.sina_hk_realtime_crawler import sina_hk_realtime_crawler
+
+        logger.info(f"[RealtimeQuote] Fetching realtime quote for {stock_code}")
+
+        # 使用爬虫获取实时行情
+        result = await sina_hk_realtime_crawler.fetch_realtime_quote(stock_code)
+
+        if result.get('realtime_data', {}).get('status') == 'error':
+            logger.warning(f"[RealtimeQuote] Failed to fetch realtime quote for {stock_code}: {result['realtime_data'].get('error')}")
+
+        logger.info(f"[RealtimeQuote] Successfully fetched realtime quote for {stock_code}")
+
+        return success_response(
+            data=result,
+            msg="Realtime quote retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching realtime quote for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve realtime quote: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/{stock_code}/minute-data", summary="Get HK stock minute-level data from Sina Finance")
+async def get_minute_data(
+        stock_code: str = Path(..., description="Stock code (e.g., 0700.HK, 01810.HK)", example="0700.HK"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get HK stock minute-level data from Sina Finance (requires authentication)
+
+    This endpoint fetches intraday minute-level data from Sina Finance API.
+
+    **Path Parameters:**
+    - `stock_code`: Stock code in format (e.g., 0700.HK, 01810.HK)
+
+    **Data Source:**
+    - Sina Finance (stock.finance.sina.com.cn)
+
+    **Returned Fields:**
+    - symbol: 股票代码
+    - normalized_symbol: 标准化后的股票代码
+    - fetch_time: 获取时间
+    - datasource: 数据来源 (新浪财经)
+    - status: 状态 (success/error)
+    - minute_data: 分时数据列表
+        - time: 时间 (HH:MM:SS)
+        - volume: 成交量
+        - turnover: 成交额
+        - price: 价格
+        - avg_price: 均价
+        - prev_open_volume: 前开盘量（仅第一条记录）
+
+    **Note:**
+    - 数据为当日分时数据
+    - 包含开盘后每一分钟的成交和价格信息
+    """
+    try:
+        from app.services.sina_hk_realtime_crawler import sina_hk_minute_crawler
+
+        logger.info(f"[MinuteData] Fetching minute data for {stock_code}")
+
+        # 使用爬虫获取分时数据
+        result = await sina_hk_minute_crawler.fetch_minute_data(stock_code)
+
+        if result.get('status') == 'error':
+            logger.warning(f"[MinuteData] Failed to fetch minute data for {stock_code}: {result.get('error')}")
+
+        logger.info(f"[MinuteData] Successfully fetched minute data for {stock_code}")
+
+        return success_response(
+            data=result,
+            msg="Minute data retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching minute data for {stock_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve minute data: {str(e)}",
             code=ResponseCode.INTERNAL_ERROR
         )
 
@@ -1294,5 +1405,558 @@ def get_financial_indicator_em(
         logger.error(f"Error fetching financial indicators for {stock_code}: {str(e)}")
         raise ApiException(
             msg=f"Failed to retrieve financial indicators from AkShare: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+# ==================== 港股指数相关 API ====================
+
+@router.get("/all/indices", summary="Get all HK stock market indices")
+def get_all_indices(
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all Hong Kong stock market indices (requires authentication)
+
+    多数据源自动切换：
+    1. 优先使用东方财富网 (stock_hk_index_spot_em)
+    2. 失败时自动切换到新浪财经 (stock_hk_index_spot_sina)
+
+    **Data Source:**
+    - Primary: AkShare `stock_hk_index_spot_em` API (Eastmoney)
+    - Backup: AkShare `stock_hk_index_spot_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (HK)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - pe_ratio: 市盈率
+    - pb_ratio: 市净率
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info("[API] Fetching all HK indices (multi-source)")
+
+        provider = AkShareProvider()
+        indices = provider.get_all_hk_indices()
+
+        if not indices:
+            return success_response(
+                data=[],
+                msg="No HK indices found"
+            )
+
+        logger.info(f"[API] Successfully fetched {len(indices)} HK indices")
+
+        return success_response(
+            data=indices,
+            msg=f"HK indices retrieved successfully: {len(indices)} indices"
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching all HK indices: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve HK indices: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/indices/sina", summary="Get all HK stock market indices from Sina (backup source)")
+def get_all_indices_sina(
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all Hong Kong stock market indices from Sina Finance (backup source)
+
+    当东方财富网数据源不稳定时，可使用此接口作为备选方案。
+
+    **Data Source:**
+    - AkShare `stock_hk_index_spot_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (HK)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - pe_ratio: 市盈率
+    - pb_ratio: 市净率
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源 (sina)
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info("[API] Fetching all HK indices from Sina Finance")
+
+        provider = AkShareProvider()
+        indices = provider._get_all_hk_indices_sina()
+
+        if not indices:
+            return success_response(
+                data=[],
+                msg="No HK indices found from Sina"
+            )
+
+        logger.info(f"[API] Successfully fetched {len(indices)} HK indices from Sina")
+
+        return success_response(
+            data=indices,
+            msg=f"HK indices retrieved from Sina: {len(indices)} indices"
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching HK indices from Sina: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve HK indices from Sina: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/indices/{index_code}", summary="Get HK stock market index by code")
+def get_index(
+        index_code: str = Path(..., description="Index code (e.g., HSI, HSTECH, CESHKM)", example="HSI"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get Hong Kong stock market index by code (requires authentication)
+
+    This endpoint fetches real-time data for a specific HK stock market index
+    from Eastmoney via AkShare.
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., HSI for Hang Seng Index, HSTECH for Hang Seng TECH Index)
+
+    **Data Source:**
+    - AkShare `stock_hk_index_spot_em` API
+    - Eastmoney
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (HK)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - pe_ratio: 市盈率
+    - pb_ratio: 市净率
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching HK index: {index_code}")
+
+        provider = AkShareProvider()
+        index_data = provider.get_index_spot_data(index_code)
+
+        if not index_data:
+            raise ApiException(
+                msg=f"Index {index_code} not found",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        logger.info(f"[API] Successfully fetched HK index: {index_code}")
+
+        return success_response(
+            data=index_data,
+            msg="HK index retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching HK index {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve HK index: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/indices/{index_code}/history", summary="Get HK stock market index history")
+def get_index_history(
+        index_code: str = Path(..., description="Index code (e.g., HSI, HSTECH)", example="HSI"),
+        start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+        end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+        period: str = Query("daily", description="Period: daily=日线，weekly=周线，monthly=月线",
+                            regex="^(daily|weekly|monthly)$"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get historical data for Hong Kong stock market index (requires authentication)
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., HSI, HSTECH)
+
+    **Query Parameters:**
+    - `start_date`: Start date (default: 1 year ago)
+    - `end_date`: End date (default: today)
+    - `period`: Period type (daily, weekly, monthly)
+
+    **Data Source:**
+    - AkShare `stock_hk_index_daily_em` API
+    - Eastmoney
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - period: 周期类型
+    - trade_date: 交易日期
+    - open_price: 开盘价
+    - close_price: 收盘价
+    - high_price: 最高价
+    - low_price: 最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching HK index history: {index_code}, period={period}")
+
+        provider = AkShareProvider()
+        history_data = provider.get_index_history_data(
+            index_code=index_code,
+            start_date=start_date,
+            end_date=end_date,
+            period=period
+        )
+
+        if not history_data:
+            raise ApiException(
+                msg=f"Index history data not found for {index_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # Convert to serializable format
+        serializable_data = []
+        for item in history_data:
+            serializable_item = {
+                "index_code": item["index_code"],
+                "period": item["period"],
+                "trade_date": item["trade_date"].isoformat() if isinstance(item["trade_date"], date) else str(
+                    item["trade_date"]),
+                "open_price": float(item["open_price"]) if item.get("open_price") is not None else None,
+                "close_price": float(item["close_price"]) if item.get("close_price") is not None else None,
+                "high_price": float(item["high_price"]) if item.get("high_price") is not None else None,
+                "low_price": float(item["low_price"]) if item.get("low_price") is not None else None,
+                "volume": int(item["volume"]) if item.get("volume") is not None else None,
+                "turnover": float(item["turnover"]) if item.get("turnover") is not None else None,
+                "change_number": float(item["change_number"]) if item.get("change_number") is not None else None,
+                "change_rate": float(item["change_rate"]) if item.get("change_rate") is not None else None,
+            }
+            serializable_data.append(serializable_item)
+
+        logger.info(f"[API] Successfully fetched {len(serializable_data)} history records for {index_code}")
+
+        return success_response(
+            data=serializable_data,
+            msg=f"Index history retrieved successfully: {len(serializable_data)} records"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching HK index history {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve index history: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/indices/{index_code}/constituents", summary="Get HK stock market index constituents")
+def get_index_constituents(
+        index_code: str = Path(..., description="Index code (e.g., HSI)", example="HSI"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get constituent stocks of Hong Kong stock market index (requires authentication)
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., HSI)
+
+    **Data Source:**
+    - AkShare `index_stock_cons` API
+
+    **Returned Fields:**
+    - stock_code: 股票代码
+    - stock_name: 股票名称
+    - weight: 权重 (%)
+    - industry: 行业
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching HK index constituents: {index_code}")
+
+        provider = AkShareProvider()
+        constituents = provider.get_index_constituents(index_code)
+
+        if not constituents:
+            raise ApiException(
+                msg=f"Index constituents data not found for {index_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        logger.info(f"[API] Successfully fetched {len(constituents)} constituents for {index_code}")
+
+        return success_response(
+            data=constituents,
+            msg=f"Index constituents retrieved successfully: {len(constituents)} stocks"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching HK index constituents {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve index constituents: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+# ==================== 美股指数相关 API ====================
+
+@router.get("/us-indices", summary="Get all US stock market indices")
+def get_all_us_indices(
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all US stock market indices (requires authentication)
+
+    获取主要美股指数行情，包括：
+    - .INX: 标普 500 指数 (S&P 500)
+    - .DJI: 道琼斯工业平均指数 (Dow Jones Industrial Average)
+    - .IXIC: 纳斯达克综合指数 (NASDAQ Composite)
+    - .NDX: 纳斯达克 100 指数 (NASDAQ-100)
+
+    **Data Source:**
+    - AkShare `index_us_stock_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (US)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info("[API] Fetching all US indices")
+
+        provider = AkShareProvider()
+        indices = provider.get_all_us_indices()
+
+        if not indices:
+            return success_response(
+                data=[],
+                msg="No US indices found"
+            )
+
+        logger.info(f"[API] Successfully fetched {len(indices)} US indices")
+
+        return success_response(
+            data=indices,
+            msg=f"US indices retrieved successfully: {len(indices)} indices"
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching all US indices: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve US indices: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/us-indices/{index_code}", summary="Get US stock market index by code")
+def get_us_index(
+        index_code: str = Path(..., description="Index code (e.g., .INX, .DJI, .IXIC, .NDX)", example=".INX"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get US stock market index by code (requires authentication)
+
+    支持的美股指数：
+    - .INX: 标普 500 指数 (S&P 500)
+    - .DJI: 道琼斯工业平均指数 (Dow Jones Industrial Average)
+    - .IXIC: 纳斯达克综合指数 (NASDAQ Composite)
+    - .NDX: 纳斯达克 100 指数 (NASDAQ-100)
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., .INX, .DJI, .IXIC, .NDX)
+
+    **Data Source:**
+    - AkShare `index_us_stock_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - index_name: 指数名称
+    - index_type: 指数类型 (US)
+    - last_price: 最新价
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    - open_price: 开盘价
+    - pre_close: 前收盘价
+    - high_price: 当日最高价
+    - low_price: 当日最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - quote_time: 行情时间
+    - market_date: 交易日
+    - data_source: 数据来源
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching US index: {index_code}")
+
+        provider = AkShareProvider()
+        index_data = provider.get_us_index_spot(index_code)
+
+        if not index_data:
+            raise ApiException(
+                msg=f"US Index {index_code} not found",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        logger.info(f"[API] Successfully fetched US index: {index_code}")
+
+        return success_response(
+            data=index_data,
+            msg="US index retrieved successfully"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching US index {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve US index: {str(e)}",
+            code=ResponseCode.INTERNAL_ERROR
+        )
+
+
+@router.get("/us-indices/{index_code}/history", summary="Get US stock market index history")
+def get_us_index_history(
+        index_code: str = Path(..., description="Index code (e.g., .INX, .DJI)", example=".INX"),
+        start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+        end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Get historical data for US stock market index (requires authentication)
+
+    **Path Parameters:**
+    - `index_code`: Index code (e.g., .INX, .DJI, .IXIC, .NDX)
+
+    **Query Parameters:**
+    - `start_date`: Start date (default: 1 year ago)
+    - `end_date`: End date (default: today)
+
+    **Data Source:**
+    - AkShare `index_us_stock_sina` API (Sina Finance)
+
+    **Returned Fields:**
+    - index_code: 指数代码
+    - trade_date: 交易日期
+    - open_price: 开盘价
+    - close_price: 收盘价
+    - high_price: 最高价
+    - low_price: 最低价
+    - volume: 成交量
+    - turnover: 成交额
+    - change_number: 涨跌额
+    - change_rate: 涨跌幅 (%)
+    """
+    try:
+        from app.services.akshare_provider import AkShareProvider
+
+        logger.info(f"[API] Fetching US index history: {index_code}")
+
+        provider = AkShareProvider()
+        history_data = provider.get_us_index_history(
+            symbol=index_code,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        if not history_data:
+            raise ApiException(
+                msg=f"US Index history data not found for {index_code}",
+                code=ResponseCode.NOT_FOUND
+            )
+
+        # Convert to serializable format
+        serializable_data = []
+        for item in history_data:
+            serializable_item = {
+                "index_code": item["index_code"],
+                "trade_date": item["trade_date"].isoformat() if isinstance(item["trade_date"], date) else str(
+                    item["trade_date"]),
+                "open_price": float(item["open_price"]) if item.get("open_price") is not None else None,
+                "close_price": float(item["close_price"]) if item.get("close_price") is not None else None,
+                "high_price": float(item["high_price"]) if item.get("high_price") is not None else None,
+                "low_price": float(item["low_price"]) if item.get("low_price") is not None else None,
+                "volume": int(item["volume"]) if item.get("volume") is not None else None,
+                "turnover": float(item["turnover"]) if item.get("turnover") is not None else None,
+                "change_number": float(item["change_number"]) if item.get("change_number") is not None else None,
+                "change_rate": float(item["change_rate"]) if item.get("change_rate") is not None else None,
+            }
+            serializable_data.append(serializable_item)
+
+        logger.info(f"[API] Successfully fetched {len(serializable_data)} history records for {index_code}")
+
+        return success_response(
+            data=serializable_data,
+            msg=f"US index history retrieved successfully: {len(serializable_data)} records"
+        )
+
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching US index history {index_code}: {str(e)}")
+        raise ApiException(
+            msg=f"Failed to retrieve US index history: {str(e)}",
             code=ResponseCode.INTERNAL_ERROR
         )

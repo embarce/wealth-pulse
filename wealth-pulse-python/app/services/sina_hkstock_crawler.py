@@ -523,23 +523,6 @@ class SinaHKStockCrawler:
             logger.error(f"[SinaHKStockCrawler] Error fetching all news: {str(e)}")
             raise Exception(f"爬取所有新闻失败：{str(e)}")
 
-    def fetch_all_news_sync(self) -> Dict:
-        """
-        同步方式爬取所有港股新闻
-
-        Returns:
-            包含所有新闻的字典
-        """
-        import asyncio
-
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(self.fetch_all_news())
-
 
 # 创建全局实例
 sina_hkstock_crawler = SinaHKStockCrawler()

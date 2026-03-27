@@ -156,10 +156,12 @@ const TradeModal: React.FC<TradeModalProps> = ({
         setFee(feeResult);
         // 重置自定义平台费，使用后端计算值
         setCustomPlatformFee(null);
-      } catch (e) {
+      } catch (e: any) {
         console.error('计算手续费失败', e);
         setFee(null);
         setCustomPlatformFee(null);
+        // 显示错误提示，帮助用户了解问题
+        toast.showError(`计算手续费失败：${e?.message || '未知错误'}`);
       } finally {
         setIsLoadingFee(false);
       }

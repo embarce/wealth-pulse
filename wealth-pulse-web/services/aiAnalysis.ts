@@ -178,12 +178,128 @@ export interface NewsSummary {
 }
 
 /**
- * 港股市场分析结果 - 匹配后端 HkStockMarketAnalysisVo
+ * 指数表现 - 匹配后端 HkStockMarketAnalysisVo.IndexPerformance
+ */
+export interface IndexPerformance {
+  indexName: string | null; // 指数名称
+  indexCode: string | null; // 指数代码
+  latestPrice: number | null; // 最新价
+  changeRate: number | null; // 涨跌幅
+  turnover: number | null; // 成交额
+  quoteTime: string | null; // 报价时间
+}
+
+/**
+ * 外部情绪 - 匹配后端 HkStockMarketAnalysisVo.ExternalSentiment
+ */
+export interface ExternalSentiment {
+  indexName: string | null; // 指数名称
+  latestPrice: number | null; // 最新价
+  changeRate: number | null; // 涨跌幅
+  note: string | null; // 备注说明
+}
+
+/**
+ * 货币流动性 - 匹配后端 HkStockMarketAnalysisVo.CurrencyLiquidity
+ */
+export interface CurrencyLiquidity {
+  symbol: string; // 货币代码
+  name: string; // 货币名称
+  lastPrice: number | null; // 最新价
+  change: number | null; // 涨跌额
+  changeRate: number | null; // 涨跌幅
+  open: number | null; // 开盘价
+  preClose: number | null; // 前收盘价
+  high: number | null; // 当日最高价
+  low: number | null; // 当日最低价
+  note: string | null; // 备注说明
+}
+
+/**
+ * 热门股票项 - 匹配后端 HkStockMarketAnalysisVo.HotStockItem
+ */
+export interface HotStockItem {
+  symbol: string; // 股票代码
+  name: string; // 股票名称
+  engname: string; // 英文名称
+  lasttrade: number | null; // 最新价
+  prevclose: number | null; // 昨收价
+  open: number | null; // 开盘价
+  high: number | null; // 最高价
+  low: number | null; // 最低价
+  volume: number | null; // 成交量
+  amount: number | null; // 成交额
+  priceChange: number | null; // 涨跌额
+  changePercent: number | null; // 涨跌幅
+  high52week: number | null; // 52 周最高价
+  low52week: number | null; // 52 周最低价
+  buy: number | null; // 买入价
+  sell: number | null; // 卖出价
+  ticktime: string | null; // 报价时间
+}
+
+/**
+ * 热门股票列表 - 匹配后端 HkStockMarketAnalysisVo.HotStocks
+ */
+export interface HotStocks {
+  formattedText: string | null; // 格式化文本
+  stocks: HotStockItem[] | null; // 热门股票列表
+  count: number | null; // 股票数量
+  hqTime: string | null; // 行情时间
+  hqStatus: string | null; // 市场状态
+  dataSource: string | null; // 数据来源
+}
+
+/**
+ * 市场宽度 - 匹配后端 HkStockMarketAnalysisVo.MarketBreadth
+ */
+export interface MarketBreadth {
+  advancingStocks: number | null; // 上涨家数
+  decliningStocks: number | null; // 下跌家数
+  unchangedStocks: number | null; // 平盘家数
+  totalStocks: number | null; // 总股票数
+  advanceDeclineRatio: number | null; // 上涨/下跌比率
+  hotStocks: HotStocks | null; // 今日热门股票
+}
+
+/**
+ * 市场快照 - 匹配后端 HkStockMarketAnalysisVo.MarketSnapshot
+ */
+export interface MarketSnapshot {
+  indexPerformance: IndexPerformance | null; // 指数表现
+  externalSentiment: ExternalSentiment | null; // 外部情绪
+  currencyLiquidity: Record<string, CurrencyLiquidity> | null; // 货币流动性
+  marketBreadth: MarketBreadth | null; // 市场宽度
+}
+
+/**
+ * LLM Token 使用情况 - 匹配后端 HkStockMarketAnalysisVo.LlmInfo.TokenUsage
+ */
+export interface TokenUsage {
+  promptTokens: number | null; // 输入 token 数
+  completionTokens: number | null; // 输出 token 数
+  totalTokens: number | null; // 总 token 数
+}
+
+/**
+ * LLM 调用信息 - 匹配后端 HkStockMarketAnalysisVo.LlmInfo
+ */
+export interface LlmInfo {
+  provider: string; // LLM 供应商
+  model: string; // 使用的模型
+  tokenUsage: TokenUsage | null; // Token 使用情况
+}
+
+/**
+ * 港股市场分析结果 - 匹配后端 HkStockMarketAnalysisVo（完整版）
  */
 export interface HkStockMarketAnalysis {
-  report: string; // Markdown 格式的投资建议报告（已处理换行符）
+  investmentReport: string; // Markdown 格式的投资建议报告（已处理换行符）
   rawReport: string; // 原始 Markdown 报告（保留完整格式，用于前端展示）
+  marketSnapshot: MarketSnapshot | null; // 市场快照数据
+  compressedNews: string; // LLM 压缩后的新闻摘要
   newsSummary: NewsSummary; // 新闻摘要统计信息
+  llmInfo: LlmInfo | null; // LLM 调用信息
 }
 
 /**
@@ -192,6 +308,78 @@ export interface HkStockMarketAnalysis {
 export interface HkStockMarketAnalysisRequest {
   provider?: string; // LLM 供应商
   model?: string; // 模型名称
+}
+
+/**
+ * 贸易评分请求 - 匹配后端 TradeScoreRequest
+ */
+export interface TradeScoreRequest {
+  stockCode: string; // 股票代码
+  transactionDate: string; // 交易日期
+  instruction: 'BUY' | 'SELL'; // 买卖方向
+  price: number; // 成交价
+  quantity: number; // 成交数量
+  context?: string; // 上下文信息（可选）
+  provider?: string; // LLM 供应商
+  model?: string; // 模型名称
+}
+
+/**
+ * 贸易评分响应 - 匹配后端 TradeScoreVo
+ */
+export interface TradeScoreResponse {
+  score: number; // 评分 (0-100)
+  rationale: string; // 评分理由
+  level: 'excellent' | 'good' | 'fair' | 'poor'; // 评级
+}
+
+/**
+ * 截图识别请求 - 匹配后端 BrokerScreenshotRequest
+ */
+export interface BrokerScreenshotRequest {
+  imageBase64: string; // Base64 编码的图片数据（不含前缀）
+  provider?: string; // LLM 供应商
+  model?: string; // 模型名称
+}
+
+/**
+ * 检测到的交易记录 - 匹配后端 DetectedTrade
+ */
+export interface DetectedTrade {
+  stockCode: string; // 股票代码
+  instruction: 'BUY' | 'SELL'; // 买卖方向
+  price: number; // 成交价
+  quantity: number; // 成交数量
+  timestamp?: string; // 交易时间
+  confidence: number; // 置信度 (0-1)
+}
+
+/**
+ * 截图识别响应 - 匹配后端 BrokerScreenshotVo
+ */
+export interface BrokerScreenshotResponse {
+  trades: DetectedTrade[]; // 检测到的交易列表
+  note?: string; // 分析说明
+}
+
+/**
+ * AI 新闻摘要 - 匹配后端 AINewsItem
+ */
+export interface AINewsItem {
+  title: string;
+  summary: string;
+  impact: 'positive' | 'negative';
+  source?: string;
+  timestamp?: string;
+}
+
+/**
+ * AI 热点 - 匹配后端 AIHotspot
+ */
+export interface AIHotspot {
+  topic: string;
+  description: string;
+  heatLevel?: number;
 }
 
 /**
@@ -298,6 +486,76 @@ export const aiAnalysisApi = {
 
     if (res?.code !== 200 || !res?.data) {
       throw new Error((res as any)?.msg || '实时港股市场分析失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * AI 分析贸易评分
+   * POST /api/ai/analyze-trade
+   */
+  analyzeTrade: async (request: TradeScoreRequest, options?: HttpRequestOptions): Promise<TradeScoreResponse> => {
+    const res = await httpClient.post<ApiResult<TradeScoreResponse>>(
+      `${API_BASE}/ai/analyze-trade`,
+      request,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '贸易评分分析失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * AI 分析券商截图
+   * POST /api/ai/analyze-broker-screenshot
+   */
+  analyzeBrokerScreenshot: async (request: BrokerScreenshotRequest, options?: HttpRequestOptions): Promise<BrokerScreenshotResponse> => {
+    const res = await httpClient.post<ApiResult<BrokerScreenshotResponse>>(
+      `${API_BASE}/ai/analyze-broker-screenshot`,
+      request,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '截图识别失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * 获取 AI 新闻摘要
+   * GET /api/ai/news-summary
+   */
+  getNewsSummary: async (options?: HttpRequestOptions): Promise<AINewsItem[]> => {
+    const res = await httpClient.get<ApiResult<AINewsItem[]>>(
+      `${API_BASE}/ai/news-summary`,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取 AI 新闻摘要失败');
+    }
+
+    return res.data;
+  },
+
+  /**
+   * 获取 AI 热点
+   * GET /api/ai/hotspots
+   */
+  getHotspots: async (options?: HttpRequestOptions): Promise<AIHotspot[]> => {
+    const res = await httpClient.get<ApiResult<AIHotspot[]>>(
+      `${API_BASE}/ai/hotspots`,
+      { ...defaultRequestOptions, ...options }
+    );
+
+    if (res?.code !== 200 || !res?.data) {
+      throw new Error((res as any)?.msg || '获取 AI 热点失败');
     }
 
     return res.data;

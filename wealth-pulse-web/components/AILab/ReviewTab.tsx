@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
 import { Transaction, StockPrice, TransactionType } from '../../types';
-import { getTradeScore } from '../../services/gemini';
+import { aiAnalysisApi } from '../../services/aiAnalysis';
 import { Language } from '../../i18n';
+import { useToast } from '../../contexts/ToastContext';
 
 interface ReviewTabProps {
   transactions: Transaction[];
@@ -12,6 +13,7 @@ interface ReviewTabProps {
 }
 
 const ReviewTab: React.FC<ReviewTabProps> = ({ transactions, stocks, lang, onUpdateTransaction }) => {
+  const toast = useToast();
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
 
   const handleReview = async (tx: Transaction) => {
@@ -19,10 +21,20 @@ const ReviewTab: React.FC<ReviewTabProps> = ({ transactions, stocks, lang, onUpd
     try {
       const stock = stocks.find(s => s.symbol === tx.symbol);
       const context = stock ? `Current: ${stock.price}, Hist: ${JSON.stringify(stock.history.slice(-3))}` : "N/A";
-      const result = await getTradeScore(tx, context, lang);
+      // 调用后端 API 分析贸易
+      const result = await aiAnalysisApi.analyzeTrade({
+        stockCode: tx.symbol,
+        transactionDate: new Date(tx.date).toISOString().split('T')[0],
+        instruction: tx.type === TransactionType.BUY ? 'BUY' : 'SELL',
+        price: tx.price,
+        quantity: tx.quantity,
+        context,
+      });
       onUpdateTransaction?.(tx.id, { aiScore: result.score, aiAdvice: result.rationale });
-    } catch (e) {
+      toast.showSuccess(lang === 'zh' ? 'AI 复盘完成' : 'AI review complete');
+    } catch (e: any) {
       console.error(e);
+      toast.showError(e?.message || (lang === 'zh' ? '复盘失败' : 'Review failed'));
     } finally {
       setAnalyzingId(null);
     }

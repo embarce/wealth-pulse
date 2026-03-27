@@ -11,12 +11,12 @@ import {
 import { apiService } from './services/backend';
 import { capitalApi } from './services/capitalApi';
 import { userApi, DashboardData, PositionsDashboardData } from './services/userApi';
-import { getTradeScore, getMarketOutlook } from './services/gemini';
 import { Language, translations } from './i18n';
 import { httpClient } from './services/http';
 import { stockApi } from './services/stockApi';
 import { tradeApi } from './services/tradeApi';
 import { ToastProvider, useToast, ToastContainerWrapper } from './contexts/ToastContext';
+import { userConfigApi } from './services/userConfigApi';
 
 // Components
 import Modal from './components/Modal';
@@ -80,20 +80,18 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
   // Toast state
   const [toasts, setToasts] = useState<any[]>([]);
 
-  const [aiOutlook, setAiOutlook] = useState(t.loading);
+  const [aiOutlook, setAiOutlook] = useState(t.outlookPlaceholder);
 
   useEffect(() => {
     const init = async () => {
       try {
         // 只加载本地数据，不请求需要认证的 API
-        const [txs, cfg] = await Promise.all([
-          apiService.getTransactions(),
-          apiService.getConfig(),
-        ]);
+        const txs = await apiService.getTransactions();
         setTransactions(txs);
-        setConfig(cfg);
         // capitalLogs 将在登录后通过 Records 组件按需加载
         setCapitalLogs([]);
+        // 配置将在登录后通过 userConfigApi 加载
+        setConfig(null);
       } catch (e) {
         console.error('初始化失败', e);
       } finally {
@@ -109,15 +107,17 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
       if (!isLoggedIn) {
         setDashboardData(null);
         setPositionsDashboardData(null);
+        setConfig(null);
         return;
       }
       try {
         // 并行获取用户信息、Dashboard数据、持仓数据和交易记录
-        const [userRes, dashboard, positions, tradeRecords] = await Promise.all([
+        const [userRes, dashboard, positions, tradeRecords, userConfig] = await Promise.all([
           httpClient.get('/api/user/getUser', { autoHandleAuthError: true }),
           userApi.getDashboard().catch(() => null),
           userApi.getPositionsDashboard().catch(() => null),
-          tradeApi.getRecordPage({ pageNum: 1, pageSize: 1000 }).catch(() => null)
+          tradeApi.getRecordPage({ pageNum: 1, pageSize: 1000 }).catch(() => null),
+          userConfigApi.getConfig().catch(() => null)
         ]);
 
         // 处理用户信息
@@ -176,8 +176,43 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
           setTransactions([]);
           await apiService.updateTransactions([]);
         }
+
+        // 处理用户配置
+        if (userConfig) {
+          console.log('用户配置:', userConfig);
+          setConfig(userConfig);
+          localStorage.setItem('app_config', JSON.stringify(userConfig));
+        } else {
+          // 如果后端配置获取失败，使用默认配置
+          console.log('未获取到用户配置，使用默认配置');
+          const defaultConfig = {
+            email: 'admin@pulse.ai',
+            emailEnabled: false,
+            feishuWebhook: '',
+            feishuEnabled: false,
+            notifyReviewComplete: true,
+            notifyVisionReady: true,
+            notifyMarketAlert: false,
+            notifyPortfolioRisk: true
+          };
+          setConfig(defaultConfig);
+          localStorage.setItem('app_config', JSON.stringify(defaultConfig));
+        }
       } catch (e) {
         console.error('获取用户数据失败', e);
+        // 发生错误时使用默认配置
+        const errorDefaultConfig = {
+          email: 'admin@pulse.ai',
+          emailEnabled: false,
+          feishuWebhook: '',
+          feishuEnabled: false,
+          notifyReviewComplete: true,
+          notifyVisionReady: true,
+          notifyMarketAlert: false,
+          notifyPortfolioRisk: true
+        };
+        setConfig(errorDefaultConfig);
+        localStorage.setItem('app_config', JSON.stringify(errorDefaultConfig));
       }
     };
     fetchUserData();
@@ -205,14 +240,6 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
         avgPrice: d.totalCost / (d.qty || 1) 
       }));
   }, [transactions]);
-
-  useEffect(() => {
-    if (isLoggedIn && holdings.length > 0) {
-      getMarketOutlook(holdings.map(h => h.symbol), lang).then(setAiOutlook);
-    } else {
-      setAiOutlook(t.outlookPlaceholder);
-    }
-  }, [isLoggedIn, activeTab, transactions, lang, t.outlookPlaceholder]);
 
   const totalPrincipal = useMemo(() => {
     // 如果有后端Dashboard数据，优先使用
@@ -361,15 +388,6 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
 
     // 刷新Dashboard数据
     await refreshDashboardData();
-
-    // 获取 AI 评分（仅针对买入）
-    if (newTx.type === TransactionType.BUY) {
-      getTradeScore(newTx, `Price ${newTx.price}`, lang).then(async score => {
-        const updatedTxs = transactions.map(tx => tx.id === newTx.id ? { ...tx, aiScore: score.score, aiAdvice: score.rationale } : tx);
-        setTransactions(updatedTxs);
-        await apiService.updateTransactions(updatedTxs);
-      });
-    }
   };
 
   // 从持仓页面点击买入
@@ -546,6 +564,30 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
     setIsLoggedIn(true);
   };
 
+  // 登出处理
+  const handleLogout = async () => {
+    try {
+      // 调用后端登出 API
+      await httpClient.post('/api/logout', {}, { autoHandleAuthError: false });
+    } catch (e) {
+      // 登出失败也继续执行本地清理
+      console.error('登出 API 调用失败', e);
+    } finally {
+      // 清除本地 token 和认证状态
+      httpClient.setToken('');
+      localStorage.removeItem('pulse_token');
+      localStorage.removeItem('pulse_auth');
+      // 清除用户相关数据
+      setUser(null);
+      setDashboardData(null);
+      setPositionsDashboardData(null);
+      setTransactions([]);
+      setCapitalLogs([]);
+      // 更新登录状态
+      setIsLoggedIn(false);
+    }
+  };
+
   if (!isLoggedIn) return <Login onLogin={handleLoginSuccess} />;
 
   if (isLoading || !config) return (
@@ -572,6 +614,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
           user={user || undefined}
           config={config}
           onOpenLLMModal={() => setLlmModalOpen(true)}
+          onLogout={handleLogout}
         />
       </div>
 
@@ -618,7 +661,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
           )}
           {activeTab === 'records' && <Records transactions={transactions} capitalRefreshTrigger={capitalRefreshTrigger} />}
           {activeTab === 'ai' && <AILab stocks={stocks} transactions={transactions} config={config} toast={toast} onAddTransactions={handleAddTransactions} onUpdateTransaction={handleUpdateTransaction} />}
-          {activeTab === 'settings' && <Settings config={config} onUpdateConfig={(cfg) => { const newCfg = { ...config, ...cfg }; setConfig(newCfg); apiService.saveConfig(newCfg); toast.showSuccess(lang === 'zh' ? '设置已保存' : 'Settings saved'); }} toast={toast} />}
+          {activeTab === 'settings' && <Settings config={config} onUpdateConfig={(cfg) => { const newCfg = { ...config, ...cfg }; setConfig(newCfg); localStorage.setItem('app_config', JSON.stringify(newCfg)); userConfigApi.saveConfig(newCfg).then(() => { toast.showSuccess(lang === 'zh' ? '设置已保存' : 'Settings saved'); }).catch((err) => { console.error('保存配置失败:', err); toast.showError(lang === 'zh' ? '保存失败' : 'Save failed'); }); }} toast={toast} />}
           {activeTab === 'help' && <Help />}
         </div>
 
@@ -693,7 +736,7 @@ const AppContent: React.FC<AppContentProps> = ({ toast }) => {
           isOpen={llmModalOpen}
           onClose={() => setLlmModalOpen(false)}
           config={config}
-          onUpdateConfig={(cfg) => { const newCfg = { ...config, ...cfg }; setConfig(newCfg); apiService.saveConfig(newCfg); }}
+          onUpdateConfig={(cfg) => { const newCfg = { ...config, ...cfg }; setConfig(newCfg); localStorage.setItem('app_config', JSON.stringify(newCfg)); userConfigApi.saveConfig(newCfg).catch((err) => { console.error('保存配置失败:', err); }); }}
           lang={lang}
           toast={toast}
         />

@@ -60,13 +60,16 @@ public class UserAssetSummaryServiceImpl extends ServiceImpl<UserAssetSummaryMap
         for (UserPosition position : positions) {
             BigDecimal currentPrice = getCurrentPrice(position.getStockCode());
             if (currentPrice != null && currentPrice.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal positionValue = currentPrice.multiply(position.getQuantity());
+                BigDecimal quantity = position.getQuantity() != null ? position.getQuantity() : BigDecimal.ZERO;
+                BigDecimal positionValue = currentPrice.multiply(quantity);
                 realTimePositionValue = realTimePositionValue.add(positionValue);
                 log.debug("股票: {}, 数量: {}, 当前价: {}, 市值: {}",
                         position.getStockCode(), position.getQuantity(), currentPrice, positionValue);
             } else {
                 // 如果没有最新股价，使用成本价作为保守估计
-                BigDecimal positionValue = position.getAvgCost().multiply(position.getQuantity());
+                BigDecimal avgCost = position.getAvgCost() != null ? position.getAvgCost() : BigDecimal.ZERO;
+                BigDecimal quantity = position.getQuantity() != null ? position.getQuantity() : BigDecimal.ZERO;
+                BigDecimal positionValue = avgCost.multiply(quantity);
                 realTimePositionValue = realTimePositionValue.add(positionValue);
                 log.warn("股票 {} 没有最新股价数据，使用成本价计算市值: {}",
                         position.getStockCode(), positionValue);
@@ -78,7 +81,8 @@ public class UserAssetSummaryServiceImpl extends ServiceImpl<UserAssetSummaryMap
         assetSummary.setPositionValue(realTimePositionValue);
 
         // 总资产 = 可用现金 + 实时持仓市值
-        BigDecimal newTotalAssets = assetSummary.getAvailableCash().add(realTimePositionValue);
+        BigDecimal availableCash = assetSummary.getAvailableCash() != null ? assetSummary.getAvailableCash() : BigDecimal.ZERO;
+        BigDecimal newTotalAssets = availableCash.add(realTimePositionValue);
         assetSummary.setTotalAssets(newTotalAssets);
 
         // 5. 回写数据库

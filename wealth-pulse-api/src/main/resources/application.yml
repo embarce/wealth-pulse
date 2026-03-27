@@ -101,6 +101,9 @@ rpc:
     url: ${PYTHON_API_HOST:}
     clientId: ${PYTHON_CLIENT_ID:}
     clientSecret: ${PYTHON_SECRET:}
+  wechat:
+    appId: ${WECHAT_APP_ID:}
+    appSecret: ${WECHAT_APP_SECRET:}
 
 # ====================================
 # 邮件通知配置
@@ -109,9 +112,17 @@ email:
   notification:
     enabled: true
 
+# ====================================
+# 微信发布 Job 配置
+# ====================================
+wechat:
+  job:
+    # 是否启用微信自动发布 Job
+    enabled: true
+
 # 系统配置
 system:
-  website-url: https://stock.embracechw.top
-  contact-url: mailto:support@girls-rating.com
-  unsubscribe-url: https://stock.embracechw.top/settings
-  version: 1.0.0
+  website-url: ${SYSTEM_WEBSITE_URL:https://stock.embracechw.top}
+  contact-url: ${SYSTEM_CONTACT_URL:mailto:support@girls-rating.com}
+  unsubscribe-url: ${SYSTEM_UNSUBSCRIBE_URL:https://stock.embracechw.top/settings}
+  version: ${SYSTEM_VERSION:1.0.0}

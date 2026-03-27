@@ -1,22 +1,21 @@
 package com.litchi.wealth.job;
 
 import cn.hutool.core.date.DateUtil;
-import cn.hutool.http.Header;
-import cn.hutool.http.HttpRequest;
-import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.litchi.wealth.dto.HolidayInfo;
 import com.litchi.wealth.entity.StockTransactionLog;
 import com.litchi.wealth.service.StockTransactionLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.Date;
 import java.util.List;
+
+import static com.litchi.wealth.utils.HkStockFeeCalculator.getHolidayFlag;
 
 /**
  * 交易结算定时任务
@@ -32,12 +31,6 @@ public class TransactionSettleJob {
     @Autowired
     private StockTransactionLogService stockTransactionLogService;
 
-    @Value("${itick.token}")
-    private String token;
-
-    @Value("${itick.url}")
-    private String url;
-
     /**
      * 每日凌晨1点执行交易结算
      * 将所有未结算的交易标记为已结算
@@ -48,39 +41,11 @@ public class TransactionSettleJob {
         try {
             // 获取当前时间
             Date date = new Date();
-            String today = DateUtil.today();
-            //确定是否为公共假期
-            boolean isHoliday = false;
-            String result = HttpRequest.get(url)
-                    .header(Header.USER_AGENT, "PostmanRuntime/7.49.1")
-                    .header(Header.ACCEPT, "application/json")
-                    .header("Token", token)
-                    .timeout(20000)//超时，毫秒
-                    .execute().body();
-            log.info("获取假期数据：{}", result);
-            JSONObject jsonObject = JSONUtil.parseObj(result);
-            Integer code = jsonObject.getInt("code");
-            if (code == 0){
-                List<JSONObject> data = jsonObject.getBeanList("data", JSONObject.class);
-                for (JSONObject item : data) {
-                    /**
-                     *"c": "HK",
-                     *"r": "Hong Kong",
-                     *"d": "2026-01-01",
-                     *"t": "09:00-09:30,09:30-12:00|13:00-16:00,16:00-16:30",
-                     *"z": "Asia/Hong_Kong",
-                     *"v": "New Year's Day"
-                     */
-                    String day = item.getStr("d");
-                    String vStr = item.getStr("v");
-                    if (day.equals(today)){
-                        isHoliday = true;
-                        log.info("今天是公共假期：{}", vStr);
-                    }
-                }
-            }
-            if (isHoliday){
-                log.info("今天是公共假期，不进行交易结算");
+            // 确定是否为公共假期
+            HolidayInfo holidayInfo = getHolidayFlag();
+            if (holidayInfo.getIsHoliday() && !holidayInfo.getNeedSettle()) {
+                log.info("今天是公共假期 [{}]，假期名称 [{}]，市场休市信息 [{}]，不进行交易结算",
+                        holidayInfo.getDate(), holidayInfo.getName(), holidayInfo.getMarket());
                 return;
             }
             // 查询所有未结算的交易
@@ -116,4 +81,7 @@ public class TransactionSettleJob {
             log.error("每日交易结算任务执行失败", e);
         }
     }
+
+
+
 }
