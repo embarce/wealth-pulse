@@ -21,7 +21,7 @@ class DoubaoImageService:
     """
 
     # 默认的图片生成模型
-    DEFAULT_MODEL = "doubao-seedream-5-0-260128"  # 豆包图片生成模型
+    DEFAULT_MODEL = "doubao-seedream-4-5-251128"  # 豆包图片生成模型
 
     def __init__(
         self,
